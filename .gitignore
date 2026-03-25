@@ -38,3 +38,4 @@ packages/database/src/generated/
 logs/
 *.log
 npm-debug.log*
+.next/
