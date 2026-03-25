@@ -1,0 +1,941 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================================
+// ENUMS
+// ============================================================================
+
+enum TenantStatus {
+  provisioning
+  active
+  suspended
+  decommissioned
+}
+
+enum PlanTier {
+  starter
+  professional
+  enterprise
+}
+
+enum UserStatus {
+  active
+  suspended
+  deactivated
+}
+
+enum PlatformUserRole {
+  platform_admin
+  platform_support
+}
+
+enum ProductType {
+  overdraft
+  micro_loan
+  bnpl
+  invoice_financing
+}
+
+enum ProductStatus {
+  draft
+  active
+  suspended
+  discontinued
+}
+
+enum InterestRateModel {
+  flat
+  reducing_balance
+  tiered
+}
+
+enum RepaymentMethod {
+  lump_sum
+  equal_installments
+  reducing
+  balloon
+  auto_deduction
+}
+
+enum ApprovalWorkflow {
+  auto
+  semi_auto
+  single_level
+  multi_level
+}
+
+enum CustomerStatus {
+  active
+  suspended
+  blacklisted
+  inactive
+}
+
+enum Gender {
+  male
+  female
+  other
+  undisclosed
+}
+
+enum KycLevel {
+  none
+  tier_1
+  tier_2
+  tier_3
+}
+
+enum ConsentType {
+  data_access
+  auto_deduction
+  credit_reporting
+  alternative_data
+  communications
+}
+
+enum LenderStatus {
+  active
+  suspended
+  inactive
+}
+
+enum LoanRequestStatus {
+  received
+  validated
+  pre_qualified
+  scored
+  approved
+  rejected
+  manual_review
+  offer_sent
+  accepted
+  declined
+  expired
+  contract_created
+  disbursing
+  disbursed
+  disbursement_failed
+  cancelled
+}
+
+enum ScoringModelType {
+  rule_based
+  ml_model
+  hybrid
+}
+
+enum RiskTier {
+  low
+  medium
+  high
+  critical
+}
+
+enum ScoringContext {
+  application
+  review
+  renewal
+  monitoring
+}
+
+enum ContractStatus {
+  active
+  performing
+  due
+  overdue
+  delinquent
+  default_status
+  written_off
+  settled
+  cancelled
+}
+
+enum ContractClassification {
+  performing
+  special_mention
+  substandard
+  doubtful
+  loss
+}
+
+enum SubscriptionStatus {
+  active
+  suspended
+  deactivated
+}
+
+enum RepaymentScheduleStatus {
+  pending
+  partial
+  paid
+  overdue
+  waived
+}
+
+enum RepaymentStatus {
+  pending
+  processing
+  completed
+  failed
+  reversed
+}
+
+enum RepaymentMethodType {
+  auto_deduction
+  manual
+  bulk
+  third_party
+  fee_recovery
+}
+
+enum DisbursementStatus {
+  pending
+  processing
+  completed
+  failed
+  reversed
+}
+
+enum LedgerEntryType {
+  disbursement
+  interest_accrual
+  fee
+  penalty
+  repayment
+  adjustment
+  write_off
+  reversal
+}
+
+enum DebitCredit {
+  debit
+  credit
+}
+
+enum ActorType {
+  user
+  system
+  api_key
+}
+
+enum NotificationChannel {
+  sms
+  push
+  email
+  in_app
+}
+
+enum NotificationStatus {
+  pending
+  sent
+  delivered
+  failed
+  bounced
+}
+
+enum WebhookDeliveryStatus {
+  pending
+  delivered
+  failed
+  exhausted
+}
+
+// ============================================================================
+// PLATFORM SCHEMA
+// ============================================================================
+
+model Tenant {
+  id                  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                String       @db.VarChar(255)
+  slug                String       @unique @db.VarChar(63)
+  legalName           String?      @map("legal_name") @db.VarChar(255)
+  registrationNumber  String?      @map("registration_number") @db.VarChar(100)
+  country             String       @db.VarChar(3)
+  schemaName          String       @unique @map("schema_name") @db.VarChar(63)
+  planTier            PlanTier     @default(starter) @map("plan_tier")
+  status              TenantStatus @default(provisioning)
+  settings            Json?
+  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt           DateTime?    @map("deleted_at") @db.Timestamptz(6)
+
+  @@map("tenants")
+}
+
+model PlatformUser {
+  id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email            String           @unique @db.VarChar(255)
+  passwordHash     String           @map("password_hash") @db.VarChar(255)
+  name             String?          @db.VarChar(255)
+  role             PlatformUserRole
+  mfaSecret        String?          @map("mfa_secret") @db.VarChar(255)
+  mfaEnabled       Boolean          @default(false) @map("mfa_enabled")
+  lastLoginAt      DateTime?        @map("last_login_at") @db.Timestamptz(6)
+  lockedUntil      DateTime?        @map("locked_until") @db.Timestamptz(6)
+  failedLoginCount Int              @default(0) @map("failed_login_count")
+  status           UserStatus       @default(active)
+  createdAt        DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime?        @map("deleted_at") @db.Timestamptz(6)
+
+  @@map("platform_users")
+}
+
+// ============================================================================
+// TENANT SCHEMA — CORE ENTITIES
+// ============================================================================
+
+model User {
+  id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String     @map("tenant_id") @db.Uuid
+  email            String     @db.VarChar(255)
+  passwordHash     String     @map("password_hash") @db.VarChar(255)
+  name             String?    @db.VarChar(255)
+  roleId           String     @map("role_id") @db.Uuid
+  mfaSecret        String?    @map("mfa_secret") @db.VarChar(255)
+  mfaEnabled       Boolean    @default(false) @map("mfa_enabled")
+  lastLoginAt      DateTime?  @map("last_login_at") @db.Timestamptz(6)
+  lockedUntil      DateTime?  @map("locked_until") @db.Timestamptz(6)
+  failedLoginCount Int        @default(0) @map("failed_login_count")
+  status           UserStatus @default(active)
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime?  @map("deleted_at") @db.Timestamptz(6)
+
+  role             Role       @relation(fields: [roleId], references: [id])
+  createdProducts  Product[]  @relation("ProductCreatedBy")
+  productVersions  ProductVersion[] @relation("VersionCreatedBy")
+  processedRequests LoanRequest[] @relation("RequestProcessedBy")
+
+  @@unique([tenantId, email])
+  @@index([tenantId])
+  @@index([roleId])
+  @@map("users")
+}
+
+model Role {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  name        String   @db.VarChar(100)
+  description String?  @db.Text
+  permissions Json     @default("[]")
+  isSystem    Boolean  @default(false) @map("is_system")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  users       User[]
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@map("roles")
+}
+
+model Lender {
+  id                String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String       @map("tenant_id") @db.Uuid
+  name              String       @db.VarChar(255)
+  licenseNumber     String?      @map("license_number") @db.VarChar(100)
+  country           String?      @db.VarChar(3)
+  fundingCapacity   Decimal?     @map("funding_capacity") @db.Decimal(19, 4)
+  fundingCurrency   String?      @map("funding_currency") @db.VarChar(3)
+  minInterestRate   Decimal?     @map("min_interest_rate") @db.Decimal(7, 4)
+  maxInterestRate   Decimal?     @map("max_interest_rate") @db.Decimal(7, 4)
+  settlementAccount Json?        @map("settlement_account")
+  riskParameters    Json?        @map("risk_parameters")
+  status            LenderStatus @default(active)
+  createdAt         DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt         DateTime?    @map("deleted_at") @db.Timestamptz(6)
+
+  products          Product[]
+  contracts         Contract[]
+
+  @@index([tenantId])
+  @@map("lenders")
+}
+
+model Customer {
+  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String         @map("tenant_id") @db.Uuid
+  externalId      String         @map("external_id") @db.VarChar(255)
+  externalSource  String?        @map("external_source") @db.VarChar(100)
+  fullName        String?        @map("full_name") @db.VarChar(255)
+  dateOfBirth     DateTime?      @map("date_of_birth") @db.Date
+  gender          Gender?
+  nationalId      String?        @map("national_id") @db.VarChar(255)
+  nationalIdType  String?        @map("national_id_type") @db.VarChar(50)
+  phonePrimary    String?        @map("phone_primary") @db.VarChar(50)
+  phoneSecondary  String?        @map("phone_secondary") @db.VarChar(50)
+  email           String?        @db.VarChar(255)
+  country         String?        @db.VarChar(3)
+  region          String?        @db.VarChar(100)
+  city            String?        @db.VarChar(100)
+  kycLevel        KycLevel       @default(none) @map("kyc_level")
+  kycVerifiedAt   DateTime?      @map("kyc_verified_at") @db.Timestamptz(6)
+  segment         String?        @db.VarChar(100)
+  status          CustomerStatus @default(active)
+  blacklistReason String?        @map("blacklist_reason") @db.Text
+  watchlist       Boolean        @default(false)
+  metadata        Json?
+  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt       DateTime?      @map("deleted_at") @db.Timestamptz(6)
+
+  consents        CustomerConsent[]
+  subscriptions   Subscription[]
+  loanRequests    LoanRequest[]
+  scoringResults  ScoringResult[]
+  contracts       Contract[]
+  disbursements   Disbursement[]
+  repayments      Repayment[]
+  notifications   Notification[]
+
+  @@unique([tenantId, externalId, externalSource])
+  @@index([tenantId])
+  @@index([phonePrimary])
+  @@index([nationalId])
+  @@index([status])
+  @@index([segment])
+  @@map("customers")
+}
+
+model CustomerConsent {
+  id          String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String      @map("tenant_id") @db.Uuid
+  customerId  String      @map("customer_id") @db.Uuid
+  consentType ConsentType @map("consent_type")
+  granted     Boolean
+  grantedAt   DateTime?   @map("granted_at") @db.Timestamptz(6)
+  revokedAt   DateTime?   @map("revoked_at") @db.Timestamptz(6)
+  channel     String?     @db.VarChar(50)
+  version     Int         @default(1)
+  ipAddress   String?     @map("ip_address") @db.VarChar(45)
+  createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  customer    Customer    @relation(fields: [customerId], references: [id])
+
+  @@index([tenantId])
+  @@index([customerId, consentType])
+  @@map("customer_consents")
+}
+
+// ============================================================================
+// TENANT SCHEMA — PRODUCT ENTITIES
+// ============================================================================
+
+model Product {
+  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String           @map("tenant_id") @db.Uuid
+  code               String           @db.VarChar(50)
+  name               String           @db.VarChar(255)
+  description        String?          @db.Text
+  type               ProductType
+  lenderId           String?          @map("lender_id") @db.Uuid
+  currency           String           @db.VarChar(3)
+  minAmount          Decimal?         @map("min_amount") @db.Decimal(19, 4)
+  maxAmount          Decimal?         @map("max_amount") @db.Decimal(19, 4)
+  minTenorDays       Int?             @map("min_tenor_days")
+  maxTenorDays       Int?             @map("max_tenor_days")
+  interestRateModel  InterestRateModel @map("interest_rate_model")
+  interestRate       Decimal?         @map("interest_rate") @db.Decimal(7, 4)
+  rateTiers          Json?            @map("rate_tiers")
+  feeStructure       Json?            @map("fee_structure")
+  repaymentMethod    RepaymentMethod  @map("repayment_method")
+  gracePeriodDays    Int              @default(0) @map("grace_period_days")
+  penaltyConfig      Json?            @map("penalty_config")
+  approvalWorkflow   ApprovalWorkflow @default(auto) @map("approval_workflow")
+  approvalThresholds Json?            @map("approval_thresholds")
+  scoringModelId     String?          @map("scoring_model_id") @db.VarChar(100)
+  eligibilityRules   Json?            @map("eligibility_rules")
+  revenueSharing     Json?            @map("revenue_sharing")
+  notificationConfig Json?            @map("notification_config")
+  coolingOffHours    Int              @default(0) @map("cooling_off_hours")
+  maxActiveLoans     Int              @default(1) @map("max_active_loans")
+  version            Int              @default(1)
+  status             ProductStatus    @default(draft)
+  activatedAt        DateTime?        @map("activated_at") @db.Timestamptz(6)
+  createdBy          String?          @map("created_by") @db.Uuid
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt          DateTime?        @map("deleted_at") @db.Timestamptz(6)
+
+  lender             Lender?          @relation(fields: [lenderId], references: [id])
+  creator            User?            @relation("ProductCreatedBy", fields: [createdBy], references: [id])
+  versions           ProductVersion[]
+  subscriptions      Subscription[]
+  loanRequests       LoanRequest[]
+  scoringResults     ScoringResult[]
+  contracts          Contract[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([type])
+  @@index([status])
+  @@index([lenderId])
+  @@map("products")
+}
+
+model ProductVersion {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  productId     String   @map("product_id") @db.Uuid
+  version       Int
+  snapshot      Json
+  changeSummary String?  @map("change_summary") @db.Text
+  createdBy     String?  @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  product       Product  @relation(fields: [productId], references: [id])
+  creator       User?    @relation("VersionCreatedBy", fields: [createdBy], references: [id])
+
+  @@unique([productId, version])
+  @@index([tenantId])
+  @@map("product_versions")
+}
+
+// ============================================================================
+// TENANT SCHEMA — LOAN PROCESSING ENTITIES
+// ============================================================================
+
+model Subscription {
+  id              String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String             @map("tenant_id") @db.Uuid
+  customerId      String             @map("customer_id") @db.Uuid
+  productId       String             @map("product_id") @db.Uuid
+  creditLimit     Decimal?           @map("credit_limit") @db.Decimal(19, 4)
+  availableLimit  Decimal?           @map("available_limit") @db.Decimal(19, 4)
+  status          SubscriptionStatus @default(active)
+  activatedAt     DateTime?          @map("activated_at") @db.Timestamptz(6)
+  deactivatedAt   DateTime?          @map("deactivated_at") @db.Timestamptz(6)
+  lastLimitReview DateTime?          @map("last_limit_review") @db.Timestamptz(6)
+  createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  customer        Customer           @relation(fields: [customerId], references: [id])
+  product         Product            @relation(fields: [productId], references: [id])
+
+  @@unique([tenantId, customerId, productId])
+  @@index([tenantId])
+  @@index([status])
+  @@map("subscriptions")
+}
+
+model LoanRequest {
+  id               String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String            @map("tenant_id") @db.Uuid
+  idempotencyKey   String?           @unique @map("idempotency_key") @db.VarChar(255)
+  customerId       String            @map("customer_id") @db.Uuid
+  productId        String            @map("product_id") @db.Uuid
+  productVersion   Int?              @map("product_version")
+  requestedAmount  Decimal            @map("requested_amount") @db.Decimal(19, 4)
+  requestedTenor   Int?              @map("requested_tenor")
+  currency         String            @db.VarChar(3)
+  channel          String?           @db.VarChar(50)
+  status           LoanRequestStatus @default(received)
+  rejectionReasons Json?             @map("rejection_reasons")
+  scoringResultId  String?           @map("scoring_result_id") @db.Uuid
+  approvedAmount   Decimal?          @map("approved_amount") @db.Decimal(19, 4)
+  approvedTenor    Int?              @map("approved_tenor")
+  offerDetails     Json?             @map("offer_details")
+  offerExpiresAt   DateTime?         @map("offer_expires_at") @db.Timestamptz(6)
+  acceptedAt       DateTime?         @map("accepted_at") @db.Timestamptz(6)
+  contractId       String?           @map("contract_id") @db.Uuid
+  processedBy      String?           @map("processed_by") @db.Uuid
+  processingNotes  String?           @map("processing_notes") @db.Text
+  metadata         Json?
+  createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  customer         Customer          @relation(fields: [customerId], references: [id])
+  product          Product           @relation(fields: [productId], references: [id])
+  scoringResult    ScoringResult?    @relation(fields: [scoringResultId], references: [id])
+  contract         Contract?         @relation("RequestContract", fields: [contractId], references: [id])
+  processor        User?             @relation("RequestProcessedBy", fields: [processedBy], references: [id])
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([productId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("loan_requests")
+}
+
+model ScoringResult {
+  id                  String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String           @map("tenant_id") @db.Uuid
+  customerId          String           @map("customer_id") @db.Uuid
+  productId           String           @map("product_id") @db.Uuid
+  modelType           ScoringModelType @map("model_type")
+  modelVersion        String?          @map("model_version") @db.VarChar(50)
+  score               Decimal          @db.Decimal(7, 2)
+  scoreRangeMin       Decimal          @map("score_range_min") @db.Decimal(7, 2)
+  scoreRangeMax       Decimal          @map("score_range_max") @db.Decimal(7, 2)
+  probabilityDefault  Decimal?         @map("probability_default") @db.Decimal(5, 4)
+  riskTier            RiskTier         @map("risk_tier")
+  recommendedLimit    Decimal?         @map("recommended_limit") @db.Decimal(19, 4)
+  contributingFactors Json?            @map("contributing_factors")
+  inputFeatures       Json?            @map("input_features")
+  confidence          Decimal?         @db.Decimal(5, 4)
+  context             ScoringContext
+  createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  customer            Customer         @relation(fields: [customerId], references: [id])
+  product             Product          @relation(fields: [productId], references: [id])
+  loanRequests        LoanRequest[]
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([createdAt])
+  @@map("scoring_results")
+}
+
+model Contract {
+  id                    String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId              String                 @map("tenant_id") @db.Uuid
+  contractNumber        String                 @map("contract_number") @db.VarChar(50)
+  customerId            String                 @map("customer_id") @db.Uuid
+  productId             String                 @map("product_id") @db.Uuid
+  productVersion        Int?                   @map("product_version")
+  lenderId              String                 @map("lender_id") @db.Uuid
+  loanRequestId         String                 @map("loan_request_id") @db.Uuid
+  principalAmount       Decimal                @map("principal_amount") @db.Decimal(19, 4)
+  interestRate          Decimal                @map("interest_rate") @db.Decimal(7, 4)
+  interestAmount        Decimal?               @map("interest_amount") @db.Decimal(19, 4)
+  totalFees             Decimal?               @map("total_fees") @db.Decimal(19, 4)
+  totalCostCredit       Decimal?               @map("total_cost_credit") @db.Decimal(19, 4)
+  currency              String                 @db.VarChar(3)
+  tenorDays             Int?                   @map("tenor_days")
+  repaymentMethod       RepaymentMethod        @map("repayment_method")
+  startDate             DateTime               @map("start_date") @db.Date
+  maturityDate          DateTime               @map("maturity_date") @db.Date
+  firstPaymentDate      DateTime?              @map("first_payment_date") @db.Date
+  outstandingPrincipal  Decimal?               @map("outstanding_principal") @db.Decimal(19, 4)
+  outstandingInterest   Decimal?               @map("outstanding_interest") @db.Decimal(19, 4)
+  outstandingFees       Decimal?               @map("outstanding_fees") @db.Decimal(19, 4)
+  outstandingPenalties  Decimal?               @map("outstanding_penalties") @db.Decimal(19, 4)
+  totalOutstanding      Decimal?               @map("total_outstanding") @db.Decimal(19, 4)
+  totalPaid             Decimal?               @map("total_paid") @db.Decimal(19, 4)
+  daysPastDue           Int                    @default(0) @map("days_past_due")
+  status                ContractStatus         @default(active)
+  classification        ContractClassification @default(performing)
+  termsSnapshot         Json?                  @map("terms_snapshot")
+  restructured          Boolean                @default(false)
+  restructureCount      Int                    @default(0) @map("restructure_count")
+  disbursementId        String?                @map("disbursement_id") @db.Uuid
+  metadata              Json?
+  settledAt             DateTime?              @map("settled_at") @db.Timestamptz(6)
+  defaultedAt           DateTime?              @map("defaulted_at") @db.Timestamptz(6)
+  writtenOffAt          DateTime?              @map("written_off_at") @db.Timestamptz(6)
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  customer              Customer               @relation(fields: [customerId], references: [id])
+  product               Product                @relation(fields: [productId], references: [id])
+  lender                Lender                 @relation(fields: [lenderId], references: [id])
+  loanRequests          LoanRequest[]          @relation("RequestContract")
+  repaymentSchedule     RepaymentScheduleEntry[]
+  disbursements         Disbursement[]
+  repayments            Repayment[]
+  ledgerEntries         LedgerEntry[]
+  notifications         Notification[]
+  collectionsActions    CollectionsAction[]
+
+  @@unique([tenantId, contractNumber])
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([productId])
+  @@index([status])
+  @@index([classification])
+  @@index([daysPastDue])
+  @@index([maturityDate])
+  @@index([createdAt])
+  @@map("contracts")
+}
+
+model RepaymentScheduleEntry {
+  id                String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String                  @map("tenant_id") @db.Uuid
+  contractId        String                  @map("contract_id") @db.Uuid
+  installmentNumber Int                     @map("installment_number")
+  dueDate           DateTime                @map("due_date") @db.Date
+  principalAmount   Decimal?                @map("principal_amount") @db.Decimal(19, 4)
+  interestAmount    Decimal?                @map("interest_amount") @db.Decimal(19, 4)
+  feeAmount         Decimal?                @map("fee_amount") @db.Decimal(19, 4)
+  totalAmount       Decimal                 @map("total_amount") @db.Decimal(19, 4)
+  paidAmount        Decimal                 @default(0) @map("paid_amount") @db.Decimal(19, 4)
+  status            RepaymentScheduleStatus @default(pending)
+  paidAt            DateTime?               @map("paid_at") @db.Timestamptz(6)
+  createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  contract          Contract                @relation(fields: [contractId], references: [id])
+
+  @@unique([contractId, installmentNumber])
+  @@index([tenantId])
+  @@index([dueDate])
+  @@index([status])
+  @@map("repayment_schedule")
+}
+
+model Disbursement {
+  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String             @map("tenant_id") @db.Uuid
+  contractId    String             @map("contract_id") @db.Uuid
+  customerId    String             @map("customer_id") @db.Uuid
+  amount        Decimal            @db.Decimal(19, 4)
+  currency      String             @db.VarChar(3)
+  channel       String?            @db.VarChar(50)
+  destination   String?            @db.VarChar(255)
+  externalRef   String?            @map("external_ref") @db.VarChar(255)
+  status        DisbursementStatus @default(pending)
+  retryCount    Int                @default(0) @map("retry_count")
+  failureReason String?            @map("failure_reason") @db.Text
+  completedAt   DateTime?          @map("completed_at") @db.Timestamptz(6)
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  contract      Contract           @relation(fields: [contractId], references: [id])
+  customer      Customer           @relation(fields: [customerId], references: [id])
+
+  @@index([tenantId])
+  @@index([contractId])
+  @@index([status])
+  @@index([externalRef])
+  @@map("disbursements")
+}
+
+model Repayment {
+  id                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String              @map("tenant_id") @db.Uuid
+  contractId         String              @map("contract_id") @db.Uuid
+  customerId         String              @map("customer_id") @db.Uuid
+  amount             Decimal             @db.Decimal(19, 4)
+  currency           String              @db.VarChar(3)
+  method             RepaymentMethodType
+  source             String?             @db.VarChar(50)
+  externalRef        String?             @map("external_ref") @db.VarChar(255)
+  allocatedPrincipal Decimal?            @map("allocated_principal") @db.Decimal(19, 4)
+  allocatedInterest  Decimal?            @map("allocated_interest") @db.Decimal(19, 4)
+  allocatedFees      Decimal?            @map("allocated_fees") @db.Decimal(19, 4)
+  allocatedPenalties Decimal?            @map("allocated_penalties") @db.Decimal(19, 4)
+  status             RepaymentStatus     @default(pending)
+  failureReason      String?             @map("failure_reason") @db.Text
+  receiptNumber      String?             @map("receipt_number") @db.VarChar(50)
+  completedAt        DateTime?           @map("completed_at") @db.Timestamptz(6)
+  createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  contract           Contract            @relation(fields: [contractId], references: [id])
+  customer           Customer            @relation(fields: [customerId], references: [id])
+
+  @@index([tenantId])
+  @@index([contractId])
+  @@index([customerId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("repayments")
+}
+
+model LedgerEntry {
+  id             String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String          @map("tenant_id") @db.Uuid
+  contractId     String          @map("contract_id") @db.Uuid
+  entryType      LedgerEntryType @map("entry_type")
+  debitCredit    DebitCredit     @map("debit_credit")
+  amount         Decimal         @db.Decimal(19, 4)
+  currency       String          @db.VarChar(3)
+  runningBalance Decimal         @map("running_balance") @db.Decimal(19, 4)
+  effectiveDate  DateTime        @map("effective_date") @db.Date
+  valueDate      DateTime        @map("value_date") @db.Date
+  description    String?         @db.Text
+  referenceType  String?         @map("reference_type") @db.VarChar(50)
+  referenceId    String?         @map("reference_id") @db.Uuid
+  createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  contract       Contract        @relation(fields: [contractId], references: [id])
+
+  @@index([tenantId])
+  @@index([contractId])
+  @@index([effectiveDate])
+  @@index([entryType])
+  @@map("ledger_entries")
+}
+
+// ============================================================================
+// TENANT SCHEMA — SUPPORTING ENTITIES
+// ============================================================================
+
+model AuditLog {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  actorId       String?   @map("actor_id") @db.Uuid
+  actorType     ActorType @map("actor_type")
+  actorIp       String?   @map("actor_ip") @db.VarChar(45)
+  action        String    @db.VarChar(100)
+  resourceType  String    @map("resource_type") @db.VarChar(100)
+  resourceId    String?   @map("resource_id") @db.Uuid
+  beforeValue   Json?     @map("before_value")
+  afterValue    Json?     @map("after_value")
+  correlationId String?   @map("correlation_id") @db.Uuid
+  metadata      Json?
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@index([tenantId])
+  @@index([actorId])
+  @@index([resourceType, resourceId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String             @map("tenant_id") @db.Uuid
+  customerId    String             @map("customer_id") @db.Uuid
+  contractId    String?            @map("contract_id") @db.Uuid
+  eventType     String             @map("event_type") @db.VarChar(100)
+  channel       NotificationChannel
+  recipient     String?            @db.VarChar(255)
+  templateId    String?            @map("template_id") @db.VarChar(100)
+  content       String?            @db.Text
+  status        NotificationStatus @default(pending)
+  externalRef   String?            @map("external_ref") @db.VarChar(255)
+  retryCount    Int                @default(0) @map("retry_count")
+  sentAt        DateTime?          @map("sent_at") @db.Timestamptz(6)
+  deliveredAt   DateTime?          @map("delivered_at") @db.Timestamptz(6)
+  failedAt      DateTime?          @map("failed_at") @db.Timestamptz(6)
+  failureReason String?            @map("failure_reason") @db.Text
+  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  customer      Customer           @relation(fields: [customerId], references: [id])
+  contract      Contract?          @relation(fields: [contractId], references: [id])
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([status])
+  @@index([eventType])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+// ============================================================================
+// TENANT SCHEMA — SETTLEMENT & RECONCILIATION (Phase 3)
+// ============================================================================
+
+enum SettlementStatus {
+  calculated
+  approved
+  executing
+  settled
+  failed
+}
+
+model SettlementRun {
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String           @map("tenant_id") @db.Uuid
+  periodStart   DateTime         @map("period_start") @db.Date
+  periodEnd     DateTime         @map("period_end") @db.Date
+  status        SettlementStatus @default(calculated)
+  totalRevenue  Decimal          @map("total_revenue") @db.Decimal(19, 4)
+  approvedBy    String?          @map("approved_by") @db.Uuid
+  approvedAt    DateTime?        @map("approved_at") @db.Timestamptz(6)
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  lines         SettlementLine[]
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("settlement_runs")
+}
+
+model SettlementLine {
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String         @map("tenant_id") @db.Uuid
+  settlementRunId   String         @map("settlement_run_id") @db.Uuid
+  partyType         String         @map("party_type") @db.VarChar(50)
+  partyId           String         @map("party_id") @db.Uuid
+  grossRevenue      Decimal        @map("gross_revenue") @db.Decimal(19, 4)
+  sharePercentage   Decimal        @map("share_percentage") @db.Decimal(5, 2)
+  shareAmount       Decimal        @map("share_amount") @db.Decimal(19, 4)
+  deductions        Decimal        @default(0) @db.Decimal(19, 4)
+  netAmount         Decimal        @map("net_amount") @db.Decimal(19, 4)
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  settlementRun     SettlementRun  @relation(fields: [settlementRunId], references: [id])
+
+  @@index([tenantId])
+  @@index([settlementRunId])
+  @@map("settlement_lines")
+}
+
+model ReconciliationRun {
+  id              String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String                    @map("tenant_id") @db.Uuid
+  runDate         DateTime                  @map("run_date") @db.Timestamptz(6)
+  status          String                    @db.VarChar(50)
+  matchRate       Decimal?                  @map("match_rate") @db.Decimal(5, 2)
+  totalTxns       Int                       @map("total_txns")
+  matchedTxns     Int                       @map("matched_txns")
+  exceptionCount  Int                       @map("exception_count")
+  createdAt       DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  exceptions      ReconciliationException[]
+
+  @@index([tenantId])
+  @@index([runDate])
+  @@map("reconciliation_runs")
+}
+
+model ReconciliationException {
+  id                    String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId              String             @map("tenant_id") @db.Uuid
+  reconciliationRunId   String             @map("reconciliation_run_id") @db.Uuid
+  contractId            String?            @map("contract_id") @db.Uuid
+  txnType               String             @map("txn_type") @db.VarChar(50)
+  externalRef           String?            @map("external_ref") @db.VarChar(255)
+  exceptionType         String             @map("exception_type") @db.VarChar(50)
+  severity              String             @db.VarChar(50)
+  amount                Decimal?           @db.Decimal(19, 4)
+  description           String?            @db.Text
+  investigation         String?            @db.Text
+  resolved              Boolean            @default(false)
+  resolvedAt            DateTime?          @map("resolved_at") @db.Timestamptz(6)
+  resolvedBy            String?            @map("resolved_by") @db.Uuid
+  createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  reconciliationRun     ReconciliationRun  @relation(fields: [reconciliationRunId], references: [id])
+
+  @@index([tenantId])
+  @@index([reconciliationRunId])
+  @@index([severity])
+  @@index([resolved])
+  @@map("reconciliation_exceptions")
+}
+
+model CollectionsAction {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  contractId  String    @map("contract_id") @db.Uuid
+  actionType  String    @map("action_type") @db.VarChar(50)
+  notes       String?   @db.Text
+  actorId     String?   @map("actor_id") @db.Uuid
+  promiseDate DateTime? @map("promise_date") @db.Timestamptz(6)
+  metadata    Json?
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  contract    Contract  @relation(fields: [contractId], references: [id])
+
+  @@index([tenantId])
+  @@index([contractId])
+  @@index([actionType])
+  @@map("collections_actions")
+}

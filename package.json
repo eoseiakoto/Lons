@@ -1,0 +1,30 @@
+{
+  "name": "lons",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lōns — B2B2C fintech lending platform",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "test": "turbo test",
+    "test:e2e": "turbo test:e2e",
+    "lint": "turbo lint",
+    "lint:fix": "turbo lint:fix",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "db:migrate": "pnpm --filter @lons/database db:migrate",
+    "db:migrate:dev": "pnpm --filter @lons/database db:migrate:dev",
+    "db:seed": "pnpm --filter @lons/database db:seed",
+    "db:studio": "pnpm --filter @lons/database db:studio",
+    "db:generate": "pnpm --filter @lons/database db:generate",
+    "clean": "turbo clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.0",
+    "turbo": "^2.3.0"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

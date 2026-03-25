@@ -1,0 +1,29 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "graphql-server",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["pnpm@9", "--filter", "@lons/graphql-server", "dev"],
+      "port": 3000
+    },
+    {
+      "name": "rest-server",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["pnpm@9", "--filter", "@lons/rest-server", "dev"],
+      "port": 3002
+    },
+    {
+      "name": "admin-portal",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["pnpm@9", "--filter", "@lons/admin-portal", "dev"],
+      "port": 3100
+    },
+    {
+      "name": "platform-portal",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["pnpm@9", "--filter", "@lons/platform-portal", "dev"],
+      "port": 3200
+    }
+  ]
+}

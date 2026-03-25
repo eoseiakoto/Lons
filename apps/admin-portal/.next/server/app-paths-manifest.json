@@ -1,0 +1,10 @@
+{
+  "/login/page": "app/login/page.js",
+  "/(portal)/dashboard/page": "app/(portal)/dashboard/page.js",
+  "/(portal)/products/page": "app/(portal)/products/page.js",
+  "/(portal)/loans/contracts/page": "app/(portal)/loans/contracts/page.js",
+  "/(portal)/collections/page": "app/(portal)/collections/page.js",
+  "/(portal)/settings/page": "app/(portal)/settings/page.js",
+  "/(portal)/customers/page": "app/(portal)/customers/page.js",
+  "/(portal)/reports/page": "app/(portal)/reports/page.js"
+}

@@ -1,0 +1,20 @@
+{
+  "name": "@lons/event-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist",
+    "lint": "eslint src --ext .ts"
+  },
+  "dependencies": {
+    "@lons/shared-types": "workspace:*"
+  },
+  "devDependencies": {
+    "@lons/eslint-config": "workspace:*",
+    "eslint": "^8.57.0",
+    "typescript": "^5.4.0"
+  }
+}

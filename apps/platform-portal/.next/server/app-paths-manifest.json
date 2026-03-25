@@ -1,0 +1,8 @@
+{
+  "/(portal)/settings/page": "app/(portal)/settings/page.js",
+  "/(portal)/tenants/[id]/customers/page": "app/(portal)/tenants/[id]/customers/page.js",
+  "/(portal)/system/page": "app/(portal)/system/page.js",
+  "/(portal)/dashboard/page": "app/(portal)/dashboard/page.js",
+  "/(portal)/tenants/page": "app/(portal)/tenants/page.js",
+  "/(portal)/tenants/[id]/page": "app/(portal)/tenants/[id]/page.js"
+}
