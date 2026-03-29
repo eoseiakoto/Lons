@@ -1,0 +1,29 @@
+{{- if .Values.tracing.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lons.fullname" . }}-otel-collector
+  labels:
+    {{- include "lons.componentLabels" (dict "context" . "component" "otel-collector") | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "lons.selectorLabels" (dict "context" . "component" "otel-collector") | nindent 4 }}
+  ports:
+    - name: otlp-grpc
+      port: {{ .Values.tracing.collector.port | default 4317 }}
+      targetPort: otlp-grpc
+      protocol: TCP
+    - name: otlp-http
+      port: {{ .Values.tracing.collector.httpPort | default 4318 }}
+      targetPort: otlp-http
+      protocol: TCP
+    - name: metrics
+      port: {{ .Values.tracing.collector.metricsPort | default 8888 }}
+      targetPort: metrics
+      protocol: TCP
+    - name: healthcheck
+      port: {{ .Values.tracing.collector.healthPort | default 13133 }}
+      targetPort: healthcheck
+      protocol: TCP
+{{- end }}

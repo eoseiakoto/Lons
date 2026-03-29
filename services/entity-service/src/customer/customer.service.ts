@@ -93,6 +93,49 @@ export class CustomerService {
     return { items: customers.slice(0, take), hasMore: customers.length > take };
   }
 
+  async findAll(tenantId: string, filters?: {
+    skip?: number;
+    take?: number;
+    search?: string;
+    status?: string;
+  }) {
+    const where: Prisma.CustomerWhereInput = { tenantId, deletedAt: null };
+    if (filters?.status) where.status = filters.status as Prisma.EnumCustomerStatusFilter['equals'];
+    if (filters?.search) {
+      where.OR = [
+        { fullName: { contains: filters.search, mode: 'insensitive' } },
+        { phonePrimary: { contains: filters.search } },
+        { externalId: { contains: filters.search } },
+        { email: { contains: filters.search, mode: 'insensitive' } },
+      ];
+    }
+
+    return this.prisma.customer.findMany({
+      where,
+      skip: filters?.skip ?? 0,
+      take: filters?.take ?? 20,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async count(tenantId: string, filters?: {
+    search?: string;
+    status?: string;
+  }) {
+    const where: Prisma.CustomerWhereInput = { tenantId, deletedAt: null };
+    if (filters?.status) where.status = filters.status as Prisma.EnumCustomerStatusFilter['equals'];
+    if (filters?.search) {
+      where.OR = [
+        { fullName: { contains: filters.search, mode: 'insensitive' } },
+        { phonePrimary: { contains: filters.search } },
+        { externalId: { contains: filters.search } },
+        { email: { contains: filters.search, mode: 'insensitive' } },
+      ];
+    }
+
+    return this.prisma.customer.count({ where });
+  }
+
   async update(tenantId: string, id: string, data: {
     fullName?: string;
     phonePrimary?: string;

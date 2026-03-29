@@ -17,9 +17,13 @@
     "db:seed": "pnpm --filter @lons/database db:seed",
     "db:studio": "pnpm --filter @lons/database db:studio",
     "db:generate": "pnpm --filter @lons/database db:generate",
+    "encrypt-pii": "tsx scripts/encrypt-existing-pii.ts",
+    "test:regression": "jest --config tests/regression/jest.config.ts --runInBand",
+    "test:staging": "jest --config tests/staging/jest.config.ts --runInBand",
     "clean": "turbo clean && rm -rf node_modules"
   },
   "devDependencies": {
+    "jest-junit": "^16.0.0",
     "prettier": "^3.2.0",
     "turbo": "^2.3.0"
   },

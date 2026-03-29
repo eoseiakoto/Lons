@@ -1,5 +1,5 @@
 import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
-import { encodeCursor } from '@lons/common';
+import { encodeCursor, AuditAction, AuditActionType, AuditResourceType } from '@lons/common';
 
 import { LoanRequestType, LoanRequestConnection } from '../types/loan-request.type';
 import { CreateLoanRequestInput } from '../inputs/create-loan-request.input';
@@ -66,6 +66,7 @@ export class LoanRequestResolver {
   }
 
   @Mutation(() => LoanRequestType)
+  @AuditAction(AuditActionType.CREATE, AuditResourceType.LOAN_REQUEST)
   @Roles('loan_request:create')
   async createLoanRequest(
     @CurrentTenant() tenantId: string,
@@ -79,6 +80,7 @@ export class LoanRequestResolver {
   }
 
   @Mutation(() => LoanRequestType)
+  @AuditAction(AuditActionType.UPDATE, AuditResourceType.LOAN_REQUEST)
   @Roles('loan_request:process')
   async processLoanRequest(
     @CurrentTenant() tenantId: string,
@@ -118,6 +120,7 @@ export class LoanRequestResolver {
   }
 
   @Mutation(() => LoanRequestType)
+  @AuditAction(AuditActionType.UPDATE, AuditResourceType.LOAN_REQUEST)
   @Roles('loan_request:process')
   async acceptOffer(
     @CurrentTenant() tenantId: string,
@@ -139,6 +142,7 @@ export class LoanRequestResolver {
   }
 
   @Mutation(() => LoanRequestType)
+  @AuditAction(AuditActionType.UPDATE, AuditResourceType.LOAN_REQUEST)
   @Roles('loan_request:process')
   async declineOffer(
     @CurrentTenant() tenantId: string,

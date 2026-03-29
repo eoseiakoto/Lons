@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from '@lons/database';
-import { EventBusModule } from '@lons/common';
+import { EventBusModule, ObservabilityModule } from '@lons/common';
 import { ProcessEngineModule } from '@lons/process-engine';
 import { SettlementServiceModule } from '@lons/settlement-service';
 import { ReconciliationServiceModule } from '@lons/reconciliation-service';
@@ -10,6 +10,7 @@ import { ReconciliationServiceModule } from '@lons/reconciliation-service';
 import { InterestAccrualJob } from './jobs/interest-accrual.job';
 import { AgingJob } from './jobs/aging.job';
 import { ReconciliationJob } from './jobs/reconciliation.job';
+import { AuditPartitionManager } from './jobs/audit-partition-manager';
 
 @Module({
   imports: [
@@ -17,10 +18,11 @@ import { ReconciliationJob } from './jobs/reconciliation.job';
     ScheduleModule.forRoot(),
     PrismaModule,
     EventBusModule,
+    ObservabilityModule,
     ProcessEngineModule,
     SettlementServiceModule,
     ReconciliationServiceModule,
   ],
-  providers: [InterestAccrualJob, AgingJob, ReconciliationJob],
+  providers: [InterestAccrualJob, AgingJob, ReconciliationJob, AuditPartitionManager],
 })
 export class SchedulerModule {}

@@ -1,6 +1,6 @@
 import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
 import { ProductService, CurrentTenant, CurrentUser, Roles, IAuthenticatedUser } from '@lons/entity-service';
-import { encodeCursor } from '@lons/common';
+import { encodeCursor, AuditAction, AuditActionType, AuditResourceType } from '@lons/common';
 
 import { ProductType, ProductConnection } from '../types/product.type';
 import { PaginationInput } from '../inputs/pagination.input';
@@ -45,6 +45,7 @@ export class ProductResolver {
   }
 
   @Mutation(() => ProductType)
+  @AuditAction(AuditActionType.CREATE, AuditResourceType.PRODUCT)
   @Roles('product:create')
   async createProduct(
     @CurrentTenant() tenantId: string,
@@ -63,6 +64,7 @@ export class ProductResolver {
   }
 
   @Mutation(() => ProductType)
+  @AuditAction(AuditActionType.UPDATE, AuditResourceType.PRODUCT)
   @Roles('product:update')
   async updateProduct(
     @CurrentTenant() tenantId: string,
@@ -74,6 +76,7 @@ export class ProductResolver {
   }
 
   @Mutation(() => ProductType)
+  @AuditAction(AuditActionType.UPDATE, AuditResourceType.PRODUCT)
   @Roles('product:activate')
   async activateProduct(
     @CurrentTenant() tenantId: string,
@@ -83,6 +86,7 @@ export class ProductResolver {
   }
 
   @Mutation(() => ProductType)
+  @AuditAction(AuditActionType.UPDATE, AuditResourceType.PRODUCT)
   @Roles('product:update')
   async suspendProduct(
     @CurrentTenant() tenantId: string,

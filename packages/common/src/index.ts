@@ -4,3 +4,7 @@ export * from './encryption';
 export * from './errors';
 export * from './idempotency';
 export * from './events';
+export * from './observability';
+export * from './audit';
+export * from './rate-limiting';
+export * from './security';

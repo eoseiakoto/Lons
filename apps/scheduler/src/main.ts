@@ -1,3 +1,6 @@
+import { initTracing } from '@lons/common';
+initTracing({ serviceName: 'scheduler' });
+
 import { NestFactory } from '@nestjs/core';
 
 import { SchedulerModule } from './scheduler.module';

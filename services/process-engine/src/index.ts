@@ -31,3 +31,6 @@ export * from './analytics/analytics.service';
 export * from './analytics/analytics.module';
 export * from './monitoring/monitoring.service';
 export * from './monitoring/monitoring.module';
+export * from './monitoring/alert.service';
+export * from './monitoring/alert-rules.service';
+export * from './monitoring/adaptive-actions.service';

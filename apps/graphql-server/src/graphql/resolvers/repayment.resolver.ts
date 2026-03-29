@@ -1,5 +1,5 @@
 import { Resolver, Query, Mutation, Args, ID, Float } from '@nestjs/graphql';
-import { encodeCursor } from '@lons/common';
+import { encodeCursor, AuditAction, AuditActionType, AuditResourceType } from '@lons/common';
 import { PaymentService } from '@lons/repayment-service';
 import { CurrentTenant, Roles } from '@lons/entity-service';
 
@@ -11,6 +11,7 @@ export class RepaymentResolver {
   constructor(private paymentService: PaymentService) {}
 
   @Mutation(() => RepaymentType)
+  @AuditAction(AuditActionType.REPAYMENT, AuditResourceType.REPAYMENT)
   @Roles('repayment:create')
   async processRepayment(
     @CurrentTenant() tenantId: string,

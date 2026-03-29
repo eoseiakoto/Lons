@@ -1,0 +1,1514 @@
+{
+  "info": {
+    "_postman_id": "lons-graphql-collection",
+    "name": "Lons - GraphQL API",
+    "description": "GraphQL API collection for the Lons B2B2C lending platform. All operations use POST to the GraphQL endpoint with application/json content type.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "authToken",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{authToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Set Authorization header from authToken variable",
+          "if (pm.variables.get('authToken')) {",
+          "    pm.request.headers.upsert({",
+          "        key: 'Authorization',",
+          "        value: 'Bearer ' + pm.variables.get('authToken')",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "description": "Authentication mutations (login, token refresh)",
+      "item": [
+        {
+          "name": "loginBySlug",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.loginBySlug) {",
+                  "    pm.collectionVariables.set('authToken', res.data.loginBySlug.accessToken);",
+                  "    pm.environment.set('authToken', res.data.loginBySlug.accessToken);",
+                  "    console.log('Auth token saved to authToken variable');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation LoginBySlug($slug: String!, $email: String!, $password: String!) {\n  loginBySlug(slug: $slug, email: $email, password: $password) {\n    accessToken\n    refreshToken\n  }\n}",
+                "variables": "{\n  \"slug\": \"{{tenantSlug}}\",\n  \"email\": \"admin@example.com\",\n  \"password\": \"password123\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Login with tenant slug, email, and password. Saves the returned access token to the authToken variable automatically."
+          }
+        },
+        {
+          "name": "loginTenantUser",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.loginTenantUser) {",
+                  "    pm.collectionVariables.set('authToken', res.data.loginTenantUser.accessToken);",
+                  "    pm.environment.set('authToken', res.data.loginTenantUser.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation LoginTenantUser($tenantId: String!, $email: String!, $password: String!) {\n  loginTenantUser(tenantId: $tenantId, email: $email, password: $password) {\n    accessToken\n    refreshToken\n  }\n}",
+                "variables": "{\n  \"tenantId\": \"{{tenantId}}\",\n  \"email\": \"admin@example.com\",\n  \"password\": \"password123\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Login with tenant ID, email, and password."
+          }
+        },
+        {
+          "name": "loginPlatformUser",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.loginPlatformUser) {",
+                  "    pm.collectionVariables.set('authToken', res.data.loginPlatformUser.accessToken);",
+                  "    pm.environment.set('authToken', res.data.loginPlatformUser.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation LoginPlatformUser($email: String!, $password: String!) {\n  loginPlatformUser(email: $email, password: $password) {\n    accessToken\n    refreshToken\n  }\n}",
+                "variables": "{\n  \"email\": \"platform-admin@lons.io\",\n  \"password\": \"password123\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Login as a platform-level admin user."
+          }
+        },
+        {
+          "name": "refreshToken",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const res = pm.response.json();",
+                  "if (res.data && res.data.refreshToken) {",
+                  "    pm.collectionVariables.set('authToken', res.data.refreshToken.accessToken);",
+                  "    pm.environment.set('authToken', res.data.refreshToken.accessToken);",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "noauth"
+            },
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation RefreshToken($refreshToken: String!) {\n  refreshToken(refreshToken: $refreshToken) {\n    accessToken\n    refreshToken\n  }\n}",
+                "variables": "{\n  \"refreshToken\": \"<paste-refresh-token-here>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Exchange a refresh token for a new access token and refresh token pair."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tenants",
+      "description": "Tenant management queries and mutations",
+      "item": [
+        {
+          "name": "tenants (paginated)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Tenants($pagination: PaginationInput) {\n  tenants(pagination: $pagination) {\n    edges {\n      node {\n        id\n        name\n        slug\n        status\n        settings\n        createdAt\n        updatedAt\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    totalCount\n  }\n}",
+                "variables": "{\n  \"pagination\": {\n    \"first\": 20,\n    \"after\": null\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "List tenants with cursor-based pagination."
+          }
+        },
+        {
+          "name": "tenant (by ID)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Tenant($id: ID!) {\n  tenant(id: $id) {\n    id\n    name\n    slug\n    status\n    settings\n    createdAt\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"id\": \"{{tenantId}}\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Fetch a single tenant by ID."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products",
+      "description": "Loan product management",
+      "item": [
+        {
+          "name": "products (paginated)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Products($pagination: PaginationInput, $type: String, $status: String) {\n  products(pagination: $pagination, type: $type, status: $status) {\n    edges {\n      node {\n        id\n        code\n        name\n        description\n        type\n        status\n        currency\n        minAmount\n        maxAmount\n        minTenorDays\n        maxTenorDays\n        interestRateModel\n        interestRate\n        repaymentMethod\n        gracePeriodDays\n        approvalWorkflow\n        maxActiveLoans\n        createdAt\n        updatedAt\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    totalCount\n  }\n}",
+                "variables": "{\n  \"pagination\": {\n    \"first\": 20,\n    \"after\": null\n  },\n  \"type\": null,\n  \"status\": null\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "List products for the authenticated tenant with optional type/status filters."
+          }
+        },
+        {
+          "name": "product (by ID)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Product($id: ID!) {\n  product(id: $id) {\n    id\n    code\n    name\n    description\n    type\n    status\n    currency\n    minAmount\n    maxAmount\n    minTenorDays\n    maxTenorDays\n    interestRateModel\n    interestRate\n    repaymentMethod\n    gracePeriodDays\n    approvalWorkflow\n    maxActiveLoans\n    createdAt\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"id\": \"<product-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Fetch a single product by ID."
+          }
+        },
+        {
+          "name": "createProduct",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CreateProduct($input: CreateProductInput!, $idempotencyKey: String) {\n  createProduct(input: $input, idempotencyKey: $idempotencyKey) {\n    id\n    code\n    name\n    description\n    type\n    status\n    currency\n    minAmount\n    maxAmount\n    interestRateModel\n    interestRate\n    repaymentMethod\n    gracePeriodDays\n    approvalWorkflow\n    maxActiveLoans\n    createdAt\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"code\": \"ML-001\",\n    \"name\": \"Quick Micro Loan\",\n    \"description\": \"Short-term micro loan for mobile wallet users\",\n    \"type\": \"micro_loan\",\n    \"currency\": \"GHS\",\n    \"minAmount\": \"100.0000\",\n    \"maxAmount\": \"5000.0000\",\n    \"minTenorDays\": 7,\n    \"maxTenorDays\": 90,\n    \"interestRateModel\": \"flat\",\n    \"interestRate\": \"5.0000\",\n    \"repaymentMethod\": \"equal_installments\",\n    \"gracePeriodDays\": 3,\n    \"approvalWorkflow\": \"auto\",\n    \"maxActiveLoans\": 1\n  },\n  \"idempotencyKey\": \"{{idempotencyKey}}\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Create a new loan product. Generates an idempotency key automatically via pre-request script."
+          }
+        },
+        {
+          "name": "updateProduct",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation UpdateProduct($id: ID!, $input: UpdateProductInput!) {\n  updateProduct(id: $id, input: $input) {\n    id\n    code\n    name\n    description\n    type\n    status\n    minAmount\n    maxAmount\n    interestRate\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"id\": \"<product-id>\",\n  \"input\": {\n    \"name\": \"Updated Micro Loan\",\n    \"maxAmount\": \"10000.0000\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Update an existing product by ID."
+          }
+        },
+        {
+          "name": "activateProduct",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation ActivateProduct($id: ID!) {\n  activateProduct(id: $id) {\n    id\n    name\n    status\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"id\": \"<product-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Activate a product, making it available for loan requests."
+          }
+        },
+        {
+          "name": "suspendProduct",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation SuspendProduct($id: ID!) {\n  suspendProduct(id: $id) {\n    id\n    name\n    status\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"id\": \"<product-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Suspend a product, preventing new loan requests."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Customers",
+      "description": "Customer management",
+      "item": [
+        {
+          "name": "customers (paginated)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Customers($pagination: PaginationInput, $status: String, $kycLevel: String) {\n  customers(pagination: $pagination, status: $status, kycLevel: $kycLevel) {\n    edges {\n      node {\n        id\n        firstName\n        lastName\n        phone\n        email\n        status\n        kycLevel\n        createdAt\n        updatedAt\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    totalCount\n  }\n}",
+                "variables": "{\n  \"pagination\": {\n    \"first\": 20,\n    \"after\": null\n  },\n  \"status\": null,\n  \"kycLevel\": null\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "List customers for the authenticated tenant with optional status/kycLevel filters."
+          }
+        },
+        {
+          "name": "customer (by ID)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Customer($id: ID!) {\n  customer(id: $id) {\n    id\n    firstName\n    lastName\n    phone\n    email\n    status\n    kycLevel\n    dateOfBirth\n    nationalId\n    createdAt\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"id\": \"<customer-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Fetch a single customer by ID. Sensitive fields (nationalId, phone) require field-level authorization."
+          }
+        },
+        {
+          "name": "addToBlacklist",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation AddToBlacklist($customerId: ID!, $reason: String!) {\n  addToBlacklist(customerId: $customerId, reason: $reason) {\n    id\n    firstName\n    lastName\n    status\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"customerId\": \"<customer-id>\",\n  \"reason\": \"Fraudulent activity detected\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Add a customer to the blacklist."
+          }
+        },
+        {
+          "name": "removeFromBlacklist",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation RemoveFromBlacklist($customerId: ID!) {\n  removeFromBlacklist(customerId: $customerId) {\n    id\n    firstName\n    lastName\n    status\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"customerId\": \"<customer-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Remove a customer from the blacklist."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Lenders",
+      "description": "Lender management",
+      "item": [
+        {
+          "name": "lenders (paginated)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Lenders($pagination: PaginationInput) {\n  lenders(pagination: $pagination) {\n    edges {\n      node {\n        id\n        name\n        code\n        status\n        contactEmail\n        contactPhone\n        revenueSharePercentage\n        createdAt\n        updatedAt\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    totalCount\n  }\n}",
+                "variables": "{\n  \"pagination\": {\n    \"first\": 20,\n    \"after\": null\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "List lenders for the authenticated tenant."
+          }
+        },
+        {
+          "name": "lender (by ID)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Lender($id: ID!) {\n  lender(id: $id) {\n    id\n    name\n    code\n    status\n    contactEmail\n    contactPhone\n    revenueSharePercentage\n    createdAt\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"id\": \"<lender-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Fetch a single lender by ID."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Loan Requests",
+      "description": "Loan request lifecycle operations",
+      "item": [
+        {
+          "name": "loanRequests (paginated)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query LoanRequests($pagination: PaginationInput, $status: String, $customerId: String) {\n  loanRequests(pagination: $pagination, status: $status, customerId: $customerId) {\n    edges {\n      node {\n        id\n        customerId\n        productId\n        requestedAmount\n        requestedTenor\n        currency\n        status\n        channel\n        createdAt\n        updatedAt\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    totalCount\n  }\n}",
+                "variables": "{\n  \"pagination\": {\n    \"first\": 20,\n    \"after\": null\n  },\n  \"status\": null,\n  \"customerId\": null\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "List loan requests with optional status and customer filters."
+          }
+        },
+        {
+          "name": "loanRequest (by ID)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query LoanRequest($id: ID!) {\n  loanRequest(id: $id) {\n    id\n    customerId\n    productId\n    requestedAmount\n    requestedTenor\n    currency\n    status\n    channel\n    createdAt\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"id\": \"<loan-request-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Fetch a single loan request by ID."
+          }
+        },
+        {
+          "name": "createLoanRequest",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CreateLoanRequest($input: CreateLoanRequestInput!, $idempotencyKey: String) {\n  createLoanRequest(input: $input, idempotencyKey: $idempotencyKey) {\n    id\n    customerId\n    productId\n    requestedAmount\n    requestedTenor\n    currency\n    status\n    channel\n    createdAt\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"customerId\": \"<customer-id>\",\n    \"productId\": \"<product-id>\",\n    \"requestedAmount\": \"5000.0000\",\n    \"requestedTenor\": 30,\n    \"currency\": \"GHS\",\n    \"channel\": \"mobile_app\"\n  },\n  \"idempotencyKey\": \"{{idempotencyKey}}\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Create a new loan request. Generates an idempotency key automatically."
+          }
+        },
+        {
+          "name": "processLoanRequest",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation ProcessLoanRequest($loanRequestId: ID!) {\n  processLoanRequest(loanRequestId: $loanRequestId) {\n    id\n    status\n    customerId\n    productId\n    requestedAmount\n    currency\n    createdAt\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"loanRequestId\": \"<loan-request-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Run the full auto pipeline: validate, pre-qualify, score, approve, and generate offer."
+          }
+        },
+        {
+          "name": "acceptOffer",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation AcceptOffer($loanRequestId: ID!) {\n  acceptOffer(loanRequestId: $loanRequestId) {\n    id\n    status\n    customerId\n    productId\n    requestedAmount\n    currency\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"loanRequestId\": \"<loan-request-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Accept a loan offer, creating a contract, generating a repayment schedule, and initiating disbursement."
+          }
+        },
+        {
+          "name": "declineOffer",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation DeclineOffer($loanRequestId: ID!) {\n  declineOffer(loanRequestId: $loanRequestId) {\n    id\n    status\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"loanRequestId\": \"<loan-request-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Decline a loan offer."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Contracts",
+      "description": "Loan contract queries",
+      "item": [
+        {
+          "name": "contracts (paginated)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Contracts($pagination: PaginationInput, $customerId: String, $status: String) {\n  contracts(pagination: $pagination, customerId: $customerId, status: $status) {\n    edges {\n      node {\n        id\n        loanRequestId\n        customerId\n        productId\n        principalAmount\n        disbursedAmount\n        totalOutstanding\n        currency\n        status\n        disbursedAt\n        maturityDate\n        createdAt\n        updatedAt\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    totalCount\n  }\n}",
+                "variables": "{\n  \"pagination\": {\n    \"first\": 20,\n    \"after\": null\n  },\n  \"customerId\": null,\n  \"status\": null\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "List contracts with optional customer and status filters."
+          }
+        },
+        {
+          "name": "contract (by ID)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Contract($id: ID!) {\n  contract(id: $id) {\n    id\n    loanRequestId\n    customerId\n    productId\n    principalAmount\n    disbursedAmount\n    totalOutstanding\n    currency\n    status\n    disbursedAt\n    maturityDate\n    createdAt\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"id\": \"<contract-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Fetch a single contract by ID."
+          }
+        },
+        {
+          "name": "repaymentSchedule",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query RepaymentSchedule($contractId: ID!) {\n  repaymentSchedule(contractId: $contractId) {\n    id\n    installmentNumber\n    dueDate\n    principalAmount\n    interestAmount\n    feeAmount\n    totalAmount\n    status\n    paidAmount\n    paidAt\n  }\n}",
+                "variables": "{\n  \"contractId\": \"<contract-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Get the repayment schedule for a contract."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Repayments",
+      "description": "Repayment processing",
+      "item": [
+        {
+          "name": "repayments (by contract)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query Repayments($contractId: ID!, $pagination: PaginationInput) {\n  repayments(contractId: $contractId, pagination: $pagination) {\n    edges {\n      node {\n        id\n        contractId\n        amount\n        currency\n        method\n        status\n        source\n        externalRef\n        createdAt\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    totalCount\n  }\n}",
+                "variables": "{\n  \"contractId\": \"<contract-id>\",\n  \"pagination\": {\n    \"first\": 20,\n    \"after\": null\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "List repayments for a specific contract."
+          }
+        },
+        {
+          "name": "processRepayment",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation ProcessRepayment($contractId: ID!, $amount: String!, $currency: String!, $method: String!, $source: String, $externalRef: String) {\n  processRepayment(contractId: $contractId, amount: $amount, currency: $currency, method: $method, source: $source, externalRef: $externalRef) {\n    id\n    contractId\n    amount\n    currency\n    method\n    status\n    source\n    externalRef\n    createdAt\n  }\n}",
+                "variables": "{\n  \"contractId\": \"<contract-id>\",\n  \"amount\": \"500.0000\",\n  \"currency\": \"GHS\",\n  \"method\": \"mobile_money\",\n  \"source\": \"MTN MoMo\",\n  \"externalRef\": \"TXN-12345\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Process a repayment against a contract. Amount is passed as a decimal string."
+          }
+        },
+        {
+          "name": "earlySettlementQuote",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query EarlySettlementQuote($contractId: ID!) {\n  earlySettlementQuote(contractId: $contractId) {\n    contractId\n    totalOutstanding\n    principalOutstanding\n    interestOutstanding\n    feesOutstanding\n    penaltiesOutstanding\n    discountAmount\n    settlementAmount\n    validUntil\n  }\n}",
+                "variables": "{\n  \"contractId\": \"<contract-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Get an early settlement quote for a contract."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Settlements",
+      "description": "Revenue settlement operations",
+      "item": [
+        {
+          "name": "settlementRuns (paginated)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query SettlementRuns($first: Int, $after: String) {\n  settlementRuns(first: $first, after: $after) {\n    edges {\n      node {\n        id\n        periodStart\n        periodEnd\n        status\n        totalRevenue\n        approvedBy\n        approvedAt\n        lines {\n          id\n          partyType\n          partyId\n          grossRevenue\n          sharePercentage\n          shareAmount\n          netAmount\n        }\n        createdAt\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    totalCount\n  }\n}",
+                "variables": "{\n  \"first\": 20,\n  \"after\": null\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "List settlement runs with pagination."
+          }
+        },
+        {
+          "name": "settlementRun (by ID)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query SettlementRun($id: ID!) {\n  settlementRun(id: $id) {\n    id\n    periodStart\n    periodEnd\n    status\n    totalRevenue\n    approvedBy\n    approvedAt\n    lines {\n      id\n      partyType\n      partyId\n      grossRevenue\n      sharePercentage\n      shareAmount\n      netAmount\n    }\n    createdAt\n  }\n}",
+                "variables": "{\n  \"id\": \"<settlement-run-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Fetch a single settlement run by ID."
+          }
+        },
+        {
+          "name": "settlementReport",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query SettlementReport($runId: ID!) {\n  settlementReport(runId: $runId) {\n    id\n    periodStart\n    periodEnd\n    status\n    approvedBy\n    approvedAt\n    totalRevenue\n    revenueBreakdown {\n      interest\n      fees\n      penalties\n    }\n    lines {\n      id\n      partyType\n      partyId\n      grossRevenue\n      sharePercentage\n      shareAmount\n      netAmount\n    }\n    supportingRepaymentIds\n    createdAt\n  }\n}",
+                "variables": "{\n  \"runId\": \"<settlement-run-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Get a detailed settlement report with revenue breakdown."
+          }
+        },
+        {
+          "name": "calculateSettlement",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CalculateSettlement($periodStart: String!, $periodEnd: String!) {\n  calculateSettlement(periodStart: $periodStart, periodEnd: $periodEnd) {\n    id\n    periodStart\n    periodEnd\n    status\n    totalRevenue\n    lines {\n      id\n      partyType\n      partyId\n      grossRevenue\n      sharePercentage\n      shareAmount\n      netAmount\n    }\n    createdAt\n  }\n}",
+                "variables": "{\n  \"periodStart\": \"2026-03-01T00:00:00.000Z\",\n  \"periodEnd\": \"2026-03-31T23:59:59.999Z\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Calculate settlement for a given period."
+          }
+        },
+        {
+          "name": "approveSettlement",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation ApproveSettlement($runId: ID!) {\n  approveSettlement(runId: $runId) {\n    id\n    status\n    approvedBy\n    approvedAt\n  }\n}",
+                "variables": "{\n  \"runId\": \"<settlement-run-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Approve a settlement run."
+          }
+        },
+        {
+          "name": "executeSettlement",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation ExecuteSettlement($runId: ID!) {\n  executeSettlement(runId: $runId) {\n    id\n    status\n  }\n}",
+                "variables": "{\n  \"runId\": \"<settlement-run-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Execute an approved settlement run."
+          }
+        },
+        {
+          "name": "rejectSettlement",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation RejectSettlement($runId: ID!, $reason: String!) {\n  rejectSettlement(runId: $runId, reason: $reason) {\n    id\n    status\n  }\n}",
+                "variables": "{\n  \"runId\": \"<settlement-run-id>\",\n  \"reason\": \"Revenue figures need reconciliation\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Reject a settlement run with a reason."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Integration - Wallet Providers",
+      "description": "Wallet provider configuration management",
+      "item": [
+        {
+          "name": "walletProviderConfigs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query WalletProviderConfigs($pagination: PaginationInput) {\n  walletProviderConfigs(pagination: $pagination) {\n    edges {\n      node {\n        id\n        providerName\n        authType\n        baseUrl\n        isActive\n        createdAt\n        updatedAt\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    totalCount\n  }\n}",
+                "variables": "{\n  \"pagination\": {\n    \"first\": 20,\n    \"after\": null\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "List wallet provider configurations for the authenticated tenant."
+          }
+        },
+        {
+          "name": "walletProviderConfig (by ID)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query WalletProviderConfig($id: ID!) {\n  walletProviderConfig(id: $id) {\n    id\n    providerName\n    authType\n    baseUrl\n    configJson\n    requestMapping\n    responseMapping\n    webhookConfig\n    resilience\n    isActive\n    createdAt\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"id\": \"<config-id>\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Fetch a single wallet provider config by ID with full details."
+          }
+        },
+        {
+          "name": "createWalletProviderConfig",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation CreateWalletProviderConfig($input: CreateWalletProviderConfigInput!, $idempotencyKey: String) {\n  createWalletProviderConfig(input: $input, idempotencyKey: $idempotencyKey) {\n    id\n    providerName\n    authType\n    baseUrl\n    isActive\n    createdAt\n  }\n}",
+                "variables": "{\n  \"input\": {\n    \"providerName\": \"mtn_momo\",\n    \"authType\": \"oauth2\",\n    \"baseUrl\": \"https://sandbox.momodeveloper.mtn.com\",\n    \"configJson\": \"{\\\"subscriptionKey\\\": \\\"your-key\\\", \\\"environment\\\": \\\"sandbox\\\"}\",\n    \"requestMapping\": \"{\\\"amount\\\": \\\"$.amount\\\", \\\"currency\\\": \\\"$.currency\\\", \\\"externalId\\\": \\\"$.transactionId\\\", \\\"payer\\\": {\\\"partyIdType\\\": \\\"MSISDN\\\", \\\"partyId\\\": \\\"$.phone\\\"}}\",\n    \"responseMapping\": \"{\\\"transactionId\\\": \\\"$.referenceId\\\", \\\"status\\\": \\\"$.status\\\"}\"\n  },\n  \"idempotencyKey\": \"{{idempotencyKey}}\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Create a new wallet provider configuration."
+          }
+        },
+        {
+          "name": "updateWalletProviderConfig",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.variables.set('idempotencyKey', require('uuid').v4());"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "mutation UpdateWalletProviderConfig($id: ID!, $input: UpdateWalletProviderConfigInput!) {\n  updateWalletProviderConfig(id: $id, input: $input) {\n    id\n    providerName\n    authType\n    baseUrl\n    isActive\n    updatedAt\n  }\n}",
+                "variables": "{\n  \"id\": \"<config-id>\",\n  \"input\": {\n    \"isActive\": true,\n    \"baseUrl\": \"https://proxy.momodeveloper.mtn.com\"\n  }\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Update an existing wallet provider configuration."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Integration - Health",
+      "description": "Integration health monitoring",
+      "item": [
+        {
+          "name": "integrationHealth (single provider)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query IntegrationHealth($provider: String!) {\n  integrationHealth(provider: $provider) {\n    provider\n    status\n    latencyMs\n    successRate\n    circuitBreakerState\n    lastChecked\n  }\n}",
+                "variables": "{\n  \"provider\": \"mtn_momo\"\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Get health status for a specific integration provider."
+          }
+        },
+        {
+          "name": "integrationHealthAll",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query IntegrationHealthAll {\n  integrationHealthAll {\n    provider\n    status\n    latencyMs\n    successRate\n    circuitBreakerState\n    lastChecked\n  }\n}",
+                "variables": "{}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "Get health status for all integration providers."
+          }
+        },
+        {
+          "name": "integrationApiLogs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "graphql",
+              "graphql": {
+                "query": "query IntegrationApiLogs($provider: String!, $from: String!, $to: String!, $first: Int, $after: String) {\n  integrationApiLogs(provider: $provider, from: $from, to: $to, first: $first, after: $after) {\n    edges {\n      node {\n        id\n        provider\n        method\n        url\n        responseStatus\n        latencyMs\n        errorMessage\n        correlationId\n        circuitBreakerState\n        createdAt\n      }\n      cursor\n    }\n    pageInfo {\n      hasNextPage\n      hasPreviousPage\n      startCursor\n      endCursor\n    }\n    totalCount\n  }\n}",
+                "variables": "{\n  \"provider\": \"mtn_momo\",\n  \"from\": \"2026-03-01T00:00:00.000Z\",\n  \"to\": \"2026-03-27T23:59:59.999Z\",\n  \"first\": 20,\n  \"after\": null\n}"
+              }
+            },
+            "url": {
+              "raw": "{{graphqlUrl}}",
+              "host": [
+                "{{graphqlUrl}}"
+              ]
+            },
+            "description": "View API logs for a specific integration provider within a date range."
+          }
+        }
+      ]
+    }
+  ]
+}

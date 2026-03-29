@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "lons.configmapName" . }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+data:
+  NODE_ENV: {{ .Values.config.nodeEnv | quote }}
+  LOG_LEVEL: {{ .Values.config.logLevel | quote }}
+  ENABLE_TRACING: {{ if .Values.tracing.enabled }}{{ "true" | quote }}{{ else }}{{ .Values.config.enableTracing | quote }}{{ end }}
+  OTEL_EXPORTER_OTLP_ENDPOINT: {{ .Values.tracing.endpoint | quote }}
+  SCORING_SERVICE_URL: {{ .Values.config.scoringServiceUrl | quote }}
+  GRAPHQL_SERVER_PORT: {{ .Values.graphqlServer.port | quote }}
+  REST_SERVER_PORT: {{ .Values.restServer.port | quote }}
+  SCHEDULER_PORT: {{ .Values.scheduler.port | quote }}
+  NOTIFICATION_WORKER_PORT: {{ .Values.notificationWorker.port | quote }}
+  SCORING_SERVICE_PORT: {{ .Values.scoringService.port | quote }}
+  {{- if .Values.postgresql.external }}
+  POSTGRES_HOST: {{ .Values.postgresql.host | quote }}
+  POSTGRES_PORT: {{ .Values.postgresql.port | quote }}
+  POSTGRES_DB: {{ .Values.postgresql.database | quote }}
+  {{- end }}
+  {{- if .Values.redis.external }}
+  REDIS_HOST: {{ .Values.redis.host | quote }}
+  REDIS_PORT: {{ .Values.redis.port | quote }}
+  {{- end }}
+  {{- if .Values.adminPortal.enabled }}
+  NEXT_PUBLIC_GRAPHQL_URL: "https://{{ .Values.ingress.host }}/graphql"
+  {{- end }}

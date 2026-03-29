@@ -1,11 +1,11 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '@lons/database';
-import { EventBusModule } from '@lons/common';
+import { EventBusModule, ObservabilityModule } from '@lons/common';
 
 import { SettlementService } from './settlement.service';
 
 @Module({
-  imports: [PrismaModule, EventBusModule],
+  imports: [PrismaModule, EventBusModule, ObservabilityModule],
   providers: [SettlementService],
   exports: [SettlementService],
 })

@@ -1,0 +1,175 @@
+{{- if .Values.monitoring.alertmanager.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "lons.fullname" . }}-alertmanager-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+data:
+  alertmanager.yml: |
+    global:
+      resolve_timeout: 5m
+      {{- if .Values.monitoring.alertmanager.slackWebhookUrl }}
+      slack_api_url: '{{ .Values.monitoring.alertmanager.slackWebhookUrl }}'
+      {{- end }}
+
+    route:
+      group_by: ['alertname', 'cluster', 'service']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      receiver: 'default'
+      routes:
+        # Critical alerts - immediate notification, frequent repeats
+        - match:
+            severity: critical
+          receiver: 'critical-alerts'
+          group_wait: 10s
+          group_interval: 5m
+          repeat_interval: 1h
+          continue: true
+
+        # Security team alerts - high priority
+        - match:
+            team: security
+          receiver: 'security-alerts'
+          group_wait: 10s
+          repeat_interval: 30m
+          continue: true
+
+        # Data/infrastructure team alerts
+        - match:
+            team: data
+          receiver: 'data-alerts'
+          group_wait: 15s
+          repeat_interval: 2h
+          continue: true
+
+        # Business-critical alerts (disbursement, reconciliation, overdue)
+        - match_re:
+            alertname: ^(DisbursementFailureRate|ReconciliationExceptions|HighOverdueRate|IntegrationOutage)$
+          receiver: 'business-alerts'
+          group_wait: 10s
+          repeat_interval: 1h
+          continue: true
+
+        # Platform/infrastructure team alerts
+        - match:
+            team: platform
+          receiver: 'platform-alerts'
+          group_wait: 20s
+          repeat_interval: 2h
+
+    receivers:
+      - name: 'default'
+        webhook_configs:
+          - url: '{{ .Values.monitoring.alertmanager.webhookUrl | default "http://localhost:9095/alerts" }}'
+            send_resolved: true
+
+      - name: 'critical-alerts'
+        webhook_configs:
+          - url: '{{ .Values.monitoring.alertmanager.criticalWebhookUrl | default "http://localhost:9095/critical" }}'
+            send_resolved: true
+        {{- if .Values.monitoring.alertmanager.slackWebhookUrl }}
+        slack_configs:
+          - channel: '#critical-alerts'
+            title: 'Critical Alert: {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\nRunbook: {{ .Annotations.runbook_url }}\n{{ end }}'
+            send_resolved: true
+        {{- end }}
+        {{- if .Values.monitoring.alertmanager.pagerdutyIntegrationKey }}
+        pagerduty_configs:
+          - routing_key: '{{ .Values.monitoring.alertmanager.pagerdutyIntegrationKey }}'
+            description: '{{ .GroupLabels.alertname }}'
+            client: 'Lons Alerting'
+            links:
+              - href: '{{ index .Alerts 0 .Annotations.runbook_url }}'
+                text: 'Runbook'
+        {{- end }}
+
+      - name: 'security-alerts'
+        webhook_configs:
+          - url: '{{ .Values.monitoring.alertmanager.securityWebhookUrl | default "http://localhost:9095/security" }}'
+            send_resolved: true
+        {{- if .Values.monitoring.alertmanager.slackWebhookUrl }}
+        slack_configs:
+          - channel: '#security-alerts'
+            title: 'Security Alert: {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ .Annotations.description }}\n{{ end }}'
+            send_resolved: true
+        {{- end }}
+
+      - name: 'data-alerts'
+        webhook_configs:
+          - url: '{{ .Values.monitoring.alertmanager.dataWebhookUrl | default "http://localhost:9095/data" }}'
+            send_resolved: true
+        {{- if .Values.monitoring.alertmanager.slackWebhookUrl }}
+        slack_configs:
+          - channel: '#data-alerts'
+            title: 'Data Alert: {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ end }}'
+            send_resolved: true
+        {{- end }}
+
+      - name: 'business-alerts'
+        webhook_configs:
+          - url: '{{ .Values.monitoring.alertmanager.businessWebhookUrl | default "http://localhost:9095/business" }}'
+            send_resolved: true
+        {{- if .Values.monitoring.alertmanager.slackWebhookUrl }}
+        slack_configs:
+          - channel: '#business-alerts'
+            title: 'Business Alert: {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.summary }}\nSeverity: {{ .Labels.severity }}\n{{ end }}'
+            send_resolved: true
+        {{- end }}
+
+      - name: 'platform-alerts'
+        webhook_configs:
+          - url: '{{ .Values.monitoring.alertmanager.webhookUrl | default "http://localhost:9095/alerts" }}'
+            send_resolved: true
+        {{- if .Values.monitoring.alertmanager.slackWebhookUrl }}
+        slack_configs:
+          - channel: '#platform-alerts'
+            title: 'Platform Alert: {{ .GroupLabels.alertname }}'
+            text: '{{ range .Alerts }}{{ .Annotations.summary }}\n{{ end }}'
+            send_resolved: true
+        {{- end }}
+
+    inhibit_rules:
+      # Suppress warning alerts if critical alert exists for same alert/cluster/service
+      - source_match:
+          severity: critical
+        target_match:
+          severity: warning
+        equal: ['alertname', 'cluster', 'service']
+
+      # Suppress PodNotReady if PodCrashLooping is firing
+      - source_match:
+          alertname: PodCrashLooping
+        target_match:
+          alertname: PodNotReady
+        equal: ['pod', 'namespace']
+
+      # Suppress slow query alerts if database CPU is high
+      - source_match:
+          alertname: RDSCPUHigh
+        target_match:
+          alertname: SlowQueryDetected
+        equal: ['DBInstanceIdentifier']
+
+      # Suppress high latency if error rate is critical
+      - source_match:
+          alertname: HighErrorRate
+          severity: critical
+        target_match:
+          alertname: HighLatencyP95
+        equal: ['service']
+
+      # Suppress queue backlog warnings if integration is down
+      - source_match:
+          alertname: IntegrationOutage
+        target_match:
+          alertname: BullMQQueueBacklog
+        equal: ['']
+{{- end }}

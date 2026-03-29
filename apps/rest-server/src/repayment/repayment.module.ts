@@ -1,5 +1,9 @@
 import { Module } from '@nestjs/common';
+import { RepaymentServiceModule } from '@lons/repayment-service';
 import { RepaymentController } from './repayment.controller';
 
-@Module({ controllers: [RepaymentController] })
+@Module({
+  imports: [RepaymentServiceModule],
+  controllers: [RepaymentController],
+})
 export class RepaymentModule {}

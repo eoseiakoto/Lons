@@ -1,0 +1,353 @@
+{
+  "info": {
+    "name": "Lons REST API",
+    "description": "B2B2C lending platform — Service Provider integration API.\n\nAll endpoints require API key authentication via X-API-Key and X-API-Secret headers.\nPOST endpoints accept an optional X-Idempotency-Key header.\nMonetary amounts are always strings.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "lons-rest-api-v1"
+  },
+  "auth": {
+    "type": "apikey",
+    "apikey": [
+      { "key": "key", "value": "X-API-Key", "type": "string" },
+      { "key": "value", "value": "{{api_key}}", "type": "string" },
+      { "key": "in", "value": "header", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "base_url", "value": "{{staging_base_url}}" }
+  ],
+  "item": [
+    {
+      "name": "Customers",
+      "item": [
+        {
+          "name": "Create Customer",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "X-API-Secret", "value": "{{api_secret}}" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"externalId\": \"SP-CUST-001\",\n  \"firstName\": \"Kwame\",\n  \"lastName\": \"Asante\",\n  \"phone\": \"+233240000001\",\n  \"email\": \"kwame@example.com\",\n  \"dateOfBirth\": \"1990-05-15\",\n  \"nationalId\": \"GHA-123456789\",\n  \"idType\": \"NATIONAL_ID\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/customers",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "customers"]
+            }
+          }
+        },
+        {
+          "name": "Get Customer",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "X-API-Secret", "value": "{{api_secret}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/customers/:id",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "customers", ":id"],
+              "variable": [
+                { "key": "id", "value": "{{customer_id}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Customers",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "X-API-Secret", "value": "{{api_secret}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/customers?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "customers"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "search", "value": "", "disabled": true }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Loan Requests",
+      "item": [
+        {
+          "name": "Submit Loan Request",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "X-API-Secret", "value": "{{api_secret}}" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"customerId\": \"{{customer_id}}\",\n  \"productId\": \"{{product_id}}\",\n  \"amount\": \"5000.00\",\n  \"currency\": \"GHS\",\n  \"termDays\": \"30\",\n  \"purpose\": \"Working capital\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/loan-requests",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "loan-requests"]
+            }
+          }
+        },
+        {
+          "name": "Get Loan Request",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "X-API-Secret", "value": "{{api_secret}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/loan-requests/:id",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "loan-requests", ":id"],
+              "variable": [
+                { "key": "id", "value": "{{loan_request_id}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Loan Requests",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "X-API-Secret", "value": "{{api_secret}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/loan-requests?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "loan-requests"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "customerId", "value": "", "disabled": true },
+                { "key": "status", "value": "", "disabled": true },
+                { "key": "productId", "value": "", "disabled": true }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Contracts",
+      "item": [
+        {
+          "name": "Get Contract",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "X-API-Secret", "value": "{{api_secret}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/contracts/:id",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "contracts", ":id"],
+              "variable": [
+                { "key": "id", "value": "{{contract_id}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Repayment Schedule",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "X-API-Secret", "value": "{{api_secret}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/contracts/:id/schedule",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "contracts", ":id", "schedule"],
+              "variable": [
+                { "key": "id", "value": "{{contract_id}}" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "List Contracts",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "X-API-Secret", "value": "{{api_secret}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/contracts?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "contracts"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "customerId", "value": "", "disabled": true },
+                { "key": "status", "value": "", "disabled": true }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Repayments",
+      "item": [
+        {
+          "name": "Record Repayment",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "X-API-Secret", "value": "{{api_secret}}" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"contractId\": \"{{contract_id}}\",\n  \"amount\": \"250.00\",\n  \"currency\": \"GHS\",\n  \"method\": \"MOBILE_MONEY\",\n  \"source\": \"MTN_MOMO\",\n  \"externalRef\": \"MOMO-TXN-123456\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/repayments",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "repayments"]
+            }
+          }
+        },
+        {
+          "name": "List Repayments",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "X-API-Secret", "value": "{{api_secret}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/repayments?page=1&limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "repayments"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "limit", "value": "20" },
+                { "key": "contractId", "value": "", "disabled": true }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Register Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "X-API-Secret", "value": "{{api_secret}}" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://example.com/hooks/lons\",\n  \"events\": [\"contract.state_changed\", \"repayment.received\", \"loan_request.status_changed\"],\n  \"isActive\": true\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/webhooks",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "webhooks"]
+            }
+          }
+        },
+        {
+          "name": "List Webhooks",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "X-API-Secret", "value": "{{api_secret}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/webhooks",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "webhooks"]
+            }
+          }
+        },
+        {
+          "name": "Delete Webhook",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "X-API-Secret", "value": "{{api_secret}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/v1/webhooks/:id",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "webhooks", ":id"],
+              "variable": [
+                { "key": "id", "value": "{{webhook_id}}" }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "API Keys",
+      "item": [
+        {
+          "name": "Rotate API Key",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "X-API-Key", "value": "{{api_key}}" },
+              { "key": "X-API-Secret", "value": "{{api_secret}}" },
+              { "key": "X-Idempotency-Key", "value": "{{$guid}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"apiKeyId\": \"{{api_key_id}}\",\n  \"gracePeriodHours\": 24\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/v1/api-keys/rotate",
+              "host": ["{{base_url}}"],
+              "path": ["v1", "api-keys", "rotate"]
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [""]
+      }
+    }
+  ]
+}

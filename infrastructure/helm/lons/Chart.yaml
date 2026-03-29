@@ -1,0 +1,14 @@
+apiVersion: v2
+name: lons
+description: "Lons B2B2C Fintech Lending Platform"
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - fintech
+  - lending
+  - b2b2c
+  - microfinance
+maintainers:
+  - name: Lons Platform Team
+    email: platform@lons.io

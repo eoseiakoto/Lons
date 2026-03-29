@@ -1,0 +1,26 @@
+{{- if .Values.certManager.enabled }}
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ include "lons.fullname" . }}-tls
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  secretName: {{ .Values.ingress.tls.secretName | default "lons-tls" }}
+  issuerRef:
+    name: {{ .Values.certManager.issuer | default "letsencrypt-prod" }}
+    kind: ClusterIssuer
+  commonName: {{ .Values.ingress.host }}
+  dnsNames:
+    - {{ .Values.ingress.host }}
+    {{- if .Values.adminPortal }}
+    {{- if .Values.adminPortal.host }}
+    - {{ .Values.adminPortal.host }}
+    {{- end }}
+    {{- end }}
+    {{- range .Values.certManager.additionalDomains }}
+    - {{ . }}
+    {{- end }}
+  renewBefore: 720h  # 30 days
+{{- end }}

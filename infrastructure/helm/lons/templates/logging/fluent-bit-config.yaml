@@ -1,0 +1,122 @@
+{{- if .Values.logging.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "lons.fullname" . }}-fluent-bit
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+data:
+  fluent-bit.conf: |
+    [SERVICE]
+        Flush         5
+        Log_Level     info
+        Daemon        off
+        Parsers_File  parsers.conf
+
+    [INPUT]
+        Name              tail
+        Tag               kube.*
+        Path              /var/log/containers/lons-*.log
+        Parser            docker
+        DB                /var/log/flb_kube.db
+        Mem_Buf_Limit     5MB
+        Skip_Long_Lines   On
+        Refresh_Interval  10
+
+    [FILTER]
+        Name          kubernetes
+        Match         kube.*
+        Kube_URL      https://kubernetes.default.svc:443
+        Merge_Log     On
+        K8S-Logging.Parser On
+        K8S-Logging.Exclude On
+
+    [FILTER]
+        Name          lua
+        Match         kube.*
+        script        /fluent-bit/scripts/pii-mask.lua
+        call          mask_pii
+
+    [OUTPUT]
+        Name            cloudwatch_logs
+        Match           kube.*
+        region          {{ .Values.logging.aws.region | default "eu-west-1" }}
+        log_group_name  /lons/{{ .Values.global.environment }}/application
+        log_stream_prefix lons-
+        auto_create_group true
+        log_retention_days {{ .Values.logging.retentionDays | default 30 }}
+
+  parsers.conf: |
+    [PARSER]
+        Name        docker
+        Format      json
+        Time_Key    time
+        Time_Format %Y-%m-%dT%H:%M:%S.%L%z
+        Time_Keep   On
+
+    [PARSER]
+        Name        lons-json
+        Format      json
+        Time_Key    timestamp
+        Time_Format %Y-%m-%dT%H:%M:%S.%LZ
+
+  pii-mask.lua: |
+    -- PII masking script for Lons platform
+    -- Masks sensitive data before shipping to log aggregator
+    -- Called by FluentBit Lua filter at ingestion time (defense-in-depth)
+
+    local patterns = {
+        -- Phone numbers: +233XXXXXXX → +233***XXXX
+        { field = "phone", pattern = "(%+%d%d%d)%d+(%d%d%d%d)", replacement = "%1***%2" },
+        { field = "phone_primary", pattern = "(%+%d%d%d)%d+(%d%d%d%d)", replacement = "%1***%2" },
+        { field = "phone_secondary", pattern = "(%+%d%d%d)%d+(%d%d%d%d)", replacement = "%1***%2" },
+        -- National ID: GHA-XXXXXXXX-X → GHA-***-XXX
+        { field = "national_id", pattern = "(%a%a%a%-)%w+(%-%w+)", replacement = "%1***%2" },
+        -- Email: user@domain → u***@domain
+        { field = "email", pattern = "(%w)%w+(@%w+%.%w+)", replacement = "%1***%2" },
+    }
+
+    local pii_fields = {
+        "national_id", "full_name", "phone", "email", "date_of_birth",
+        "phone_primary", "phone_secondary", "customer_name", "account_number",
+        "national_id_type"
+    }
+
+    function mask_pii(tag, timestamp, record)
+        local modified = false
+
+        -- Mask known PII fields in log message string
+        if record["log"] and type(record["log"]) == "string" then
+            for _, field in ipairs(pii_fields) do
+                -- Match JSON field with value
+                local pattern = '"' .. field .. '"%s*:%s*"([^"]+)"'
+                local masked = string.gsub(record["log"], pattern, function(value)
+                    if #value > 4 then
+                        return '"' .. field .. '":"***MASKED***"'
+                    end
+                    return '"' .. field .. '":"' .. value .. '"'
+                end)
+                if masked ~= record["log"] then
+                    record["log"] = masked
+                    modified = true
+                end
+            end
+        end
+
+        -- Direct field masking (if fields are structured)
+        for _, p in ipairs(patterns) do
+            if record[p.field] and type(record[p.field]) == "string" then
+                local masked = string.gsub(record[p.field], p.pattern, p.replacement)
+                if masked ~= record[p.field] then
+                    record[p.field] = masked
+                    modified = true
+                end
+            end
+        end
+
+        if modified then
+            return 2, timestamp, record
+        end
+        return 0, timestamp, record
+    end
+{{- end }}

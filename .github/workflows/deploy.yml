@@ -1,0 +1,465 @@
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+    branches: [main, develop]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        type: choice
+        options:
+          - dev
+          - staging
+          - preprod
+          - production
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: eu-west-1
+  ECR_REGISTRY: 546854093923.dkr.ecr.eu-west-1.amazonaws.com
+  HELM_CHART: infrastructure/helm/lons
+  HELM_RELEASE: lons
+
+jobs:
+  # ============================================================================
+  # Deploy to Dev (auto on develop push, manual dispatch)
+  # ============================================================================
+  deploy-dev:
+    if: |
+      github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'dev' ||
+      github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'develop'
+    runs-on: ubuntu-latest
+    environment: dev
+    env:
+      ENVIRONMENT: dev
+      EKS_CLUSTER: lons-dev-cluster
+      NAMESPACE: lons-dev
+      VALUES_FILE: values-dev.yaml
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assume AWS role via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEV }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Retag and push images to ECR
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          for service in graphql-server rest-server scheduler notification-worker admin-portal scoring-service; do
+            GHCR_IMAGE="ghcr.io/${{ github.repository }}/$service:$SHORT_SHA"
+            ECR_IMAGE="${{ env.ECR_REGISTRY }}/lons-$service:$SHORT_SHA"
+
+            docker pull $GHCR_IMAGE || true
+            docker tag $GHCR_IMAGE $ECR_IMAGE
+            docker push $ECR_IMAGE
+          done
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ env.EKS_CLUSTER }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Install/upgrade Helm chart
+        run: |
+          helm upgrade --install ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \
+            -f ${{ env.HELM_CHART }}/${{ env.VALUES_FILE }} \
+            --set global.imageTag=${{ github.sha }} \
+            --set global.imageSHA=${{ github.sha }} \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --wait \
+            --timeout 15m
+
+      - name: Smoke tests
+        run: |
+          echo "Running smoke tests on ${{ env.ENVIRONMENT }}..."
+          DEV_URL="${{ vars.DEV_URL }}"
+          if [ -z "$DEV_URL" ]; then
+            echo "DEV_URL not configured, skipping health checks"
+            exit 0
+          fi
+
+          for attempt in {1..5}; do
+            echo "Attempt $attempt..."
+            if curl -sf "$DEV_URL/v1/health"; then
+              echo "Health check passed"
+              exit 0
+            fi
+            sleep 10
+          done
+
+          echo "Health check failed after 5 attempts"
+          curl -sf "$DEV_URL/v1/health" || exit 1
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Deployment failed, rolling back..."
+          helm rollback ${{ env.HELM_RELEASE }} \
+            --namespace ${{ env.NAMESPACE }} \
+            --wait \
+            --timeout 5m || true
+
+  # ============================================================================
+  # Deploy to Staging (auto on main push, manual dispatch)
+  # ============================================================================
+  deploy-staging:
+    if: |
+      github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging' ||
+      github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.head_branch == 'main'
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      ENVIRONMENT: staging
+      EKS_CLUSTER: lons-staging-cluster
+      NAMESPACE: lons-staging
+      VALUES_FILE: values-staging.yaml
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assume AWS role via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_STAGING }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Retag and push images to ECR
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          for service in graphql-server rest-server scheduler notification-worker admin-portal scoring-service; do
+            GHCR_IMAGE="ghcr.io/${{ github.repository }}/$service:$SHORT_SHA"
+            ECR_IMAGE="${{ env.ECR_REGISTRY }}/lons-$service:$SHORT_SHA"
+
+            docker pull $GHCR_IMAGE || true
+            docker tag $GHCR_IMAGE $ECR_IMAGE
+            docker push $ECR_IMAGE
+          done
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ env.EKS_CLUSTER }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Install/upgrade Helm chart
+        run: |
+          helm upgrade --install ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \
+            -f ${{ env.HELM_CHART }}/${{ env.VALUES_FILE }} \
+            --set global.imageTag=${{ github.sha }} \
+            --set global.imageSHA=${{ github.sha }} \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --wait \
+            --timeout 15m
+
+      - name: Smoke tests
+        run: |
+          echo "Running smoke tests on ${{ env.ENVIRONMENT }}..."
+          STAGING_URL="${{ vars.STAGING_URL }}"
+          if [ -z "$STAGING_URL" ]; then
+            echo "STAGING_URL not configured, skipping health checks"
+            exit 0
+          fi
+
+          for attempt in {1..5}; do
+            echo "Attempt $attempt..."
+            curl -sf "$STAGING_URL/v1/health" && break
+            sleep 10
+          done
+
+          curl -sf "$STAGING_URL/v1/health" || exit 1
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Deployment failed, rolling back..."
+          helm rollback ${{ env.HELM_RELEASE }} \
+            --namespace ${{ env.NAMESPACE }} \
+            --wait \
+            --timeout 5m || true
+
+  # ============================================================================
+  # E2E Tests on Staging (mandatory gate for preprod promotion)
+  # ============================================================================
+  e2e-tests-staging:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'preprod'
+    needs: []
+    runs-on: ubuntu-latest
+    environment: staging
+    env:
+      ENVIRONMENT: staging
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: lons_test
+          POSTGRES_PASSWORD: test_password
+          POSTGRES_DB: lons_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run E2E Tests against Staging
+        env:
+          GRAPHQL_URL: ${{ vars.STAGING_URL }}/graphql
+          REST_URL: ${{ vars.STAGING_URL }}/v1
+          DATABASE_URL: postgresql://lons_test:test_password@localhost:5432/lons_e2e
+          REDIS_URL: redis://localhost:6379
+        run: pnpm test:e2e
+
+      - name: Upload E2E Test Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-test-results-${{ github.run_id }}
+          path: |
+            coverage/
+            test-results/
+          retention-days: 30
+
+  # ============================================================================
+  # Deploy to Preprod (manual only, requires staging success + E2E tests pass)
+  # ============================================================================
+  deploy-preprod:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'preprod'
+    needs: [e2e-tests-staging]
+    runs-on: ubuntu-latest
+    environment: preprod
+    env:
+      ENVIRONMENT: preprod
+      EKS_CLUSTER: lons-preprod-cluster
+      NAMESPACE: lons-preprod
+      VALUES_FILE: values-preprod.yaml
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assume AWS role via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PREPROD }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Retag and push images to ECR
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          for service in graphql-server rest-server scheduler notification-worker admin-portal scoring-service; do
+            GHCR_IMAGE="ghcr.io/${{ github.repository }}/$service:$SHORT_SHA"
+            ECR_IMAGE="${{ env.ECR_REGISTRY }}/lons-$service:$SHORT_SHA"
+
+            docker pull $GHCR_IMAGE || true
+            docker tag $GHCR_IMAGE $ECR_IMAGE
+            docker push $ECR_IMAGE
+          done
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ env.EKS_CLUSTER }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Install/upgrade Helm chart
+        run: |
+          helm upgrade --install ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \
+            -f ${{ env.HELM_CHART }}/${{ env.VALUES_FILE }} \
+            --set global.imageTag=${{ github.sha }} \
+            --set global.imageSHA=${{ github.sha }} \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --wait \
+            --timeout 15m
+
+      - name: Smoke tests
+        run: |
+          echo "Running smoke tests on ${{ env.ENVIRONMENT }}..."
+          PREPROD_URL="${{ vars.PREPROD_URL }}"
+          if [ -z "$PREPROD_URL" ]; then
+            echo "PREPROD_URL not configured, skipping health checks"
+            exit 0
+          fi
+
+          for attempt in {1..5}; do
+            echo "Attempt $attempt..."
+            curl -sf "$PREPROD_URL/v1/health" && break
+            sleep 10
+          done
+
+          curl -sf "$PREPROD_URL/v1/health" || exit 1
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Deployment failed, rolling back..."
+          helm rollback ${{ env.HELM_RELEASE }} \
+            --namespace ${{ env.NAMESPACE }} \
+            --wait \
+            --timeout 5m || true
+
+  # ============================================================================
+  # Deploy to Production (manual only, requires preprod success, has protection)
+  # ============================================================================
+  deploy-production:
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production'
+    needs: []
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      ENVIRONMENT: production
+      EKS_CLUSTER: lons-production-cluster
+      NAMESPACE: lons-production
+      VALUES_FILE: values-production.yaml
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assume AWS role via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN_PRODUCTION }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Log in to Amazon ECR
+        uses: aws-actions/amazon-ecr-login@v2
+        id: login-ecr
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Retag and push images to ECR
+        run: |
+          SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          for service in graphql-server rest-server scheduler notification-worker admin-portal scoring-service; do
+            GHCR_IMAGE="ghcr.io/${{ github.repository }}/$service:$SHORT_SHA"
+            ECR_IMAGE="${{ env.ECR_REGISTRY }}/lons-$service:$SHORT_SHA"
+
+            docker pull $GHCR_IMAGE || true
+            docker tag $GHCR_IMAGE $ECR_IMAGE
+            docker push $ECR_IMAGE
+          done
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig \
+            --name ${{ env.EKS_CLUSTER }} \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Install/upgrade Helm chart
+        run: |
+          helm upgrade --install ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \
+            -f ${{ env.HELM_CHART }}/${{ env.VALUES_FILE }} \
+            --set global.imageTag=${{ github.sha }} \
+            --set global.imageSHA=${{ github.sha }} \
+            --namespace ${{ env.NAMESPACE }} \
+            --create-namespace \
+            --wait \
+            --timeout 15m
+
+      - name: Post-deploy health check
+        run: |
+          echo "Running health checks on ${{ env.ENVIRONMENT }}..."
+          PROD_URL="${{ vars.PRODUCTION_URL }}"
+          if [ -z "$PROD_URL" ]; then
+            echo "PRODUCTION_URL not configured, skipping health checks"
+            exit 0
+          fi
+
+          for attempt in {1..10}; do
+            echo "Attempt $attempt..."
+            curl -sf "$PROD_URL/v1/health" && break
+            sleep 10
+          done
+
+          curl -sf "$PROD_URL/v1/health" || exit 1
+
+      - name: Rollback on failure
+        if: failure()
+        run: |
+          echo "Deployment failed, rolling back..."
+          helm rollback ${{ env.HELM_RELEASE }} \
+            --namespace ${{ env.NAMESPACE }} \
+            --wait \
+            --timeout 5m || true

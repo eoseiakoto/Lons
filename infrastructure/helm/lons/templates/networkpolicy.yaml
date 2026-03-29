@@ -1,0 +1,432 @@
+{{- if .Values.networkPolicy.enabled -}}
+---
+# Default deny all ingress traffic
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-default-deny
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/part-of: lons
+  policyTypes:
+    - Ingress
+---
+# Allow ingress from nginx ingress controller to graphql-server
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-allow-ingress-graphql
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: graphql-server
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: {{ .Values.graphqlServer.port }}
+---
+# Allow ingress from nginx ingress controller to rest-server
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-allow-ingress-rest
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: rest-server
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: {{ .Values.restServer.port }}
+---
+# Allow ingress from nginx ingress controller to admin-portal
+{{- if .Values.adminPortal.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-allow-ingress-admin-portal
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: admin-portal
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: {{ .Values.adminPortal.port }}
+{{- end }}
+---
+# Allow graphql-server to reach scoring-service on port 8000
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-allow-graphql-to-scoring
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: scoring-service
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: graphql-server
+              app.kubernetes.io/instance: {{ .Release.Name }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: rest-server
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.scoringService.port }}
+---
+# Allow rest-server to reach scoring-service
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-allow-rest-to-scoring
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: scoring-service
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: rest-server
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.scoringService.port }}
+---
+# Allow admin-portal to reach graphql-server
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-allow-admin-to-graphql
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: graphql-server
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: admin-portal
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.graphqlServer.port }}
+---
+# Allow scheduler to reach notification-worker
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-allow-scheduler-to-notif
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: notification-worker
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: scheduler
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.notificationWorker.port }}
+---
+# Egress: graphql-server can reach scoring-service, PostgreSQL, Redis, DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-egress-graphql
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: graphql-server
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Egress
+  egress:
+    # To scoring-service
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: scoring-service
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.scoringService.port }}
+    # To PostgreSQL (external)
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.postgresql.port }}
+    # To Redis (external)
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.redis.port }}
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Egress: rest-server can reach PostgreSQL, Redis, scoring-service, DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-egress-rest
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: rest-server
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Egress
+  egress:
+    # To scoring-service
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: scoring-service
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.scoringService.port }}
+    # To PostgreSQL (external)
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.postgresql.port }}
+    # To Redis (external)
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.redis.port }}
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Egress: scoring-service can only reach DNS (no DB access)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-egress-scoring
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: scoring-service
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Egress
+  egress:
+    # DNS only
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Egress: scheduler can reach PostgreSQL, Redis, notification-worker, DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-egress-scheduler
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: scheduler
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Egress
+  egress:
+    # To notification-worker
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: notification-worker
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.notificationWorker.port }}
+    # To PostgreSQL (external)
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.postgresql.port }}
+    # To Redis (external)
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.redis.port }}
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Egress: notification-worker can reach external APIs and DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-egress-notification
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: notification-worker
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Egress
+  egress:
+    # To external APIs (SMS/Email providers) - all outbound
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels: {}
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# Egress: admin-portal can reach graphql-server and DNS
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-egress-admin
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: admin-portal
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Egress
+  egress:
+    # To graphql-server
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: graphql-server
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.graphqlServer.port }}
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+{{- end }}

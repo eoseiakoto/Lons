@@ -1,0 +1,73 @@
+{{- if .Values.serviceMesh.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "lons.fullname" . }}-service-mesh-config
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    # Linkerd Service Mesh Configuration for Lōns
+    # mTLS is automatic when Linkerd proxy is injected into pods
+
+    # Namespace annotation for automatic Linkerd proxy injection:
+    # kubectl annotate namespace <namespace> linkerd.io/inject=enabled
+
+    # Pod annotations (applied via Helm values in deployment templates):
+    # linkerd.io/inject: enabled
+    # config.linkerd.io/proxy-cpu-request: "25m"
+    # config.linkerd.io/proxy-memory-request: "64Mi"
+    # config.linkerd.io/proxy-cpu-limit: "250m"
+    # config.linkerd.io/proxy-memory-limit: "256Mi"
+
+    # Service Profiles for traffic management and observability:
+    services:
+      - name: graphql-server
+        port: 3000
+        protocol: http
+        retries: true
+        timeout: 30s
+
+      - name: rest-server
+        port: 3001
+        protocol: http
+        retries: true
+        timeout: 30s
+
+      - name: scoring-service
+        port: 8000
+        protocol: http/2
+        retries: true
+        timeout: 60s
+
+      - name: notification-worker
+        port: 3003
+        protocol: http
+        retries: false
+        timeout: 15s
+
+      - name: admin-portal
+        port: 3100
+        protocol: http
+        retries: true
+        timeout: 30s
+
+      - name: scheduler
+        port: 3002
+        protocol: http
+        retries: false
+        timeout: 45s
+
+    # External traffic (ALB → nginx ingress) bypasses mesh:
+    # Annotate nginx ingress pods with:
+    # config.linkerd.io/skip-inbound-ports: "4143,4191"
+
+    # Mutual TLS (mTLS) is automatic:
+    # - All pod-to-pod communication uses mTLS
+    # - Certificate rotation is handled by Linkerd
+    # - No service account changes required
+
+    # For traffic splitting and canary deployments:
+    # Use Flagger with Linkerd provider (optional, Phase 6)
+{{- end }}

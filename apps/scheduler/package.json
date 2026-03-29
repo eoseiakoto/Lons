@@ -12,6 +12,7 @@
   "dependencies": {
     "@lons/common": "workspace:*",
     "@lons/database": "workspace:*",
+    "@lons/shared-types": "workspace:*",
     "@lons/event-contracts": "workspace:*",
     "@lons/process-engine": "workspace:*",
     "@lons/settlement-service": "workspace:*",

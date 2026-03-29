@@ -7,3 +7,7 @@ export * from './credit-bureau/mock-credit-bureau.adapter';
 export * from './webhook/webhook.service';
 export * from './resilience/circuit-breaker';
 export * from './resilience/retry';
+export * from './monitoring';
+export * from './adapters/generic-wallet';
+export * from './adapters/mock';
+export * from './adapters/wallet-adapter-resolver.service';

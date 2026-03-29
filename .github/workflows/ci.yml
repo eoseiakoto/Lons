@@ -2,9 +2,16 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
     branches: [main]
+
+env:
+  # REGISTRY: Images are built to GHCR (ghcr.io) in CI.
+  # Post-CI, the Deploy workflow retagsand pushes to ECR (AWS) for production.
+  # This dual-registry approach maintains CI simplicity while enabling ECR for EKS.
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository }}
 
 jobs:
   lint-test-build:
@@ -49,7 +56,7 @@ jobs:
         run: pnpm --filter database exec prisma generate
 
       - name: Lint
-        run: pnpm lint || true
+        run: pnpm lint
 
       - name: Test
         run: pnpm test
@@ -70,7 +77,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.14'
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
@@ -81,3 +88,75 @@ jobs:
         run: |
           cd services/scoring-service
           python -m pytest tests/ -v
+
+  docker-build-push:
+    needs: [lint-test-build, python-scoring]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        service:
+          - name: graphql-server
+            context: .
+            dockerfile: infrastructure/docker/graphql-server.Dockerfile
+          - name: rest-server
+            context: .
+            dockerfile: infrastructure/docker/rest-server.Dockerfile
+          - name: scheduler
+            context: .
+            dockerfile: infrastructure/docker/scheduler.Dockerfile
+          - name: notification-worker
+            context: .
+            dockerfile: infrastructure/docker/notification-worker.Dockerfile
+          - name: admin-portal
+            context: .
+            dockerfile: infrastructure/docker/admin-portal.Dockerfile
+          - name: scoring-service
+            context: services/scoring-service
+            dockerfile: services/scoring-service/Dockerfile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}/${{ matrix.service.name }}
+          tags: |
+            type=sha,prefix=sha-,format=short
+            type=raw,value=main-latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value=develop-latest,enable=${{ github.ref == 'refs/heads/develop' }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.service.context }}
+          file: ${{ matrix.service.dockerfile }}
+          push: ${{ github.ref == 'refs/heads/main' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run Trivy vulnerability scanner
+        if: github.ref == 'refs/heads/main'
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_PREFIX }}/${{ matrix.service.name }}:${{ github.sha }}
+          format: 'table'
+          exit-code: '1'
+          severity: 'CRITICAL,HIGH'
+          ignore-unfixed: true

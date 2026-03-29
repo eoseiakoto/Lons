@@ -1,0 +1,68 @@
+{{- if .Values.logging.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "lons.fullname" . }}-log-retention
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+data:
+  retention-policy.json: |
+    {
+      "description": "Log retention tiers for Lons platform — balances compliance, cost, and searchability",
+      "tiers": {
+        "hot": {
+          "storage": "AWS CloudWatch Logs",
+          "retention_days": {{ .Values.logging.retention.hot | default 30 }},
+          "searchable": true,
+          "cost": "higher",
+          "use_case": "Active troubleshooting, real-time monitoring, alerting",
+          "retrieval_latency": "immediate"
+        },
+        "warm": {
+          "storage": "AWS S3 Standard-IA (infrequent access)",
+          "retention_days": {{ .Values.logging.retention.warm | default 90 }},
+          "searchable": true,
+          "cost": "medium",
+          "use_case": "Recent historical logs, periodic queries, SLA reporting",
+          "retrieval_latency": "minutes via Athena",
+          "notes": "Transitioned from CloudWatch via S3 export on schedule"
+        },
+        "cold": {
+          "storage": "AWS S3 Glacier Deep Archive",
+          "retention_days": {{ .Values.logging.retention.cold | default 365 }},
+          "searchable": false,
+          "cost": "lowest",
+          "use_case": "Compliance archive, legal holds, historical reference",
+          "retrieval_latency": "hours to days",
+          "notes": "Retrieval incurs data transfer costs"
+        }
+      },
+      "pii_handling": {
+        "masking_strategy": "Applied at ingestion via FluentBit Lua script + NestJS logger middleware",
+        "defense_in_depth": true,
+        "masking_layers": [
+          "Layer 1: NestJS logger middleware masks PII before emitting to stdout",
+          "Layer 2: FluentBit Lua script masks PII at container log ingestion",
+          "Layer 3: CloudWatch native masking (optional, for double coverage)"
+        ],
+        "fields_masked": [
+          "national_id (GHA-***-XXX pattern)",
+          "full_name (***MASKED***)",
+          "phone (primary/secondary) (+XXX***XXXX pattern)",
+          "email (u***@domain pattern)",
+          "date_of_birth (***MASKED***)",
+          "customer_name (***MASKED***)",
+          "account_number (***MASKED***)"
+        ],
+        "exceptions": {
+          "audit_logs": "Exempt from PII masking — contain only IDs and actions, not sensitive values",
+          "system_logs": "May contain PII patterns; masked by default"
+        }
+      },
+      "compliance": {
+        "gdpr": "Retention tiers allow 30-90 day operational logs with 1-year archive",
+        "soups_or_local_regs": "Cold tier (1 year) meets typical regulatory requirements for fintech",
+        "audit_trail": "All masking operations are logged; audit logs retained separately (immutable)"
+      }
+    }
+{{- end }}

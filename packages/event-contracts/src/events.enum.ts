@@ -55,4 +55,38 @@ export enum EventType {
   SETTLEMENT_APPROVED = 'settlement.approved',
   RECONCILIATION_COMPLETED = 'reconciliation.completed',
   COLLECTIONS_ACTION_LOGGED = 'collections_action.logged',
+
+  // Notification events (Phase 4)
+  NOTIFICATION_SENT = 'notification.sent',
+  NOTIFICATION_FAILED = 'notification.failed',
+  NOTIFICATION_DELIVERED = 'notification.delivered',
+
+  // Recovery events (Sprint 5)
+  RECOVERY_STRATEGY_RECOMMENDED = 'recovery.strategy_recommended',
+  RECOVERY_STRATEGY_APPLIED = 'recovery.strategy_applied',
+  RECOVERY_OUTCOME_RECORDED = 'recovery.outcome_recorded',
+  LOAN_RESTRUCTURED = 'loan.restructured',
+
+  // Monitoring events (Sprint 5)
+  MONITORING_RISK_CHANGED = 'monitoring.risk_changed',
+  MONITORING_ALERT_TRIGGERED = 'monitoring.alert_triggered',
+  MONITORING_ALERT_ACKNOWLEDGED = 'monitoring.alert_acknowledged',
+  ADAPTIVE_ACTION_EXECUTED = 'monitoring.adaptive_action_executed',
+
+  // ML model events (Sprint 5)
+  ML_MODEL_TRAINED = 'ml_model.trained',
+  ML_MODEL_ACTIVATED = 'ml_model.activated',
+  ML_MODEL_DRIFT_DETECTED = 'ml_model.drift_detected',
+
+  // Webhook events (Sprint 6)
+  WEBHOOK_DELIVERY_ATTEMPTED = 'webhook.delivery_attempted',
+  WEBHOOK_DELIVERY_SUCCEEDED = 'webhook.delivery_succeeded',
+  WEBHOOK_DELIVERY_FAILED = 'webhook.delivery_failed',
+  WEBHOOK_DELIVERY_EXHAUSTED = 'webhook.delivery_exhausted',
+
+  // Audit events (Sprint 6)
+  AUDIT_ENTRY_CREATED = 'audit.entry_created',
+
+  // Integration events (Sprint 5)
+  INTEGRATION_HEALTH_CHANGED = 'integration.health_changed',
 }

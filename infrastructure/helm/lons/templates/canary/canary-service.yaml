@@ -1,0 +1,17 @@
+{{- if .Values.canary.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lons.fullname" . }}-graphql-server-canary
+  labels:
+    {{- include "lons.componentLabels" (dict "context" . "component" "graphql-server-canary") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.graphqlServer.port | default 3000 }}
+      targetPort: {{ .Values.graphqlServer.port | default 3000 }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "lons.selectorLabels" (dict "context" . "component" "graphql-server") | nindent 4 }}
+{{- end }}

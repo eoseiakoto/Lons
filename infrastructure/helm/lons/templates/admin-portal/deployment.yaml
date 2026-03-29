@@ -1,0 +1,93 @@
+{{- if .Values.adminPortal.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lons.fullname" . }}-admin-portal
+  labels:
+    {{- include "lons.componentLabels" (dict "context" . "component" "admin-portal") | nindent 4 }}
+spec:
+  {{- if not .Values.adminPortal.autoscaling.enabled }}
+  replicas: {{ .Values.adminPortal.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "lons.selectorLabels" (dict "context" . "component" "admin-portal") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "lons.componentLabels" (dict "context" . "component" "admin-portal") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- if .Values.serviceMesh.enabled }}
+        linkerd.io/inject: enabled
+        config.linkerd.io/proxy-cpu-request: {{ .Values.serviceMesh.proxy.cpuRequest | default "25m" | quote }}
+        config.linkerd.io/proxy-memory-request: {{ .Values.serviceMesh.proxy.memoryRequest | default "64Mi" | quote }}
+        config.linkerd.io/proxy-cpu-limit: {{ .Values.serviceMesh.proxy.cpuLimit | default "250m" | quote }}
+        config.linkerd.io/proxy-memory-limit: {{ .Values.serviceMesh.proxy.memoryLimit | default "256Mi" | quote }}
+        {{- end }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: admin-portal
+          image: {{ include "lons.image" (dict "imageValues" .Values.adminPortal.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.adminPortal.port }}
+              protocol: TCP
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.config.nodeEnv | quote }}
+            - name: NEXT_PUBLIC_GRAPHQL_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "lons.configmapName" . }}
+                  key: NEXT_PUBLIC_GRAPHQL_URL
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.adminPortal.healthCheck.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.adminPortal.healthCheck.initialDelaySeconds }}
+            periodSeconds: {{ .Values.adminPortal.healthCheck.periodSeconds }}
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.adminPortal.healthCheck.path }}
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.adminPortal.resources | nindent 12 }}
+      terminationGracePeriodSeconds: 30
+      {{- if .Values.topologySpread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: {{ .Values.topologySpread.whenUnsatisfiable | default "ScheduleAnyway" }}
+          labelSelector:
+            matchLabels:
+              {{- include "lons.selectorLabels" (dict "context" . "component" "admin-portal") | nindent 14 }}
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "lons.selectorLabels" (dict "context" . "component" "admin-portal") | nindent 14 }}
+      {{- end }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "lons.fullname" . }}-admin-portal
+  labels:
+    {{- include "lons.componentLabels" (dict "context" . "component" "admin-portal") | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "lons.selectorLabels" (dict "context" . "component" "admin-portal") | nindent 6 }}
+{{- end }}

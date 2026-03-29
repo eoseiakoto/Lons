@@ -1,6 +1,6 @@
 import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
 import { CustomerService, CurrentTenant, Roles } from '@lons/entity-service';
-import { encodeCursor, decodeCursor } from '@lons/common';
+import { encodeCursor, decodeCursor, AuditAction, AuditActionType, AuditResourceType } from '@lons/common';
 
 import { CustomerType, CustomerConnection } from '../types/customer.type';
 import { PaginationInput } from '../inputs/pagination.input';
@@ -44,6 +44,7 @@ export class CustomerResolver {
   }
 
   @Mutation(() => CustomerType)
+  @AuditAction(AuditActionType.BLACKLIST, AuditResourceType.CUSTOMER)
   @Roles('customer:blacklist')
   async addToBlacklist(
     @CurrentTenant() tenantId: string,
@@ -54,6 +55,7 @@ export class CustomerResolver {
   }
 
   @Mutation(() => CustomerType)
+  @AuditAction(AuditActionType.UPDATE, AuditResourceType.CUSTOMER)
   @Roles('customer:blacklist')
   async removeFromBlacklist(
     @CurrentTenant() tenantId: string,

@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lons.fullname" . }}-rest-server
+  labels:
+    {{- include "lons.componentLabels" (dict "context" . "component" "rest-server") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.restServer.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "lons.selectorLabels" (dict "context" . "component" "rest-server") | nindent 4 }}

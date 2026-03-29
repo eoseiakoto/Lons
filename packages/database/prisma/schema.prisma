@@ -246,6 +246,57 @@ enum WebhookDeliveryStatus {
   exhausted
 }
 
+enum WebhookAuthMethod {
+  hmac
+  bearer
+  basic_auth
+}
+
+enum WalletProviderType {
+  MOCK
+  MTN_MOMO
+  MPESA
+  AIRTEL_MONEY
+  GENERIC
+}
+
+enum NotificationProviderType {
+  CONSOLE
+  RECORDING_MOCK
+  AFRICAS_TALKING
+  TWILIO
+  SMTP
+  FCM
+}
+
+enum AdapterEnvironmentMode {
+  SANDBOX
+  PRODUCTION
+}
+
+enum FeedbackCategory {
+  BUG
+  FEATURE_REQUEST
+  UX_ISSUE
+  INTEGRATION_QUESTION
+  OTHER
+}
+
+enum FeedbackSeverity {
+  CRITICAL
+  MAJOR
+  MINOR
+  SUGGESTION
+}
+
+enum FeedbackStatus {
+  NEW
+  ACKNOWLEDGED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
 // ============================================================================
 // PLATFORM SCHEMA
 // ============================================================================
@@ -264,6 +315,12 @@ model Tenant {
   createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt           DateTime?    @map("deleted_at") @db.Timestamptz(6)
+
+  walletProviderConfigs       WalletProviderConfig[]
+  notificationProviderConfigs NotificationProviderConfig[]
+  notificationMockLogs        NotificationMockLog[]
+  feedbacks                   Feedback[]
+  surveyResponses             SurveyResponse[]
 
   @@map("tenants")
 }
@@ -312,6 +369,8 @@ model User {
   createdProducts  Product[]  @relation("ProductCreatedBy")
   productVersions  ProductVersion[] @relation("VersionCreatedBy")
   processedRequests LoanRequest[] @relation("RequestProcessedBy")
+  feedbacks        Feedback[]
+  surveyResponses  SurveyResponse[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -785,6 +844,9 @@ model AuditLog {
   afterValue    Json?     @map("after_value")
   correlationId String?   @map("correlation_id") @db.Uuid
   metadata      Json?
+  previousHash  String?   @map("previous_hash") @db.Char(64)
+  entryHash     String?   @map("entry_hash") @db.Char(64)
+  accessType    String?   @map("access_type") @db.VarChar(30)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
   @@index([tenantId])
@@ -792,6 +854,7 @@ model AuditLog {
   @@index([resourceType, resourceId])
   @@index([action])
   @@index([createdAt])
+  @@index([entryHash])
   @@map("audit_logs")
 }
 
@@ -938,4 +1001,155 @@ model CollectionsAction {
   @@index([contractId])
   @@index([actionType])
   @@map("collections_actions")
+}
+
+// ============================================================================
+// TENANT SCHEMA — WEBHOOKS (Sprint 6)
+// ============================================================================
+
+model WebhookEndpoint {
+  id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String              @map("tenant_id") @db.Uuid
+  url           String              @db.VarChar(2048)
+  events        String[]
+  authMethod    WebhookAuthMethod   @default(hmac) @map("auth_method")
+  secret        String              @db.Text
+  active        Boolean             @default(true)
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt     DateTime?           @map("deleted_at") @db.Timestamptz(6)
+
+  deliveryLogs  WebhookDeliveryLog[]
+
+  @@index([tenantId])
+  @@index([tenantId, active])
+  @@map("webhook_endpoints")
+}
+
+model WebhookDeliveryLog {
+  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  webhookEndpointId   String                @map("webhook_endpoint_id") @db.Uuid
+  event               String                @db.VarChar(100)
+  payload             Json                  @db.JsonB
+  httpStatus          Int?                  @map("http_status")
+  responseBody        String?               @map("response_body") @db.Text
+  retryCount          Int                   @default(0) @map("retry_count")
+  status              WebhookDeliveryStatus @default(pending)
+  nextRetryAt         DateTime?             @map("next_retry_at") @db.Timestamptz(6)
+  deliveredAt         DateTime?             @map("delivered_at") @db.Timestamptz(6)
+  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  webhookEndpoint     WebhookEndpoint       @relation(fields: [webhookEndpointId], references: [id])
+
+  @@index([webhookEndpointId])
+  @@index([status])
+  @@index([webhookEndpointId, status, createdAt])
+  @@map("webhook_delivery_logs")
+}
+
+// ============================================================================
+// TENANT SCHEMA — ADAPTER CONFIGURATION (Sprint 7)
+// ============================================================================
+
+model WalletProviderConfig {
+  id                    String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId              String                 @map("tenant_id") @db.Uuid
+  providerType          WalletProviderType     @map("provider_type")
+  environmentMode       AdapterEnvironmentMode @map("environment_mode")
+  displayName           String                 @map("display_name") @db.VarChar(255)
+  apiBaseUrl            String?                @map("api_base_url") @db.VarChar(512)
+  credentialsSecretRef  String?                @map("credentials_secret_ref") @db.VarChar(512)
+  webhookSigningKeyRef  String?                @map("webhook_signing_key_ref") @db.VarChar(512)
+  configJson            Json?                  @map("config_json") @db.JsonB
+  isActive              Boolean                @default(true) @map("is_active")
+  isDefault             Boolean                @default(false) @map("is_default")
+  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt             DateTime?              @map("deleted_at") @db.Timestamptz(6)
+
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, providerType, isActive], name: "uq_wallet_provider_active")
+  @@index([tenantId])
+  @@map("wallet_provider_configs")
+}
+
+model NotificationProviderConfig {
+  id                    String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId              String                     @map("tenant_id") @db.Uuid
+  providerType          NotificationProviderType   @map("provider_type")
+  environmentMode       AdapterEnvironmentMode     @map("environment_mode")
+  displayName           String                     @map("display_name") @db.VarChar(255)
+  credentialsSecretRef  String?                    @map("credentials_secret_ref") @db.VarChar(512)
+  configJson            Json?                      @map("config_json") @db.JsonB
+  isActive              Boolean                    @default(true) @map("is_active")
+  isDefault             Boolean                    @default(false) @map("is_default")
+  createdAt             DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt             DateTime?                  @map("deleted_at") @db.Timestamptz(6)
+
+  tenant                Tenant                     @relation(fields: [tenantId], references: [id])
+
+  @@unique([tenantId, providerType, isActive], name: "uq_notification_provider_active")
+  @@index([tenantId])
+  @@map("notification_provider_configs")
+}
+
+model NotificationMockLog {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  channel         String   @db.VarChar(20)
+  recipient       String   @db.VarChar(255)
+  templateId      String?  @map("template_id") @db.VarChar(100)
+  renderedContent String   @map("rendered_content") @db.Text
+  status          String   @db.VarChar(20)
+  correlationId   String?  @map("correlation_id") @db.VarChar(100)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([correlationId])
+  @@map("notification_mock_log")
+}
+
+// ============================================================================
+// TENANT SCHEMA — FEEDBACK & SURVEYS (Sprint 7)
+// ============================================================================
+
+model Feedback {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String           @map("tenant_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  category       FeedbackCategory
+  severity       FeedbackSeverity
+  description    String           @db.Text
+  screenshotUrl  String?          @map("screenshot_url") @db.VarChar(512)
+  pageUrl        String?          @map("page_url") @db.VarChar(512)
+  debugContext   Json?            @map("debug_context") @db.JsonB
+  status         FeedbackStatus   @default(NEW)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant         Tenant           @relation(fields: [tenantId], references: [id])
+  user           User             @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("feedbacks")
+}
+
+model SurveyResponse {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  score     Int
+  comment   String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([tenantId])
+  @@map("survey_responses")
 }

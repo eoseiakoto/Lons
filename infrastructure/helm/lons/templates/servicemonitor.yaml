@@ -1,0 +1,29 @@
+{{- if and .Values.metrics.enabled .Values.metrics.serviceMonitor.enabled -}}
+{{- $fullname := include "lons.fullname" . -}}
+{{- $labels := include "lons.labels" . -}}
+{{- $services := list "graphql-server" "rest-server" "scheduler" "notification-worker" "scoring-service" -}}
+{{- $ports := dict "graphql-server" $.Values.graphqlServer.port "rest-server" $.Values.restServer.port "scheduler" $.Values.scheduler.port "notification-worker" $.Values.notificationWorker.port "scoring-service" $.Values.scoringService.port -}}
+{{- range $svc := $services }}
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ $fullname }}-{{ $svc }}
+  labels:
+    {{- $labels | nindent 4 }}
+    app.kubernetes.io/component: {{ $svc }}
+    {{- with $.Values.metrics.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ $svc }}
+      app.kubernetes.io/instance: {{ $.Release.Name }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: {{ $.Values.metrics.serviceMonitor.interval }}
+      scrapeTimeout: {{ $.Values.metrics.serviceMonitor.scrapeTimeout }}
+{{- end }}
+{{- end }}

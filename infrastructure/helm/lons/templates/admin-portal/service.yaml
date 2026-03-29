@@ -1,0 +1,17 @@
+{{- if .Values.adminPortal.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lons.fullname" . }}-admin-portal
+  labels:
+    {{- include "lons.componentLabels" (dict "context" . "component" "admin-portal") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.adminPortal.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "lons.selectorLabels" (dict "context" . "component" "admin-portal") | nindent 4 }}
+{{- end }}

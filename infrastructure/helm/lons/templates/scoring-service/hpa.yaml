@@ -1,0 +1,22 @@
+{{- if .Values.scoringService.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "lons.fullname" . }}-scoring-service
+  labels:
+    {{- include "lons.componentLabels" (dict "context" . "component" "scoring-service") | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "lons.fullname" . }}-scoring-service
+  minReplicas: {{ .Values.scoringService.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.scoringService.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.scoringService.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}

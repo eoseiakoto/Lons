@@ -1,0 +1,133 @@
+name: Load Test Suite
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: dev
+        type: choice
+        options:
+          - dev
+          - staging
+          - preprod
+          - prod
+      test_type:
+        description: Test type to run
+        required: true
+        default: sla-validation
+        type: choice
+        options:
+          - smoke
+          - loan-application
+          - repayment-processing
+          - graphql-queries
+          - tenant-isolation
+          - sla-validation
+      profile:
+        description: Load profile
+        required: false
+        default: load
+        type: choice
+        options:
+          - smoke
+          - load
+          - stress
+          - soak
+          - spike
+
+jobs:
+  load_test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install k6
+        run: |
+          sudo apt-key adv --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3232A
+          echo "deb https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install -y k6
+
+      - name: Verify k6 installation
+        run: k6 version
+
+      - name: Determine test script
+        id: test_script
+        run: |
+          case "${{ github.event.inputs.test_type }}" in
+            smoke)
+              echo "script=scripts/load-test.js" >> $GITHUB_OUTPUT
+              ;;
+            loan-application)
+              echo "script=scripts/load-tests/loan-application.js" >> $GITHUB_OUTPUT
+              ;;
+            repayment-processing)
+              echo "script=scripts/load-tests/repayment-processing.js" >> $GITHUB_OUTPUT
+              ;;
+            graphql-queries)
+              echo "script=scripts/load-tests/graphql-queries.js" >> $GITHUB_OUTPUT
+              ;;
+            tenant-isolation)
+              echo "script=scripts/load-tests/tenant-isolation.js" >> $GITHUB_OUTPUT
+              ;;
+            sla-validation)
+              echo "script=scripts/load-tests/sla-validation.js" >> $GITHUB_OUTPUT
+              ;;
+            *)
+              echo "script=scripts/load-test.js" >> $GITHUB_OUTPUT
+              ;;
+          esac
+
+      - name: Run k6 load test
+        env:
+          ENVIRONMENT: ${{ github.event.inputs.environment }}
+          PROFILE: ${{ github.event.inputs.profile || 'load' }}
+        run: |
+          k6 run \
+            -e ENVIRONMENT=$ENVIRONMENT \
+            -e PROFILE=$PROFILE \
+            --out json=test-results.json \
+            ${{ steps.test_script.outputs.script }}
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: k6-test-results-${{ github.event.inputs.test_type }}-${{ github.event.inputs.environment }}
+          path: test-results.json
+          retention-days: 30
+
+      - name: Generate test summary
+        if: always()
+        run: |
+          echo "## Load Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Test Type:** ${{ github.event.inputs.test_type }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ github.event.inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Profile:** ${{ github.event.inputs.profile }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Artifacts:** [Download Results](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+
+      - name: Notify Slack (optional)
+        if: failure() && env.SLACK_WEBHOOK != ''
+        uses: slackapi/slack-github-action@v1.24.0
+        with:
+          webhook-url: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {
+              "text": "Load test failed for ${{ github.event.inputs.test_type }} on ${{ github.event.inputs.environment }}",
+              "blocks": [
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Load Test Failed*\n*Test:* ${{ github.event.inputs.test_type }}\n*Environment:* ${{ github.event.inputs.environment }}\n*Run:* <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View Details>"
+                  }
+                }
+              ]
+            }

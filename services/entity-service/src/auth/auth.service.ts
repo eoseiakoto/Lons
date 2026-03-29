@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@lons/database';
 import { DEFAULTS } from '@lons/shared-types';
 
@@ -194,6 +194,28 @@ export class AuthService {
         tenantId: payload.tenantId,
       }),
     };
+  }
+
+  async changePassword(
+    tenantId: string,
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.prisma.user.findFirst({
+      where: { id: userId, tenantId, deletedAt: null },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const valid = await this.passwordService.verify(user.passwordHash, currentPassword);
+    if (!valid) throw new UnauthorizedException('Current password is incorrect');
+
+    this.passwordService.validateStrength(newPassword);
+    const newHash = await this.passwordService.hash(newPassword);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: newHash, updatedAt: new Date() },
+    });
   }
 
   private async recordFailedLogin(userId: string): Promise<void> {

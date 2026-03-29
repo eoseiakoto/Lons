@@ -1,0 +1,55 @@
+# Lōns Platform — Code Ownership
+# Each line is a file pattern followed by one or more owners.
+# The last matching pattern has the most precedence.
+# Ref: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything
+* @eoseiakoto
+
+# Infrastructure & DevOps
+infrastructure/ @eoseiakoto
+.github/ @eoseiakoto
+Dockerfile @eoseiakoto
+docker-compose* @eoseiakoto
+
+# Core API services
+apps/graphql-server/ @eoseiakoto
+apps/rest-server/ @eoseiakoto
+
+# Admin Portal (Next.js frontend)
+apps/admin-portal/ @eoseiakoto
+
+# Background services
+apps/scheduler/ @eoseiakoto
+services/notification-service/ @eoseiakoto
+
+# Loan processing pipeline
+services/process-engine/ @eoseiakoto
+services/entity-service/ @eoseiakoto
+services/repayment-service/ @eoseiakoto
+
+# AI/ML & Scoring
+services/scoring-service/ @eoseiakoto
+
+# Financial services (settlements, reconciliation, recovery)
+services/settlement-service/ @eoseiakoto
+services/reconciliation-service/ @eoseiakoto
+services/recovery-service/ @eoseiakoto
+
+# Integration layer
+services/integration-service/ @eoseiakoto
+
+# Shared packages (changes here affect all services)
+packages/ @eoseiakoto
+
+# Database schema (critical — review carefully)
+packages/database/prisma/ @eoseiakoto
+
+# Security-sensitive files
+**/auth/ @eoseiakoto
+**/security/ @eoseiakoto
+infrastructure/terraform/oidc.tf @eoseiakoto
+infrastructure/terraform/security.tf @eoseiakoto
+
+# Documentation
+Docs/ @eoseiakoto

@@ -1,6 +1,7 @@
 import { Resolver, Query, Mutation, Args, ID, Int, ObjectType, Field } from '@nestjs/graphql';
 import { CollectionsService, AnalyticsService, PortfolioMetrics } from '@lons/process-engine';
 import { CurrentTenant, CurrentUser, Roles, IAuthenticatedUser } from '@lons/entity-service';
+import { AuditAction, AuditActionType, AuditResourceType } from '@lons/common';
 
 @ObjectType()
 class CollectionsActionType {
@@ -132,6 +133,7 @@ export class CollectionsResolver {
   }
 
   @Mutation(() => CollectionsActionType)
+  @AuditAction(AuditActionType.UPDATE, AuditResourceType.CONTRACT)
   @Roles('contract:update')
   async logCollectionsAction(
     @CurrentTenant() tenantId: string,

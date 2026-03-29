@@ -1,0 +1,449 @@
+{{- if .Values.monitoring.dashboards.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "lons.fullname" . }}-grafana-dashboards
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+    grafana_dashboard: "1"
+data:
+  lons-platform-overview.json: |
+    {
+      "dashboard": {
+        "title": "Lōns Platform Overview",
+        "description": "System-wide health and key business metrics",
+        "tags": ["lons", "platform", "overview"],
+        "timezone": "UTC",
+        "schemaVersion": 38,
+        "version": 1,
+        "refresh": "30s",
+        "time": {
+          "from": "now-6h",
+          "to": "now"
+        },
+        "templating": {
+          "list": [
+            {
+              "name": "environment",
+              "type": "query",
+              "datasource": "Prometheus",
+              "query": "label_values(up{job=~\".*lons.*\"}, env)",
+              "current": {
+                "text": "All",
+                "value": "$__all"
+              },
+              "multi": true
+            },
+            {
+              "name": "interval",
+              "type": "interval",
+              "current": {
+                "text": "1m",
+                "value": "1m"
+              },
+              "options": ["1m", "5m", "15m", "30m", "1h"]
+            }
+          ]
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "Active Loans",
+            "type": "stat",
+            "gridPos": {
+              "h": 4,
+              "w": 4,
+              "x": 0,
+              "y": 0
+            },
+            "targets": [
+              {
+                "expr": "sum(lons_contracts_active_total{env=~\"$environment\"})",
+                "legendFormat": "Active Contracts"
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Disbursement Volume (24h)",
+            "type": "stat",
+            "gridPos": {
+              "h": 4,
+              "w": 4,
+              "x": 4,
+              "y": 0
+            },
+            "targets": [
+              {
+                "expr": "increase(lons_disbursement_amount_total{env=~\"$environment\"}[24h])",
+                "legendFormat": "Amount"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Repayment Collection Rate",
+            "type": "gauge",
+            "gridPos": {
+              "h": 4,
+              "w": 4,
+              "x": 8,
+              "y": 0
+            },
+            "targets": [
+              {
+                "expr": "sum(lons_repayment_collected_total{env=~\"$environment\"}) / sum(lons_repayment_due_total{env=~\"$environment\"})",
+                "legendFormat": "Collection %"
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Overdue Rate",
+            "type": "gauge",
+            "gridPos": {
+              "h": 4,
+              "w": 4,
+              "x": 12,
+              "y": 0
+            },
+            "targets": [
+              {
+                "expr": "sum(lons_contracts_overdue_total{env=~\"$environment\"}) / sum(lons_contracts_active_total{env=~\"$environment\"})",
+                "legendFormat": "Overdue %"
+              }
+            ]
+          },
+          {
+            "id": 5,
+            "title": "System Health",
+            "type": "stat",
+            "gridPos": {
+              "h": 4,
+              "w": 4,
+              "x": 16,
+              "y": 0
+            },
+            "targets": [
+              {
+                "expr": "count(up{job=~\".*lons.*\",env=~\"$environment\",up==1}) / count(up{job=~\".*lons.*\",env=~\"$environment\"})",
+                "legendFormat": "Healthy %"
+              }
+            ]
+          },
+          {
+            "id": 6,
+            "title": "API Error Rate",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 6,
+              "w": 12,
+              "x": 0,
+              "y": 4
+            },
+            "targets": [
+              {
+                "expr": "sum(rate(http_requests_total{status=~\"5..\",env=~\"$environment\"}[$interval])) / sum(rate(http_requests_total{env=~\"$environment\"}[$interval]))",
+                "legendFormat": "Error Rate"
+              }
+            ]
+          },
+          {
+            "id": 7,
+            "title": "API Response Time (P95)",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 6,
+              "w": 12,
+              "x": 12,
+              "y": 4
+            },
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{env=~\"$environment\"}[$interval])) by (le))",
+                "legendFormat": "P95 Latency"
+              }
+            ]
+          }
+        ]
+      }
+    }
+
+  lons-per-tenant-metrics.json: |
+    {
+      "dashboard": {
+        "title": "Lōns Per-Tenant Metrics",
+        "description": "Tenant-specific performance and business metrics",
+        "tags": ["lons", "tenant", "multi-tenant"],
+        "timezone": "UTC",
+        "schemaVersion": 38,
+        "version": 1,
+        "refresh": "30s",
+        "time": {
+          "from": "now-6h",
+          "to": "now"
+        },
+        "templating": {
+          "list": [
+            {
+              "name": "tenant_id",
+              "type": "query",
+              "datasource": "Prometheus",
+              "query": "label_values(lons_contracts_active_total, tenant_id)",
+              "current": {
+                "text": "All",
+                "value": "$__all"
+              },
+              "multi": true
+            },
+            {
+              "name": "environment",
+              "type": "query",
+              "datasource": "Prometheus",
+              "query": "label_values(lons_contracts_active_total{tenant_id=~\"$tenant_id\"}, env)",
+              "current": {
+                "text": "All",
+                "value": "$__all"
+              },
+              "multi": true
+            }
+          ]
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "Active Loans by Tenant",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 6,
+              "w": 12,
+              "x": 0,
+              "y": 0
+            },
+            "targets": [
+              {
+                "expr": "sum by (tenant_id) (lons_contracts_active_total{tenant_id=~\"$tenant_id\",env=~\"$environment\"})",
+                "legendFormat": "{{ tenant_id }}"
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Disbursement Volume by Tenant",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 6,
+              "w": 12,
+              "x": 12,
+              "y": 0
+            },
+            "targets": [
+              {
+                "expr": "sum by (tenant_id) (increase(lons_disbursement_amount_total{tenant_id=~\"$tenant_id\",env=~\"$environment\"}[1h]))",
+                "legendFormat": "{{ tenant_id }}"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "Repayment Rate by Tenant",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 6,
+              "w": 12,
+              "x": 0,
+              "y": 6
+            },
+            "targets": [
+              {
+                "expr": "sum by (tenant_id) (lons_repayment_collected_total{tenant_id=~\"$tenant_id\",env=~\"$environment\"}) / sum by (tenant_id) (lons_repayment_due_total{tenant_id=~\"$tenant_id\",env=~\"$environment\"})",
+                "legendFormat": "{{ tenant_id }}"
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Portfolio At Risk (PAR) by Tenant",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 6,
+              "w": 12,
+              "x": 12,
+              "y": 6
+            },
+            "targets": [
+              {
+                "expr": "sum by (tenant_id) (lons_contracts_overdue_total{tenant_id=~\"$tenant_id\",env=~\"$environment\"}) / sum by (tenant_id) (lons_contracts_active_total{tenant_id=~\"$tenant_id\",env=~\"$environment\"})",
+                "legendFormat": "{{ tenant_id }}"
+              }
+            ]
+          },
+          {
+            "id": 5,
+            "title": "API Usage by Tenant",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 6,
+              "w": 12,
+              "x": 0,
+              "y": 12
+            },
+            "targets": [
+              {
+                "expr": "sum by (tenant_id) (rate(http_requests_total{tenant_id=~\"$tenant_id\",env=~\"$environment\"}[5m]))",
+                "legendFormat": "{{ tenant_id }}"
+              }
+            ]
+          }
+        ]
+      }
+    }
+
+  lons-integration-health.json: |
+    {
+      "dashboard": {
+        "title": "Lōns Integration Health",
+        "description": "Wallet adapters, SMS, credit bureau, and external integration status",
+        "tags": ["lons", "integration", "health"],
+        "timezone": "UTC",
+        "schemaVersion": 38,
+        "version": 1,
+        "refresh": "15s",
+        "time": {
+          "from": "now-24h",
+          "to": "now"
+        },
+        "templating": {
+          "list": [
+            {
+              "name": "adapter",
+              "type": "query",
+              "datasource": "Prometheus",
+              "query": "label_values(lons_integration_health_status, adapter)",
+              "current": {
+                "text": "All",
+                "value": "$__all"
+              },
+              "multi": true
+            },
+            {
+              "name": "environment",
+              "type": "query",
+              "datasource": "Prometheus",
+              "query": "label_values(lons_integration_health_status{adapter=~\"$adapter\"}, env)",
+              "current": {
+                "text": "All",
+                "value": "$__all"
+              },
+              "multi": true
+            }
+          ]
+        },
+        "panels": [
+          {
+            "id": 1,
+            "title": "Adapter Health Status",
+            "type": "stat",
+            "gridPos": {
+              "h": 4,
+              "w": 6,
+              "x": 0,
+              "y": 0
+            },
+            "targets": [
+              {
+                "expr": "lons_integration_health_status{adapter=~\"$adapter\",env=~\"$environment\"}",
+                "legendFormat": "{{ adapter }}"
+              }
+            ]
+          },
+          {
+            "id": 2,
+            "title": "Wallet Adapter Latency",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 6,
+              "w": 12,
+              "x": 0,
+              "y": 4
+            },
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(lons_wallet_request_duration_seconds_bucket{adapter=~\"$adapter\",env=~\"$environment\"}[5m])) by (le, adapter))",
+                "legendFormat": "{{ adapter }} P95"
+              }
+            ]
+          },
+          {
+            "id": 3,
+            "title": "SMS Delivery Rate",
+            "type": "gauge",
+            "gridPos": {
+              "h": 6,
+              "w": 12,
+              "x": 12,
+              "y": 4
+            },
+            "targets": [
+              {
+                "expr": "sum(lons_sms_delivered_total{env=~\"$environment\"}) / sum(lons_sms_sent_total{env=~\"$environment\"})",
+                "legendFormat": "Delivery %"
+              }
+            ]
+          },
+          {
+            "id": 4,
+            "title": "Credit Bureau Response Time",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 6,
+              "w": 12,
+              "x": 0,
+              "y": 10
+            },
+            "targets": [
+              {
+                "expr": "histogram_quantile(0.95, sum(rate(lons_bureau_request_duration_seconds_bucket{env=~\"$environment\"}[5m])) by (le))",
+                "legendFormat": "P95 Response Time"
+              }
+            ]
+          },
+          {
+            "id": 5,
+            "title": "Integration Error Rates",
+            "type": "timeseries",
+            "gridPos": {
+              "h": 6,
+              "w": 12,
+              "x": 12,
+              "y": 10
+            },
+            "targets": [
+              {
+                "expr": "sum by (adapter) (rate(lons_integration_errors_total{adapter=~\"$adapter\",env=~\"$environment\"}[5m]))",
+                "legendFormat": "{{ adapter }}"
+              }
+            ]
+          },
+          {
+            "id": 6,
+            "title": "Circuit Breaker States",
+            "type": "stat",
+            "gridPos": {
+              "h": 4,
+              "w": 6,
+              "x": 0,
+              "y": 16
+            },
+            "targets": [
+              {
+                "expr": "lons_circuit_breaker_state{adapter=~\"$adapter\",env=~\"$environment\"}",
+                "legendFormat": "{{ adapter }}"
+              }
+            ]
+          }
+        ]
+      }
+    }
+{{- end }}

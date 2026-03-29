@@ -1,0 +1,115 @@
+version: 2
+updates:
+  # Root package.json and pnpm lockfile
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:00"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "automated"
+    reviewers:
+      - "team:engineering"
+    groups:
+      nestjs:
+        patterns:
+          - "@nestjs/*"
+        update-types:
+          - "minor"
+          - "patch"
+      prisma:
+        patterns:
+          - "prisma"
+          - "@prisma/*"
+        update-types:
+          - "minor"
+          - "patch"
+      typescript:
+        patterns:
+          - "typescript"
+          - "ts-*"
+          - "@types/*"
+        update-types:
+          - "minor"
+          - "patch"
+      testing:
+        patterns:
+          - "jest"
+          - "@testing-library/*"
+        update-types:
+          - "minor"
+          - "patch"
+
+  # Python scoring service dependencies
+  - package-ecosystem: "pip"
+    directory: "/services/scoring-service"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:15"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+      - "automated"
+    reviewers:
+      - "team:ml-engineering"
+
+  # GitHub Actions versions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "03:30"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "ci"
+      - "automated"
+
+  # Dockerfile base images
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+    labels:
+      - "dependencies"
+      - "docker"
+      - "automated"
+    registries:
+      docker-hub:
+        type: docker-registry
+        url: https://registry.hub.docker.com
+
+  # Terraform modules and providers
+  - package-ecosystem: "terraform"
+    directory: "/infrastructure/terraform"
+    schedule:
+      interval: "monthly"
+      day: "first"
+    labels:
+      - "dependencies"
+      - "infrastructure"
+      - "automated"
+    reviewers:
+      - "team:platform-eng"
+    open-pull-requests-limit: 3
+
+  # Helm chart dependencies and sub-charts
+  - package-ecosystem: "docker"
+    directory: "/infrastructure/helm/lons"
+    schedule:
+      interval: "monthly"
+      day: "first"
+    labels:
+      - "dependencies"
+      - "helm"
+      - "infrastructure"
+      - "automated"
+    reviewers:
+      - "team:platform-eng"

@@ -1,14 +1,24 @@
-import { Injectable, CanActivate, ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  UnauthorizedException,
+  Logger,
+} from '@nestjs/common';
+import { ApiKeyService } from '@lons/entity-service';
 
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
-  canActivate(context: ExecutionContext): boolean {
+  private readonly logger = new Logger(ApiKeyGuard.name);
+
+  constructor(private readonly apiKeyService: ApiKeyService) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context.switchToHttp().getRequest();
 
-    // Check for Bearer token
+    // Check for Bearer token — JWT auth handled elsewhere, pass through
     const authHeader = request.headers['authorization'];
     if (authHeader?.startsWith('Bearer ')) {
-      // JWT auth handled elsewhere — pass through
       return true;
     }
 
@@ -17,17 +27,28 @@ export class ApiKeyGuard implements CanActivate {
     const apiSecret = request.headers['x-api-secret'];
 
     if (!apiKey || !apiSecret) {
-      throw new UnauthorizedException(
-        'API key and secret required. Provide X-API-Key and X-API-Secret headers.',
-      );
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'API key and secret required. Provide X-API-Key and X-API-Secret headers.',
+      });
     }
 
-    // In production, validate against stored API keys
-    // For now, accept any non-empty key/secret pair and extract tenant from key prefix
-    // API key format: tenant-slug_key-id (e.g., quickcash-gh_abc123)
-    request['tenantSlug'] = apiKey.split('_')[0];
-    request['apiKeyId'] = apiKey.split('_')[1];
+    try {
+      // Validate the API key against the database
+      const result = await this.apiKeyService.validateApiKey(apiKey);
 
-    return true;
+      // Attach tenant context and API key metadata to the request
+      request['tenantId'] = result.tenantId;
+      request['apiKeyId'] = apiKey;
+      request['rateLimitPerMin'] = result.rateLimitPerMin;
+
+      return true;
+    } catch (error: any) {
+      this.logger.warn(`API key validation failed: ${error.message}`);
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: error.message || 'Invalid API key or secret',
+      });
+    }
   }
 }

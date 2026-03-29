@@ -113,6 +113,31 @@ export class PaymentService {
     return repayment;
   }
 
+  async findAll(tenantId: string, filters?: {
+    skip?: number;
+    take?: number;
+    contractId?: string;
+  }) {
+    const where: Prisma.RepaymentWhereInput = { tenantId };
+    if (filters?.contractId) where.contractId = filters.contractId;
+
+    return this.prisma.repayment.findMany({
+      where,
+      skip: filters?.skip ?? 0,
+      take: filters?.take ?? 20,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async count(tenantId: string, filters?: {
+    contractId?: string;
+  }) {
+    const where: Prisma.RepaymentWhereInput = { tenantId };
+    if (filters?.contractId) where.contractId = filters.contractId;
+
+    return this.prisma.repayment.count({ where });
+  }
+
   async getRepayments(tenantId: string, contractId: string, take: number = 20, cursor?: string) {
     const items = await this.prisma.repayment.findMany({
       where: { tenantId, contractId },

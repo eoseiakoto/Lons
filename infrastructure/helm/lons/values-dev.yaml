@@ -1,0 +1,151 @@
+## Development environment overrides
+## Minimal replicas, smaller resources, debug logging, no autoscaling
+
+global:
+  environment: development
+  imagePullPolicy: Always
+  imageTag: dev-latest
+
+graphqlServer:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+restServer:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+scheduler:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+notificationWorker:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+scoringService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+ingress:
+  host: api.dev.lons.io
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+  tls:
+    secretName: lons-dev-tls
+
+config:
+  nodeEnv: development
+  logLevel: debug
+  enableTracing: "true"
+
+metrics:
+  serviceMonitor:
+    enabled: false
+
+monitoring:
+  alerts:
+    enabled: true
+  dashboards:
+    enabled: true
+
+networkPolicy:
+  enabled: false
+
+serviceMesh:
+  enabled: false
+  proxy:
+    cpuRequest: "10m"
+    memoryRequest: "32Mi"
+    cpuLimit: "100m"
+    memoryLimit: "128Mi"
+  authorization:
+    enabled: false
+
+certManager:
+  enabled: true
+  issuer: letsencrypt-staging
+
+adminPortal:
+  replicaCount: 1
+  image:
+    tag: dev-latest
+  host: admin.dev.lons.io
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+  autoscaling:
+    enabled: false
+
+externalSecrets:
+  enabled: true
+
+logging:
+  enabled: true
+  aws:
+    region: eu-west-1
+  retention:
+    hot: 7
+    warm: 30
+    cold: 90
+
+tracing:
+  enabled: true
+  collector:
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 250m
+        memory: 256Mi
+  debug: true
+
+canary:
+  enabled: false
+
+resourceQuotas:
+  enabled: false
+
+topologySpread:
+  enabled: false
