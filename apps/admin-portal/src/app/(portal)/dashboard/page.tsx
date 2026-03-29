@@ -3,6 +3,8 @@
 import { gql, useQuery } from '@apollo/client';
 import { MetricCard } from '@/components/ui/metric-card';
 import { formatMoney } from '@/lib/utils';
+import { NpsWidget } from '@/components/survey/nps-widget';
+import { useAuth } from '@/lib/auth-context';
 
 const PORTFOLIO_METRICS = gql`
   query PortfolioMetrics {
@@ -23,6 +25,7 @@ const PORTFOLIO_METRICS = gql`
 `;
 
 export default function DashboardPage() {
+  const { user } = useAuth();
   const { data, loading, error } = useQuery(PORTFOLIO_METRICS);
 
   if (loading) {
@@ -83,6 +86,11 @@ export default function DashboardPage() {
         <p className="text-3xl font-bold text-red-400">{collections?.totalInCollections ?? 0}</p>
         <p className="text-sm text-white/40 mt-1">contracts requiring attention</p>
       </div>
+
+      {/* NPS Survey Widget */}
+      {user && (
+        <NpsWidget tenantId={user.tenantId} userId={user.userId} />
+      )}
     </div>
   );
 }

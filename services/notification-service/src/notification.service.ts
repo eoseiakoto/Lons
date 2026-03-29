@@ -1,14 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@lons/database';
-
-import { ConsoleNotificationAdapter } from './adapters/console-notification.adapter';
+import { NotificationAdapterResolver } from './adapters/notification-adapter-resolver.service';
 import { renderTemplate, NOTIFICATION_TEMPLATES } from './templates/template-renderer';
 
 @Injectable()
 export class NotificationService {
+  private readonly logger = new Logger(NotificationService.name);
+
   constructor(
     private prisma: PrismaService,
-    private adapter: ConsoleNotificationAdapter,
+    private resolver: NotificationAdapterResolver,
   ) {}
 
   async sendNotification(tenantId: string, params: {
@@ -31,7 +32,11 @@ export class NotificationService {
 
     const recipient = channel === 'email' ? (customer?.email || '') : (customer?.phonePrimary || '');
 
-    return this.adapter.send(tenantId, {
+    // Resolve the correct adapter for this tenant + channel
+    const channelEnum = channel.toUpperCase() as 'SMS' | 'EMAIL' | 'PUSH';
+    const adapter = await this.resolver.resolve(tenantId, channelEnum);
+
+    return adapter.send(tenantId, {
       customerId: params.customerId,
       contractId: params.contractId,
       eventType: params.eventType,
