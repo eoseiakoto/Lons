@@ -247,19 +247,9 @@ resource "aws_cloudwatch_log_group" "postgresql" {
 }
 
 # ──────────────────────────────────────────────────────────────────────
-# RDS DB Instance Database Resource
-# ──────────────────────────────────────────────────────────────────────
-# Ensure the initial database is created with correct settings
-# (RDS creates it, but we document it for consistency)
+# NOTE: The initial database is created via the `db_name` parameter on
+# aws_db_instance.main (see above). No separate resource is needed.
 #
 # IMPORTANT: The database must support DECIMAL(19,4) for all monetary amounts.
 # PostgreSQL's NUMERIC type supports arbitrary precision and is compatible
 # with Prisma's Decimal type for fintech calculations.
-resource "aws_db_instance_database" "main" {
-  instance_id = aws_db_instance.main.id
-  name        = var.database_name
-
-  depends_on = [
-    aws_db_instance.main
-  ]
-}

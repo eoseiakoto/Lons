@@ -234,8 +234,4 @@ resource "aws_security_group_rule" "cluster_egress_all" {
   protocol          = "-1"
   cidr_blocks       = ["0.0.0.0/0"]
   security_group_id = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
-
-  tags = merge(var.tags, {
-    Name = "${var.cluster_name}-cluster-egress-all"
-  })
 }
