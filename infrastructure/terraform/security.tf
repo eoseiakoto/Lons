@@ -163,9 +163,8 @@ resource "aws_config_configuration_recorder" "main" {
 resource "aws_config_configuration_recorder_status" "main" {
   name              = aws_config_configuration_recorder.main.name
   is_enabled        = true
-  depends_on        = [aws_s3_bucket_policy.config_logs]
+  depends_on        = [aws_s3_bucket_policy.config_logs, aws_iam_role_policy.config_s3_policy]
   start_recording   = true
-  depends_on        = [aws_iam_role_policy.config_s3_policy]
 }
 
 # AWS Config Delivery Channel
