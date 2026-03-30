@@ -27,3 +27,13 @@ output "admin_domain_name" {
   description = "The admin portal domain name (admin.{subdomain})"
   value       = "admin.${var.subdomain}"
 }
+
+output "platform_domain_name" {
+  description = "The platform portal domain name (platform.{subdomain})"
+  value       = "platform.${var.subdomain}"
+}
+
+output "grafana_domain_name" {
+  description = "The Grafana dashboard domain name (grafana.{subdomain})"
+  value       = var.grafana_enabled ? "grafana.${var.subdomain}" : ""
+}

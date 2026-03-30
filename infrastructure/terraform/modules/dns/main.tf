@@ -141,3 +141,53 @@ resource "aws_route53_record" "admin_alb_alias" {
 
   depends_on = [aws_acm_certificate_validation.main]
 }
+
+# Alias A record for platform.{subdomain} pointing to CloudFront (when CDN is enabled)
+resource "aws_route53_record" "platform_cloudfront_alias" {
+  count   = var.cloudfront_enabled ? 1 : 0
+  zone_id = local.zone_id
+  name    = "platform.${var.subdomain}"
+  type    = "A"
+
+  alias {
+    name                   = var.cloudfront_domain_name
+    zone_id                = var.cloudfront_zone_id
+    evaluate_target_health = true
+  }
+
+  depends_on = [aws_acm_certificate_validation.main]
+}
+
+# Alias A record for platform.{subdomain} pointing to ALB (when CDN is not enabled)
+# Used for staging and dev environments
+resource "aws_route53_record" "platform_alb_alias" {
+  count   = var.cloudfront_enabled ? 0 : 1
+  zone_id = local.zone_id
+  name    = "platform.${var.subdomain}"
+  type    = "A"
+
+  alias {
+    name                   = var.alb_dns_name
+    zone_id                = var.alb_zone_id
+    evaluate_target_health = true
+  }
+
+  depends_on = [aws_acm_certificate_validation.main]
+}
+
+# Alias A record for grafana.{subdomain} pointing to ALB
+# Grafana monitoring dashboard — always via ALB, never CDN
+resource "aws_route53_record" "grafana_alb_alias" {
+  count   = var.grafana_enabled ? 1 : 0
+  zone_id = local.zone_id
+  name    = "grafana.${var.subdomain}"
+  type    = "A"
+
+  alias {
+    name                   = var.alb_dns_name
+    zone_id                = var.alb_zone_id
+    evaluate_target_health = true
+  }
+
+  depends_on = [aws_acm_certificate_validation.main]
+}

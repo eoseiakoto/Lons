@@ -28,7 +28,8 @@ redis_automatic_failover_enabled = true
 domain_name = "lons.io"
 
 # Features
-enable_alb_waf = true
+enable_alb_waf  = true
+grafana_enabled = true
 
 # Monitoring
 log_retention_days = 14

@@ -119,6 +119,7 @@ module "dns" {
   cloudfront_enabled     = var.environment == "prod" || var.environment == "preprod"
   cloudfront_domain_name = var.environment == "prod" || var.environment == "preprod" ? module.cdn[0].distribution_domain_name : ""
   cloudfront_zone_id     = var.environment == "prod" || var.environment == "preprod" ? module.cdn[0].distribution_zone_id : ""
+  grafana_enabled        = var.grafana_enabled
   tags                   = local.common_tags
 }
 

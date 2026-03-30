@@ -51,6 +51,12 @@ variable "cloudfront_zone_id" {
   default     = ""
 }
 
+variable "grafana_enabled" {
+  description = "Whether to create DNS record for Grafana dashboard"
+  type        = bool
+  default     = false
+}
+
 variable "tags" {
   description = "Tags to apply to all resources"
   type        = map(string)

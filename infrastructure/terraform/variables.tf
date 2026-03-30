@@ -155,6 +155,12 @@ variable "enable_alb_waf" {
   default     = true
 }
 
+variable "grafana_enabled" {
+  description = "Whether to create DNS record for Grafana dashboard"
+  type        = bool
+  default     = false
+}
+
 variable "log_retention_days" {
   description = "CloudWatch log retention in days"
   type        = number

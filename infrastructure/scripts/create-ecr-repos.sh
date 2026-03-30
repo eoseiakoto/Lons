@@ -2,7 +2,7 @@
 ###############################################################################
 # create-ecr-repos.sh
 #
-# Creates ECR repositories for all 6 Lōns services with:
+# Creates ECR repositories for all 7 Lōns services with:
 # - Image scanning on push enabled
 # - Lifecycle policy (keep last 20 images, expire untagged after 7 days)
 # - Idempotent (safe to re-run)
@@ -36,6 +36,7 @@ SERVICES=(
   "scheduler"
   "notification-worker"
   "admin-portal"
+  "platform-portal"
   "scoring-service"
 )
 
@@ -107,7 +108,7 @@ create_lifecycle_policy() {
       "description": "Keep last 20 images",
       "selection": {
         "tagStatus": "tagged",
-        "tagPrefixList": [""],
+        "tagPrefixList": ["v", "staging", "latest"],
         "countType": "imageCountMoreThan",
         "countNumber": 20
       },
@@ -156,7 +157,7 @@ create_ecr_repository() {
     if aws ecr create-repository \
       --repository-name "$repo_name" \
       --region "$AWS_REGION" \
-      --encryption-configuration encryptionType=AES \
+      --encryption-configuration encryptionType=AES256 \
       --tags "Key=Project,Value=${PROJECT_NAME}" "Key=Service,Value=${service_name}" \
       >/dev/null 2>&1; then
 
