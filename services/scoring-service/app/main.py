@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -23,3 +25,9 @@ async def health():
         "service": settings.app_name,
         "model_version": settings.model_version,
     }
+
+
+@app.get("/health/ready")
+async def readiness():
+    """Readiness probe — confirms the service is ready to handle traffic."""
+    return {"status": "ok", "service": "scoring-service", "timestamp": datetime.utcnow().isoformat()}

@@ -1,0 +1,198 @@
+## Pre-production environment overrides
+## Production-like settings with slightly smaller resources
+
+global:
+  environment: preprod
+  imagePullPolicy: IfNotPresent
+  imageTag: ""  # Use per-service tags in preprod
+
+graphqlServer:
+  replicaCount: 2
+  image:
+    tag: "1.0.0"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+restServer:
+  replicaCount: 2
+  image:
+    tag: "1.0.0"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+scheduler:
+  replicaCount: 1
+  image:
+    tag: "1.0.0"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+notificationWorker:
+  replicaCount: 1
+  image:
+    tag: "1.0.0"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+scoringService:
+  replicaCount: 2
+  image:
+    tag: "1.0.0"
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 65
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+
+ingress:
+  host: api.preprod.lons.io
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/rate-limit: "300"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+  tls:
+    secretName: lons-preprod-tls
+
+config:
+  nodeEnv: preprod
+  logLevel: info
+  enableTracing: "false"
+
+certManager:
+  enabled: true
+  issuer: letsencrypt-prod
+
+adminPortal:
+  replicaCount: 2
+  image:
+    tag: "1.0.0"
+  host: admin.preprod.lons.io
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
+metrics:
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+
+monitoring:
+  alerts:
+    enabled: true
+  alertmanager:
+    enabled: true
+    webhookUrl: "http://localhost:9095/alerts"
+    criticalWebhookUrl: "http://localhost:9095/critical"
+    securityWebhookUrl: "http://localhost:9095/security"
+    dataWebhookUrl: "http://localhost:9095/data"
+    businessWebhookUrl: "http://localhost:9095/business"
+  dashboards:
+    enabled: true
+
+networkPolicy:
+  enabled: true
+
+serviceMesh:
+  enabled: true
+  proxy:
+    cpuRequest: "25m"
+    memoryRequest: "64Mi"
+    cpuLimit: "250m"
+    memoryLimit: "256Mi"
+  authorization:
+    enabled: true
+
+externalSecrets:
+  enabled: true
+
+logging:
+  enabled: true
+  aws:
+    region: eu-west-1
+  retention:
+    hot: 30
+    warm: 90
+    cold: 365
+
+tracing:
+  enabled: true
+  collector:
+    replicaCount: 2
+
+canary:
+  enabled: true
+
+resourceQuotas:
+  enabled: true
+  requests:
+    cpu: "8"
+    memory: "16Gi"
+  limits:
+    cpu: "16"
+    memory: "32Gi"
+  maxPods: "50"
+  defaultLimits:
+    cpu: "500m"
+    memory: "512Mi"
+  defaultRequests:
+    cpu: "100m"
+    memory: "128Mi"
+  maxLimits:
+    cpu: "4000m"
+    memory: "4Gi"
+  maxPodLimits:
+    cpu: "8000m"
+    memory: "8Gi"
+
+topologySpread:
+  enabled: true
+  whenUnsatisfiable: ScheduleAnyway

@@ -1,0 +1,22 @@
+export enum FeedbackCategory {
+  BUG = 'BUG',
+  FEATURE_REQUEST = 'FEATURE_REQUEST',
+  UX_ISSUE = 'UX_ISSUE',
+  INTEGRATION_QUESTION = 'INTEGRATION_QUESTION',
+  OTHER = 'OTHER',
+}
+
+export enum FeedbackSeverity {
+  CRITICAL = 'CRITICAL',
+  MAJOR = 'MAJOR',
+  MINOR = 'MINOR',
+  SUGGESTION = 'SUGGESTION',
+}
+
+export enum FeedbackStatus {
+  NEW = 'NEW',
+  ACKNOWLEDGED = 'ACKNOWLEDGED',
+  IN_PROGRESS = 'IN_PROGRESS',
+  RESOLVED = 'RESOLVED',
+  CLOSED = 'CLOSED',
+}

@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '@lons/database';
-import { EventBusModule } from '@lons/common';
+import { EventBusModule, ObservabilityModule } from '@lons/common';
 
 import { LoanRequestModule } from './loan-request/loan-request.module';
 import { PreQualificationModule } from './pre-qualification/pre-qualification.module';
@@ -20,6 +20,7 @@ import { MonitoringModule } from './monitoring/monitoring.module';
   imports: [
     PrismaModule,
     EventBusModule,
+    ObservabilityModule,
     LoanRequestModule,
     PreQualificationModule,
     ScoringModule,

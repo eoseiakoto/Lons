@@ -2,7 +2,7 @@ import { Resolver, Query, Mutation, Args, ID, ObjectType, Field, Int } from '@ne
 import { SettlementService } from '@lons/settlement-service';
 import { CurrentTenant, CurrentUser, Roles, IAuthenticatedUser } from '@lons/entity-service';
 import { PageInfo } from '../types/page-info.type';
-import { encodeCursor } from '@lons/common';
+import { encodeCursor, AuditAction, AuditActionType, AuditResourceType } from '@lons/common';
 
 @ObjectType()
 class SettlementLineType {
@@ -84,6 +84,7 @@ export class SettlementResolver {
   constructor(private settlementService: SettlementService) {}
 
   @Mutation(() => SettlementRunType)
+  @AuditAction(AuditActionType.SETTLEMENT, AuditResourceType.SETTLEMENT)
   @Roles('analytics:read')
   async calculateSettlement(
     @CurrentTenant() tenantId: string,
@@ -94,6 +95,7 @@ export class SettlementResolver {
   }
 
   @Mutation(() => SettlementRunType)
+  @AuditAction(AuditActionType.UPDATE, AuditResourceType.SETTLEMENT)
   @Roles('analytics:read')
   async approveSettlement(
     @CurrentTenant() tenantId: string,

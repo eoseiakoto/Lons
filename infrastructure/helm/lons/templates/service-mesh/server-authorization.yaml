@@ -1,0 +1,183 @@
+{{- if and .Values.serviceMesh.enabled .Values.serviceMesh.authorization.enabled }}
+# Linkerd Server and ServerAuthorization policies for mTLS traffic control
+# Restricts which services can communicate with which based on mutual TLS
+
+---
+# Server definition: scoring-service on port 8000
+apiVersion: policy.linkerd.io/v1beta2
+kind: Server
+metadata:
+  name: scoring-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: scoring-service
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  port: {{ .Values.scoringService.port }}
+  proxyProtocol: HTTP/2
+
+---
+# ServerAuthorization: Only graphql-server and rest-server can reach scoring-service
+apiVersion: policy.linkerd.io/v1beta2
+kind: ServerAuthorization
+metadata:
+  name: scoring-service-authz
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  server:
+    name: scoring-service
+  client:
+    meshTLS:
+      serviceAccounts:
+        - name: {{ include "lons.fullname" . }}-graphql-server
+          namespace: {{ .Release.Namespace }}
+        - name: {{ include "lons.fullname" . }}-rest-server
+          namespace: {{ .Release.Namespace }}
+
+---
+# Server definition: graphql-server internal communication on port 3000
+apiVersion: policy.linkerd.io/v1beta2
+kind: Server
+metadata:
+  name: graphql-server-internal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: graphql-server
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  port: {{ .Values.graphqlServer.port }}
+  proxyProtocol: HTTP/2
+
+---
+# ServerAuthorization: admin-portal and rest-server can reach graphql-server
+# Ingress traffic (from nginx) is allowed as unauthenticated (bypass mesh for external)
+apiVersion: policy.linkerd.io/v1beta2
+kind: ServerAuthorization
+metadata:
+  name: graphql-server-authz
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  server:
+    name: graphql-server-internal
+  client:
+    meshTLS:
+      serviceAccounts:
+        - name: {{ include "lons.fullname" . }}-admin-portal
+          namespace: {{ .Release.Namespace }}
+        - name: {{ include "lons.fullname" . }}-rest-server
+          namespace: {{ .Release.Namespace }}
+    # Allow unauthenticated traffic from ingress controller (external traffic)
+    unauthenticated: true
+
+---
+# Server definition: rest-server on port 3001
+apiVersion: policy.linkerd.io/v1beta2
+kind: Server
+metadata:
+  name: rest-server
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: rest-server
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  port: {{ .Values.restServer.port }}
+  proxyProtocol: HTTP/2
+
+---
+# ServerAuthorization: rest-server accepts external traffic (unauthenticated from ingress)
+apiVersion: policy.linkerd.io/v1beta2
+kind: ServerAuthorization
+metadata:
+  name: rest-server-authz
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  server:
+    name: rest-server
+  client:
+    # Allow unauthenticated traffic from ingress controller (external API)
+    unauthenticated: true
+
+---
+# Server definition: notification-worker on port 3003
+apiVersion: policy.linkerd.io/v1beta2
+kind: Server
+metadata:
+  name: notification-worker
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: notification-worker
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  port: {{ .Values.notificationWorker.port }}
+  proxyProtocol: HTTP/2
+
+---
+# ServerAuthorization: Only scheduler can reach notification-worker
+apiVersion: policy.linkerd.io/v1beta2
+kind: ServerAuthorization
+metadata:
+  name: notification-worker-authz
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  server:
+    name: notification-worker
+  client:
+    meshTLS:
+      serviceAccounts:
+        - name: {{ include "lons.fullname" . }}-scheduler
+          namespace: {{ .Release.Namespace }}
+
+---
+# Server definition: admin-portal on port 3100
+apiVersion: policy.linkerd.io/v1beta2
+kind: Server
+metadata:
+  name: admin-portal
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/component: admin-portal
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  port: {{ .Values.adminPortal.port }}
+  proxyProtocol: HTTP/2
+
+---
+# ServerAuthorization: admin-portal accepts external traffic (unauthenticated from ingress)
+apiVersion: policy.linkerd.io/v1beta2
+kind: ServerAuthorization
+metadata:
+  name: admin-portal-authz
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  server:
+    name: admin-portal
+  client:
+    # Allow unauthenticated traffic from ingress controller (external admin UI)
+    unauthenticated: true
+
+{{- end }}

@@ -1,0 +1,59 @@
+{{- if eq .Values.global.environment "staging" -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "lons.fullname" . }}-staging-seed
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db-seed
+  annotations:
+    description: "One-off seed job for staging database - manual trigger only"
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      labels:
+        {{- include "lons.selectorLabels" (dict "context" . "component" "db-seed") | nindent 8 }}
+        app.kubernetes.io/component: db-seed
+    spec:
+      restartPolicy: Never
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "lons.fullname" . }}-seed
+      initContainers:
+        - name: wait-for-postgres
+          image: busybox:1.36
+          command: ['sh', '-c', 'until nc -z {{ .Values.postgresql.host }} {{ .Values.postgresql.port | default 5432 }}; do echo "Waiting for PostgreSQL..."; sleep 2; done']
+      containers:
+        - name: seed
+          image: {{ include "lons.image" (dict "imageValues" .Values.graphqlServer.image "global" .Values.global) }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          command: ["npx", "ts-node", "packages/database/prisma/seed-staging.ts"]
+          env:
+            - name: NODE_ENV
+              value: staging
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "lons.secretName" . }}
+                  key: DATABASE_URL
+            - name: LOG_LEVEL
+              value: "debug"
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: 1000m
+              memory: 1Gi
+          volumeMounts:
+            - name: work-dir
+              mountPath: /workspace
+      volumes:
+        - name: work-dir
+          emptyDir: {}
+{{- end }}

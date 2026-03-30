@@ -12,6 +12,8 @@ import {
   BarChart3,
   Settings,
   LogOut,
+  Building2,
+  MessageSquare,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 
@@ -23,6 +25,11 @@ const navigation = [
   { name: 'Collections', href: '/collections', icon: AlertTriangle },
   { name: 'Reports', href: '/reports', icon: BarChart3 },
   { name: 'Settings', href: '/settings', icon: Settings },
+];
+
+const platformNavigation = [
+  { name: 'Tenants', href: '/platform/tenants', icon: Building2 },
+  { name: 'Feedback', href: '/platform/feedback', icon: MessageSquare },
 ];
 
 export function Sidebar() {
@@ -55,6 +62,32 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {user?.role === 'platform_admin' && (
+          <>
+            <div className="mt-4 mb-2 px-3">
+              <span className="text-xs font-semibold text-white/30 uppercase tracking-wider">Platform</span>
+            </div>
+            {platformNavigation.map((item) => {
+              const isActive = pathname.startsWith(item.href);
+              return (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={cn(
+                    'flex items-center px-3 py-2.5 text-sm font-medium rounded-lg mb-0.5 transition-all duration-200',
+                    isActive
+                      ? 'bg-white/15 text-white border-l-2 border-blue-400'
+                      : 'text-white/60 hover:bg-white/10 hover:text-white',
+                  )}
+                >
+                  <item.icon className="w-5 h-5 mr-3 flex-shrink-0" />
+                  {item.name}
+                </Link>
+              );
+            })}
+          </>
+        )}
       </nav>
 
       <div className="p-4 border-t border-white/10">

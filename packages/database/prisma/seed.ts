@@ -1167,10 +1167,1316 @@ async function main() {
 }
 
 // ---------------------------------------------------------------------------
+// Staging Seed Data (DEV-07)
+// ---------------------------------------------------------------------------
+
+/**
+ * Comprehensive staging seed data for realistic testing.
+ * Creates 3 SPs with products, customers in various states, contracts,
+ * ledger entries, reconciliation batches, settlements, notifications, and audit logs.
+ *
+ * **Idempotent** — safe to run multiple times.
+ */
+async function seedStagingData(p: PrismaClient) {
+  console.log('\n============================================================');
+  console.log('  Seeding STAGING data (ENVIRONMENT=staging)');
+  console.log('============================================================\n');
+
+  // -----------------------------------------------------------------------
+  // Helpers
+  // -----------------------------------------------------------------------
+  const STAGING_COUNTRY_SHORT: Record<string, string> = { GH: 'GHA', KE: 'KEN', NG: 'NGA' };
+
+  interface StagingSP {
+    name: string;
+    slug: string;
+    legalName: string;
+    regNumber: string;
+    country: string;
+    countryCode: string;
+    schemaName: string;
+    planTier: 'starter' | 'professional' | 'enterprise';
+    currency: string;
+    timezone: string;
+    emailDomain: string;
+    walletProvider: 'MOCK';
+    walletDisplayName: string;
+    productTypes: Array<'overdraft' | 'micro_loan' | 'bnpl' | 'invoice_financing'>;
+    lender: {
+      name: string;
+      license: string;
+      capacity: number;
+      minRate: number;
+      maxRate: number;
+      settlementProvider: string;
+    };
+    phonePrefix: string;
+    phonePadLen: number;
+    externalSource: string;
+    nationalIdType: string;
+    nationalIdFmt: (i: number) => string;
+    regions: string[];
+    cities: string[];
+  }
+
+  const SPS: StagingSP[] = [
+    {
+      name: 'GhanaLend Financial',
+      slug: 'ghanalend-stg',
+      legalName: 'GhanaLend Financial Services Ltd',
+      regNumber: 'GHA-STG-2026-001',
+      country: 'GH',
+      countryCode: 'GHA',
+      schemaName: 'tenant_ghanalend_stg',
+      planTier: 'enterprise',
+      currency: 'GHS',
+      timezone: 'Africa/Accra',
+      emailDomain: 'ghanalend-stg.lons.io',
+      walletProvider: 'MOCK',
+      walletDisplayName: 'Mock MTN MoMo (Sandbox)',
+      productTypes: ['overdraft', 'micro_loan', 'bnpl', 'invoice_financing'],
+      lender: { name: 'GhanaLend Capital', license: 'LIC-GHA-STG-001', capacity: 8_000_000, minRate: 0, maxRate: 35, settlementProvider: 'mtn_momo' },
+      phonePrefix: '+23324',
+      phonePadLen: 7,
+      externalSource: 'mtn_momo',
+      nationalIdType: 'ghana_card',
+      nationalIdFmt: (i) => `GHA-STG-${String(2000 + i * 13).padStart(4, '0')}-${String(3000 + i * 29).padStart(4, '0')}`,
+      regions: ['Greater Accra', 'Ashanti', 'Western', 'Central'],
+      cities: ['Accra', 'Kumasi', 'Takoradi', 'Cape Coast'],
+    },
+    {
+      name: 'KenyaCredit Ltd',
+      slug: 'kenyacredit-stg',
+      legalName: 'KenyaCredit Ltd',
+      regNumber: 'KEN-STG-2026-001',
+      country: 'KE',
+      countryCode: 'KEN',
+      schemaName: 'tenant_kenyacredit_stg',
+      planTier: 'professional',
+      currency: 'KES',
+      timezone: 'Africa/Nairobi',
+      emailDomain: 'kenyacredit-stg.lons.io',
+      walletProvider: 'MOCK',
+      walletDisplayName: 'Mock M-Pesa (Sandbox)',
+      productTypes: ['overdraft', 'micro_loan', 'bnpl'],
+      lender: { name: 'KenyaCredit Finance', license: 'LIC-KEN-STG-001', capacity: 80_000_000, minRate: 0, maxRate: 30, settlementProvider: 'mpesa' },
+      phonePrefix: '+2547',
+      phonePadLen: 8,
+      externalSource: 'mpesa',
+      nationalIdType: 'national_id',
+      nationalIdFmt: (i) => `KEN-STG-${String(20000 + i * 131).padStart(5, '0')}-${String(200 + i * 11).padStart(3, '0')}`,
+      regions: ['Nairobi', 'Central', 'Rift Valley', 'Coast'],
+      cities: ['Nairobi', 'Mombasa', 'Kisumu', 'Nakuru'],
+    },
+    {
+      name: 'NaijaFunds Inc',
+      slug: 'naijafunds-stg',
+      legalName: 'NaijaFunds Inc',
+      regNumber: 'NGA-STG-2026-001',
+      country: 'NG',
+      countryCode: 'NGA',
+      schemaName: 'tenant_naijafunds_stg',
+      planTier: 'starter',
+      currency: 'NGN',
+      timezone: 'Africa/Lagos',
+      emailDomain: 'naijafunds-stg.lons.io',
+      walletProvider: 'MOCK',
+      walletDisplayName: 'Mock Generic Wallet (Sandbox)',
+      productTypes: ['micro_loan', 'bnpl', 'invoice_financing'],
+      lender: { name: 'NaijaFunds Capital', license: 'LIC-NGA-STG-001', capacity: 1_200_000_000, minRate: 0, maxRate: 40, settlementProvider: 'bank_transfer' },
+      phonePrefix: '+234',
+      phonePadLen: 10,
+      externalSource: 'bank_transfer',
+      nationalIdType: 'nin',
+      nationalIdFmt: (i) => `NGA-STG-${String(3000 + i * 19).padStart(4, '0')}-${String(20000 + i * 37).padStart(5, '0')}`,
+      regions: ['Lagos', 'Abuja FCT', 'Rivers', 'Kano'],
+      cities: ['Lagos', 'Abuja', 'Port Harcourt', 'Kano'],
+    },
+  ];
+
+  // Product templates keyed by type
+  const productTemplates: Record<string, {
+    code: (currency: string) => string;
+    name: string;
+    description: string;
+    minAmountMultiplier: number;
+    maxAmountMultiplier: number;
+    minTenorDays: number;
+    maxTenorDays: number;
+    interestRateModel: 'flat' | 'reducing_balance';
+    interestRate: number;
+    feeStructure: object;
+    repaymentMethod: 'auto_deduction' | 'equal_installments' | 'lump_sum';
+    gracePeriodDays: number;
+    penaltyConfig: object;
+    approvalWorkflow: 'auto' | 'semi_auto';
+    eligibilityRules: object;
+    revenueSharing: object;
+    maxActiveLoans: number;
+  }> = {
+    overdraft: {
+      code: (c) => `STG-OD-${c}-001`,
+      name: 'Staging Overdraft',
+      description: 'Staging overdraft facility',
+      minAmountMultiplier: 1,
+      maxAmountMultiplier: 50,
+      minTenorDays: 1,
+      maxTenorDays: 30,
+      interestRateModel: 'flat',
+      interestRate: 5.0,
+      feeStructure: { origination: { type: 'percentage', value: 1.5 } },
+      repaymentMethod: 'auto_deduction',
+      gracePeriodDays: 0,
+      penaltyConfig: { type: 'percentage', rate: 2.0, cap: 25.0, compound: false },
+      approvalWorkflow: 'auto',
+      eligibilityRules: { minKycLevel: 'tier_1', minTransactionHistory: 30 },
+      revenueSharing: { lender: 60, sp: 25, emi: 10, platform: 5 },
+      maxActiveLoans: 1,
+    },
+    micro_loan: {
+      code: (c) => `STG-ML-${c}-001`,
+      name: 'Staging Micro-Loan',
+      description: 'Staging micro-loan product',
+      minAmountMultiplier: 5,
+      maxAmountMultiplier: 100,
+      minTenorDays: 7,
+      maxTenorDays: 90,
+      interestRateModel: 'reducing_balance',
+      interestRate: 12.0,
+      feeStructure: { origination: { type: 'flat', value: 5.0 }, service: { type: 'percentage', value: 0.5 } },
+      repaymentMethod: 'equal_installments',
+      gracePeriodDays: 3,
+      penaltyConfig: { type: 'percentage', rate: 1.5, cap: 30.0, compound: false },
+      approvalWorkflow: 'semi_auto',
+      eligibilityRules: { minKycLevel: 'tier_1', minAccountAge: 60 },
+      revenueSharing: { lender: 55, sp: 30, emi: 10, platform: 5 },
+      maxActiveLoans: 2,
+    },
+    bnpl: {
+      code: (c) => `STG-BNPL-${c}-001`,
+      name: 'Staging BNPL',
+      description: 'Staging buy-now-pay-later product',
+      minAmountMultiplier: 2,
+      maxAmountMultiplier: 50,
+      minTenorDays: 14,
+      maxTenorDays: 90,
+      interestRateModel: 'flat',
+      interestRate: 0.0,
+      feeStructure: { merchant: { type: 'percentage', value: 3.0 } },
+      repaymentMethod: 'equal_installments',
+      gracePeriodDays: 0,
+      penaltyConfig: { type: 'flat', rate: 5.0, cap: 50.0, compound: false },
+      approvalWorkflow: 'auto',
+      eligibilityRules: { minKycLevel: 'tier_1', minCreditScore: 500 },
+      revenueSharing: { lender: 50, sp: 30, emi: 10, platform: 10 },
+      maxActiveLoans: 3,
+    },
+    invoice_financing: {
+      code: (c) => `STG-IF-${c}-001`,
+      name: 'Staging Invoice Finance',
+      description: 'Staging invoice factoring product',
+      minAmountMultiplier: 50,
+      maxAmountMultiplier: 500,
+      minTenorDays: 30,
+      maxTenorDays: 180,
+      interestRateModel: 'flat',
+      interestRate: 8.0,
+      feeStructure: { origination: { type: 'percentage', value: 2.0 } },
+      repaymentMethod: 'lump_sum',
+      gracePeriodDays: 5,
+      penaltyConfig: { type: 'percentage', rate: 2.5, cap: 30.0, compound: false },
+      approvalWorkflow: 'semi_auto',
+      eligibilityRules: { minKycLevel: 'tier_2', minAccountAge: 180 },
+      revenueSharing: { lender: 55, sp: 25, emi: 10, platform: 10 },
+      maxActiveLoans: 2,
+    },
+  };
+
+  // Base amount per currency (smallest useful unit for products)
+  const BASE_AMOUNT: Record<string, number> = { GHS: 10, KES: 100, NGN: 2000 };
+
+  // Customer profile definitions — each gets specific treatment
+  interface CustomerProfile {
+    tag: string;
+    fullName: (spIdx: number) => string;
+    gender: 'male' | 'female';
+    kycLevel: 'tier_1' | 'tier_2' | 'tier_3';
+    status: 'active' | 'blacklisted' | 'suspended';
+    watchlist: boolean;
+    creditScore: number;
+    blacklistReason?: string;
+    consentRevoked?: boolean;
+    contractSpec?: {
+      status: 'active' | 'overdue' | 'delinquent' | 'default_status' | 'written_off' | 'settled';
+      classification: 'performing' | 'special_mention' | 'substandard' | 'doubtful' | 'loss';
+      dpd: number;
+      paidPct: number;
+      restructured?: boolean;
+      earlyPartialPayment?: boolean;
+      count?: number;
+    };
+  }
+
+  const ghNames = [
+    { m: 'Kwadwo Mensah', f: 'Ama Serwaa' },
+    { m: 'Kofi Boakye', f: 'Abena Ofosu' },
+    { m: 'Yaw Opoku', f: 'Efua Gyamfi' },
+    { m: 'Kweku Asante', f: 'Akua Nkrumah' },
+    { m: 'Nana Amponsah', f: 'Adwoa Bediako' },
+    { m: 'Kojo Frimpong', f: 'Afia Darko' },
+    { m: 'Kwabena Tetteh', f: 'Akosua Aidoo' },
+    { m: 'Papa Annan', f: 'Maame Konadu' },
+    { m: 'Edem Quarcoo', f: 'Dzifa Amegashie' },
+    { m: 'Nii Armah', f: 'Korkor Lamptey' },
+    { m: 'Kwasi Appiah', f: 'Afua Badu' },
+    { m: 'Kodjo Brew', f: 'Esi Quarshie' },
+    { m: 'Fiifi Owusu', f: 'Aba Ankomah' },
+    { m: 'Kobi Amoako', f: 'Naa Adjeley' },
+    { m: 'Yoofi Tawiah', f: 'Araba Tagoe' },
+    { m: 'Kweku Danso', f: 'Ama Boateng' },
+  ];
+  const keNames = [
+    { m: 'John Kamau', f: 'Mary Wanjiku' },
+    { m: 'Peter Omondi', f: 'Grace Achieng' },
+    { m: 'James Kipchoge', f: 'Faith Nyambura' },
+    { m: 'David Mwangi', f: 'Esther Wambui' },
+    { m: 'Brian Otieno', f: 'Mercy Muthoni' },
+    { m: 'George Kariuki', f: 'Agnes Chebet' },
+    { m: 'Samuel Njoroge', f: 'Beatrice Wairimu' },
+    { m: 'Joseph Kiprotich', f: 'Tabitha Njeri' },
+    { m: 'Patrick Odhiambo', f: 'Caroline Mwende' },
+    { m: 'Daniel Rotich', f: 'Joyce Atieno' },
+    { m: 'Stephen Muturi', f: 'Lucy Wangari' },
+    { m: 'Andrew Kiptoo', f: 'Sarah Nduta' },
+    { m: 'Michael Onyango', f: 'Janet Awuor' },
+    { m: 'Francis Wekesa', f: 'Rose Chemutai' },
+    { m: 'Charles Mutiso', f: 'Ann Moraa' },
+    { m: 'Henry Kosgei', f: 'Jane Akinyi' },
+  ];
+  const ngNames = [
+    { m: 'Chidi Okafor', f: 'Chidinma Eze' },
+    { m: 'Emeka Nwosu', f: 'Amaka Igwe' },
+    { m: 'Tunde Bakare', f: 'Ngozi Obi' },
+    { m: 'Segun Alabi', f: 'Funke Adesanya' },
+    { m: 'Obinna Mba', f: 'Blessing Umeh' },
+    { m: 'Ikenna Chukwu', f: 'Kemi Fashola' },
+    { m: 'Femi Akindele', f: 'Yetunde Oladipo' },
+    { m: 'Chinedu Okwu', f: 'Aisha Bello' },
+    { m: 'Babatunde Ogundimu', f: 'Halima Yusuf' },
+    { m: 'Dayo Adeniyi', f: 'Nkechi Nnadi' },
+    { m: 'Uche Nnaji', f: 'Folake Ojo' },
+    { m: 'Kunle Oni', f: 'Zainab Ibrahim' },
+    { m: 'Nonso Okonkwo', f: 'Binta Suleiman' },
+    { m: 'Wale Adebayo', f: 'Titilayo Dosunmu' },
+    { m: 'Ebuka Anichebe', f: 'Omowunmi Fasasi' },
+    { m: 'Gbenga Oduya', f: 'Ifeoma Udeze' },
+  ];
+  const namesBySP = [ghNames, keNames, ngNames];
+
+  const PROFILES: CustomerProfile[] = [
+    // 0: New customer — no contracts
+    { tag: 'new', fullName: (si) => namesBySP[si][0].m, gender: 'male', kycLevel: 'tier_1', status: 'active', watchlist: false, creditScore: 650 },
+    // 1: Active — current, 0 DPD
+    { tag: 'active-current', fullName: (si) => namesBySP[si][1].f, gender: 'female', kycLevel: 'tier_2', status: 'active', watchlist: false, creditScore: 720,
+      contractSpec: { status: 'active', classification: 'performing', dpd: 0, paidPct: 0.4 } },
+    // 2: Active — multiple contracts
+    { tag: 'active-multi', fullName: (si) => namesBySP[si][2].m, gender: 'male', kycLevel: 'tier_2', status: 'active', watchlist: false, creditScore: 700,
+      contractSpec: { status: 'active', classification: 'performing', dpd: 0, paidPct: 0.3, count: 2 } },
+    // 3: Overdue — 30 DPD
+    { tag: 'overdue-30', fullName: (si) => namesBySP[si][3].f, gender: 'female', kycLevel: 'tier_1', status: 'active', watchlist: false, creditScore: 550,
+      contractSpec: { status: 'overdue', classification: 'special_mention', dpd: 30, paidPct: 0.2 } },
+    // 4: Overdue — 60 DPD, in collections
+    { tag: 'overdue-60', fullName: (si) => namesBySP[si][4].m, gender: 'male', kycLevel: 'tier_1', status: 'active', watchlist: false, creditScore: 480,
+      contractSpec: { status: 'delinquent', classification: 'substandard', dpd: 60, paidPct: 0.1 } },
+    // 5: Overdue — 90+ DPD, escalated
+    { tag: 'overdue-90', fullName: (si) => namesBySP[si][5].f, gender: 'female', kycLevel: 'tier_1', status: 'active', watchlist: false, creditScore: 400,
+      contractSpec: { status: 'default_status', classification: 'doubtful', dpd: 95, paidPct: 0.05 } },
+    // 6: Defaulted — written off
+    { tag: 'defaulted', fullName: (si) => namesBySP[si][6].m, gender: 'male', kycLevel: 'tier_1', status: 'active', watchlist: false, creditScore: 350,
+      contractSpec: { status: 'written_off', classification: 'loss', dpd: 180, paidPct: 0.02 } },
+    // 7: Fully repaid
+    { tag: 'repaid', fullName: (si) => namesBySP[si][7].f, gender: 'female', kycLevel: 'tier_2', status: 'active', watchlist: false, creditScore: 780,
+      contractSpec: { status: 'settled', classification: 'performing', dpd: 0, paidPct: 1.0 } },
+    // 8: Partial early repayment
+    { tag: 'early-partial', fullName: (si) => namesBySP[si][8].m, gender: 'male', kycLevel: 'tier_2', status: 'active', watchlist: false, creditScore: 740,
+      contractSpec: { status: 'active', classification: 'performing', dpd: 0, paidPct: 0.7, earlyPartialPayment: true } },
+    // 9: Restructured
+    { tag: 'restructured', fullName: (si) => namesBySP[si][9].f, gender: 'female', kycLevel: 'tier_1', status: 'active', watchlist: false, creditScore: 520,
+      contractSpec: { status: 'active', classification: 'special_mention', dpd: 0, paidPct: 0.25, restructured: true } },
+    // 10: Blacklisted — fraud
+    { tag: 'blacklisted', fullName: (si) => namesBySP[si][10].m, gender: 'male', kycLevel: 'tier_1', status: 'blacklisted', watchlist: false, creditScore: 200, blacklistReason: 'Confirmed identity fraud and forged documentation' },
+    // 11: Watchlist — manual review
+    { tag: 'watchlist', fullName: (si) => namesBySP[si][11].f, gender: 'female', kycLevel: 'tier_1', status: 'active', watchlist: true, creditScore: 560 },
+    // 12: High credit score >800
+    { tag: 'high-score', fullName: (si) => namesBySP[si][12].m, gender: 'male', kycLevel: 'tier_3', status: 'active', watchlist: false, creditScore: 850 },
+    // 13: Low credit score <400
+    { tag: 'low-score', fullName: (si) => namesBySP[si][13].f, gender: 'female', kycLevel: 'tier_1', status: 'active', watchlist: false, creditScore: 320 },
+    // 14: Borderline credit score
+    { tag: 'borderline', fullName: (si) => namesBySP[si][14].m, gender: 'male', kycLevel: 'tier_1', status: 'active', watchlist: false, creditScore: 600 },
+    // 15: Expired consent
+    { tag: 'expired-consent', fullName: (si) => namesBySP[si][15].f, gender: 'female', kycLevel: 'tier_1', status: 'active', watchlist: false, creditScore: 650, consentRevoked: true },
+  ];
+
+  // -----------------------------------------------------------------------
+  // 1. Platform Admin for staging
+  // -----------------------------------------------------------------------
+  console.log('[STG 1/9] Creating staging platform admin...');
+  const stagingAdminHash = await hashPassword('StagingAdmin123!@#');
+  await p.platformUser.upsert({
+    where: { email: 'superadmin@lons.io' },
+    update: { passwordHash: stagingAdminHash },
+    create: {
+      email: 'superadmin@lons.io',
+      passwordHash: stagingAdminHash,
+      name: 'Staging Super Admin',
+      role: 'platform_admin',
+      mfaEnabled: false,
+      status: 'active',
+    },
+  });
+  console.log('  Created superadmin@lons.io');
+
+  // -----------------------------------------------------------------------
+  // Loop SPs
+  // -----------------------------------------------------------------------
+  for (let spIdx = 0; spIdx < SPS.length; spIdx++) {
+    const sp = SPS[spIdx];
+    console.log(`\n${'='.repeat(60)}`);
+    console.log(`  [STG SP ${spIdx + 1}/${SPS.length}] ${sp.name}`);
+    console.log(`${'='.repeat(60)}`);
+
+    // -----------------------------------------------------------------
+    // 2. Tenant
+    // -----------------------------------------------------------------
+    console.log('[STG 2/9] Creating tenant...');
+    const tenant = await p.tenant.upsert({
+      where: { schemaName: sp.schemaName },
+      update: {},
+      create: {
+        name: sp.name,
+        slug: sp.slug,
+        legalName: sp.legalName,
+        registrationNumber: sp.regNumber,
+        country: sp.countryCode,
+        schemaName: sp.schemaName,
+        planTier: sp.planTier,
+        status: 'active',
+        settings: {
+          currencies: [sp.currency],
+          timezone: sp.timezone,
+          businessHours: { start: '08:00', end: '17:00' },
+          environment: 'staging',
+        },
+      },
+    });
+    console.log(`  Tenant: ${tenant.id}`);
+
+    // -----------------------------------------------------------------
+    // 3. Roles & Users
+    // -----------------------------------------------------------------
+    console.log('[STG 3/9] Creating roles and users...');
+    const roles = await createRoles(tenant.id);
+
+    const userDefs = [
+      { key: 'sp_admin', email: `admin@${sp.emailDomain}`, password: 'StgAdmin123!@#', name: `${sp.name} Admin` },
+      { key: 'sp_operator', email: `operator@${sp.emailDomain}`, password: 'StgOperator123!@#', name: `${sp.name} Operator` },
+      { key: 'sp_analyst', email: `analyst@${sp.emailDomain}`, password: 'StgAnalyst123!@#', name: `${sp.name} Analyst` },
+      { key: 'sp_auditor', email: `auditor@${sp.emailDomain}`, password: 'StgAuditor123!@#', name: `${sp.name} Auditor` },
+    ];
+
+    let spAdminId = '';
+    for (const u of userDefs) {
+      const roleObj = roles[u.key];
+      if (!roleObj) continue;
+      const pwHash = await hashPassword(u.password);
+      const user = await p.user.upsert({
+        where: { tenantId_email: { tenantId: tenant.id, email: u.email } },
+        update: { passwordHash: pwHash },
+        create: {
+          tenantId: tenant.id,
+          email: u.email,
+          passwordHash: pwHash,
+          name: u.name,
+          roleId: roleObj.id,
+          mfaEnabled: false,
+          status: 'active',
+        },
+      });
+      if (u.key === 'sp_admin') spAdminId = user.id;
+      console.log(`  User: ${u.email}`);
+    }
+
+    // -----------------------------------------------------------------
+    // 4. Adapter Configs (Wallet + Notification)
+    // -----------------------------------------------------------------
+    console.log('[STG 4/9] Creating adapter configs...');
+
+    // WalletProviderConfig — use the composite unique constraint
+    await p.walletProviderConfig.upsert({
+      where: {
+        uq_wallet_provider_active: {
+          tenantId: tenant.id,
+          providerType: 'MOCK',
+          isActive: true,
+        },
+      },
+      update: {},
+      create: {
+        tenantId: tenant.id,
+        providerType: 'MOCK',
+        environmentMode: 'SANDBOX',
+        displayName: sp.walletDisplayName,
+        configJson: {
+          initial_balance: '1000000.0000',
+          supported_currencies: [sp.currency],
+          simulate_failures: false,
+          latency_ms: 200,
+        },
+        isActive: true,
+        isDefault: true,
+      },
+    });
+    console.log(`  Wallet: ${sp.walletDisplayName}`);
+
+    // NotificationProviderConfig
+    await p.notificationProviderConfig.upsert({
+      where: {
+        uq_notification_provider_active: {
+          tenantId: tenant.id,
+          providerType: 'RECORDING_MOCK',
+          isActive: true,
+        },
+      },
+      update: {},
+      create: {
+        tenantId: tenant.id,
+        providerType: 'RECORDING_MOCK',
+        environmentMode: 'SANDBOX',
+        displayName: 'Recording Mock (Sandbox)',
+        configJson: {
+          record_all: true,
+          supported_channels: ['sms', 'email', 'push'],
+        },
+        isActive: true,
+        isDefault: true,
+      },
+    });
+    console.log('  Notification: Recording Mock (Sandbox)');
+
+    // -----------------------------------------------------------------
+    // 5. Lender
+    // -----------------------------------------------------------------
+    console.log('[STG 5/9] Creating lender...');
+    const existingLender = await p.lender.findFirst({
+      where: { tenantId: tenant.id, licenseNumber: sp.lender.license },
+    });
+    const lender = existingLender ?? await p.lender.create({
+      data: {
+        tenantId: tenant.id,
+        name: sp.lender.name,
+        licenseNumber: sp.lender.license,
+        country: sp.countryCode,
+        fundingCapacity: sp.lender.capacity,
+        fundingCurrency: sp.currency,
+        minInterestRate: sp.lender.minRate,
+        maxInterestRate: sp.lender.maxRate,
+        settlementAccount: { provider: sp.lender.settlementProvider, accountId: `${sp.slug.toUpperCase()}-SETTLE-001` },
+        riskParameters: { maxExposure: sp.lender.capacity * 0.2, singleBorrowerLimit: sp.lender.capacity * 0.01 },
+        status: 'active',
+      },
+    });
+    console.log(`  Lender: ${lender.name}`);
+
+    // -----------------------------------------------------------------
+    // 6. Products — active products + suspended/discontinued/draft extras
+    // -----------------------------------------------------------------
+    console.log('[STG 6/9] Creating products...');
+    const base = BASE_AMOUNT[sp.currency] ?? 10;
+    const activeProductRecords: Array<{ id: string; code: string; type: string; minAmount: number; maxAmount: number }> = [];
+
+    // Active products from SP's productTypes
+    for (const pType of sp.productTypes) {
+      const tmpl = productTemplates[pType];
+      const code = tmpl.code(sp.currency);
+      const minAmount = base * tmpl.minAmountMultiplier;
+      const maxAmount = base * tmpl.maxAmountMultiplier;
+
+      const product = await p.product.upsert({
+        where: { tenantId_code: { tenantId: tenant.id, code } },
+        update: {},
+        create: {
+          tenantId: tenant.id,
+          code,
+          name: tmpl.name,
+          description: tmpl.description,
+          type: pType,
+          lenderId: lender.id,
+          currency: sp.currency,
+          minAmount,
+          maxAmount,
+          minTenorDays: tmpl.minTenorDays,
+          maxTenorDays: tmpl.maxTenorDays,
+          interestRateModel: tmpl.interestRateModel,
+          interestRate: tmpl.interestRate,
+          feeStructure: tmpl.feeStructure as Prisma.InputJsonValue,
+          repaymentMethod: tmpl.repaymentMethod,
+          gracePeriodDays: tmpl.gracePeriodDays,
+          penaltyConfig: tmpl.penaltyConfig as Prisma.InputJsonValue,
+          approvalWorkflow: tmpl.approvalWorkflow,
+          eligibilityRules: tmpl.eligibilityRules as Prisma.InputJsonValue,
+          revenueSharing: tmpl.revenueSharing as Prisma.InputJsonValue,
+          maxActiveLoans: tmpl.maxActiveLoans,
+          status: 'active',
+          activatedAt: daysAgo(120),
+          createdBy: spAdminId || undefined,
+        },
+      });
+      activeProductRecords.push({ id: product.id, code: product.code, type: pType, minAmount, maxAmount });
+      console.log(`  Product: ${code} (active)`);
+    }
+
+    // Extra products: suspended, discontinued, draft
+    const extraStatuses: Array<{ suffix: string; status: 'suspended' | 'discontinued' | 'draft' }> = [
+      { suffix: 'SUSP', status: 'suspended' },
+      { suffix: 'DISC', status: 'discontinued' },
+      { suffix: 'DRFT', status: 'draft' },
+    ];
+    for (const extra of extraStatuses) {
+      const code = `STG-ML-${sp.currency}-${extra.suffix}`;
+      await p.product.upsert({
+        where: { tenantId_code: { tenantId: tenant.id, code } },
+        update: {},
+        create: {
+          tenantId: tenant.id,
+          code,
+          name: `Staging Micro-Loan (${extra.status})`,
+          description: `Testing product in ${extra.status} state`,
+          type: 'micro_loan',
+          lenderId: lender.id,
+          currency: sp.currency,
+          minAmount: base * 5,
+          maxAmount: base * 100,
+          minTenorDays: 7,
+          maxTenorDays: 90,
+          interestRateModel: 'reducing_balance',
+          interestRate: 12.0,
+          feeStructure: { origination: { type: 'flat', value: 5.0 } } as Prisma.InputJsonValue,
+          repaymentMethod: 'equal_installments',
+          gracePeriodDays: 3,
+          penaltyConfig: { type: 'percentage', rate: 1.5, cap: 30.0, compound: false } as Prisma.InputJsonValue,
+          approvalWorkflow: 'semi_auto',
+          eligibilityRules: { minKycLevel: 'tier_1' } as Prisma.InputJsonValue,
+          revenueSharing: { lender: 55, sp: 30, emi: 10, platform: 5 } as Prisma.InputJsonValue,
+          maxActiveLoans: 2,
+          status: extra.status,
+          createdBy: spAdminId || undefined,
+        },
+      });
+      console.log(`  Product: ${code} (${extra.status})`);
+    }
+
+    // -----------------------------------------------------------------
+    // 7. Customers — 16 profiles per SP
+    // -----------------------------------------------------------------
+    console.log('[STG 7/9] Creating customers with profiles...');
+    interface StagingCustomerRecord { id: string; profile: CustomerProfile; idx: number }
+    const customerRecords: StagingCustomerRecord[] = [];
+
+    for (let ci = 0; ci < PROFILES.length; ci++) {
+      const prof = PROFILES[ci];
+      const fullName = prof.fullName(spIdx);
+      const externalId = `STG-CUST-${sp.country}-${String(ci + 1).padStart(4, '0')}`;
+      const phone = sp.phonePrefix + phoneDigits(sp.phonePadLen, (spIdx + 10) * 10000 + ci);
+
+      const existingCustomer = await p.customer.findFirst({
+        where: { tenantId: tenant.id, externalId, externalSource: sp.externalSource },
+      });
+      const customer = existingCustomer ?? await p.customer.create({
+        data: {
+          tenantId: tenant.id,
+          externalId,
+          externalSource: sp.externalSource,
+          fullName,
+          dateOfBirth: new Date(1985 + (ci % 15), ci % 12, 1 + (ci * 3) % 28),
+          gender: prof.gender,
+          nationalId: sp.nationalIdFmt(ci),
+          nationalIdType: sp.nationalIdType,
+          phonePrimary: phone,
+          country: sp.countryCode,
+          region: sp.regions[ci % sp.regions.length],
+          city: sp.cities[ci % sp.cities.length],
+          kycLevel: prof.kycLevel,
+          kycVerifiedAt: prof.kycLevel !== 'tier_1' ? daysAgo(90 + ci * 5) : undefined,
+          status: prof.status,
+          blacklistReason: prof.blacklistReason ?? undefined,
+          watchlist: prof.watchlist,
+          segment: prof.creditScore >= 800 ? 'premium' : prof.creditScore >= 600 ? 'standard' : 'subprime',
+          metadata: { registrationChannel: 'mobile_app', creditScore: prof.creditScore, stagingProfile: prof.tag },
+        },
+      });
+
+      // Consents
+      const existingConsents = await p.customerConsent.count({ where: { customerId: customer.id } });
+      if (existingConsents === 0) {
+        const consentData: Prisma.CustomerConsentCreateManyInput[] = [
+          {
+            tenantId: tenant.id,
+            customerId: customer.id,
+            consentType: 'data_access',
+            granted: prof.consentRevoked ? false : true,
+            grantedAt: daysAgo(120),
+            revokedAt: prof.consentRevoked ? daysAgo(5) : undefined,
+            channel: 'mobile_app',
+            version: 1,
+          },
+          {
+            tenantId: tenant.id,
+            customerId: customer.id,
+            consentType: 'auto_deduction',
+            granted: prof.consentRevoked ? false : true,
+            grantedAt: daysAgo(120),
+            revokedAt: prof.consentRevoked ? daysAgo(5) : undefined,
+            channel: 'mobile_app',
+            version: 1,
+          },
+          {
+            tenantId: tenant.id,
+            customerId: customer.id,
+            consentType: 'communications',
+            granted: true,
+            grantedAt: daysAgo(120),
+            channel: 'mobile_app',
+            version: 1,
+          },
+          {
+            tenantId: tenant.id,
+            customerId: customer.id,
+            consentType: 'credit_reporting',
+            granted: prof.consentRevoked ? false : true,
+            grantedAt: daysAgo(120),
+            revokedAt: prof.consentRevoked ? daysAgo(5) : undefined,
+            channel: 'mobile_app',
+            version: 1,
+          },
+        ];
+        await p.customerConsent.createMany({ data: consentData });
+      }
+
+      // Scoring result for customers with a credit score
+      const existingScore = await p.scoringResult.findFirst({
+        where: { tenantId: tenant.id, customerId: customer.id },
+      });
+      if (!existingScore && activeProductRecords.length > 0) {
+        const scoreProd = activeProductRecords[0];
+        await p.scoringResult.create({
+          data: {
+            tenantId: tenant.id,
+            customerId: customer.id,
+            productId: scoreProd.id,
+            modelType: 'rule_based',
+            modelVersion: 'v1.0-staging',
+            score: prof.creditScore,
+            scoreRangeMin: 0,
+            scoreRangeMax: 1000,
+            probabilityDefault: prof.creditScore >= 700 ? 0.02 : prof.creditScore >= 500 ? 0.10 : 0.30,
+            riskTier: prof.creditScore >= 700 ? 'low' : prof.creditScore >= 500 ? 'medium' : prof.creditScore >= 350 ? 'high' : 'critical',
+            recommendedLimit: scoreProd.maxAmount * (prof.creditScore / 1000),
+            contributingFactors: {
+              transactionHistory: prof.creditScore >= 600 ? 'positive' : 'negative',
+              accountAge: prof.kycLevel === 'tier_3' ? 'excellent' : 'fair',
+              repaymentHistory: prof.creditScore >= 700 ? 'excellent' : prof.creditScore >= 500 ? 'fair' : 'poor',
+            },
+            confidence: 0.85,
+            context: 'application',
+          },
+        });
+      }
+
+      customerRecords.push({ id: customer.id, profile: prof, idx: ci });
+      console.log(`  Customer [${prof.tag}]: ${fullName}`);
+    }
+
+    // -----------------------------------------------------------------
+    // 8. Contracts, schedules, repayments, disbursements, ledger entries
+    // -----------------------------------------------------------------
+    console.log('[STG 8/9] Creating contracts, schedules, repayments, ledger...');
+    const customersWithContracts = customerRecords.filter((c) => c.profile.contractSpec);
+    let contractSeq = 0;
+
+    for (const custRec of customersWithContracts) {
+      const spec = custRec.profile.contractSpec!;
+      const numContracts = spec.count ?? 1;
+
+      for (let contractIdx = 0; contractIdx < numContracts; contractIdx++) {
+        contractSeq++;
+        const prod = activeProductRecords[(contractSeq - 1) % activeProductRecords.length];
+        const contractNumber = `STG-LN-${STAGING_COUNTRY_SHORT[sp.country] ?? sp.countryCode}-${String(contractSeq).padStart(4, '0')}`;
+
+        // Check existing
+        const existingContract = await p.contract.findFirst({
+          where: { tenantId: tenant.id, contractNumber },
+        });
+        if (existingContract) {
+          console.log(`  Contract ${contractNumber} already exists, skipping`);
+          continue;
+        }
+
+        // Create the backing loan request
+        const idempotencyKey = `${sp.slug}-stg-lr-${String(contractSeq).padStart(4, '0')}`;
+        const requestedAmount = Math.round(prod.minAmount + (prod.maxAmount - prod.minAmount) * 0.5);
+        const requestedTenor = 60;
+
+        const existingLR = await p.loanRequest.findFirst({ where: { idempotencyKey } });
+        const lr = existingLR ?? await p.loanRequest.create({
+          data: {
+            tenantId: tenant.id,
+            idempotencyKey,
+            customerId: custRec.id,
+            productId: prod.id,
+            requestedAmount,
+            requestedTenor,
+            currency: sp.currency,
+            channel: 'mobile_app',
+            status: 'disbursed',
+            approvedAmount: requestedAmount,
+            approvedTenor: requestedTenor,
+            acceptedAt: daysAgo(70 + contractSeq),
+            metadata: { source: sp.externalSource, stagingProfile: custRec.profile.tag },
+            createdAt: daysAgo(80 + contractSeq),
+          },
+        });
+
+        const principal = requestedAmount;
+        const interestRate = prod.type === 'overdraft' ? 5 : 12;
+        const interestAmount = Math.round(principal * (interestRate / 100));
+        const totalFees = Math.round(principal * 0.015);
+        const totalCostCredit = principal + interestAmount + totalFees;
+        const totalPaid = Math.round(totalCostCredit * spec.paidPct);
+        const totalOutstanding = totalCostCredit - totalPaid;
+
+        const isSettled = spec.status === 'settled';
+        const isWrittenOff = spec.status === 'written_off';
+        const isDefaultStatus = spec.status === 'default_status';
+        const disbursedDaysAgo = isSettled ? 120 : isDefaultStatus || isWrittenOff ? 200 : 70 + contractSeq;
+        const tenorDays = requestedTenor;
+        const startDate = daysAgo(disbursedDaysAgo);
+        const maturityDate = isDefaultStatus || isWrittenOff
+          ? daysAgo(disbursedDaysAgo - tenorDays)
+          : isSettled
+            ? daysAgo(disbursedDaysAgo - tenorDays)
+            : daysFromNow(tenorDays - disbursedDaysAgo + 30);
+
+        const contract = await p.contract.create({
+          data: {
+            tenantId: tenant.id,
+            contractNumber,
+            customerId: custRec.id,
+            productId: prod.id,
+            lenderId: lender.id,
+            loanRequestId: lr.id,
+            principalAmount: principal,
+            interestRate,
+            interestAmount,
+            totalFees,
+            totalCostCredit,
+            currency: sp.currency,
+            tenorDays,
+            repaymentMethod: prod.type === 'overdraft' ? 'auto_deduction' : 'equal_installments',
+            startDate,
+            maturityDate,
+            firstPaymentDate: new Date(startDate.getTime() + 15 * 24 * 60 * 60 * 1000),
+            outstandingPrincipal: Math.round(principal * (1 - spec.paidPct * 0.8)),
+            outstandingInterest: Math.round(interestAmount * (1 - spec.paidPct)),
+            outstandingFees: spec.paidPct >= 0.3 ? 0 : totalFees,
+            outstandingPenalties: spec.dpd > 0 ? Math.round(principal * 0.02 * Math.ceil(spec.dpd / 30)) : 0,
+            totalOutstanding,
+            totalPaid,
+            daysPastDue: spec.dpd,
+            status: spec.status,
+            classification: spec.classification,
+            restructured: spec.restructured ?? false,
+            restructureCount: spec.restructured ? 1 : 0,
+            settledAt: isSettled ? daysAgo(10) : undefined,
+            defaultedAt: isDefaultStatus ? daysAgo(spec.dpd - 90) : undefined,
+            writtenOffAt: isWrittenOff ? daysAgo(30) : undefined,
+          },
+        });
+
+        // Link loan request to contract
+        await p.loanRequest.update({
+          where: { id: lr.id },
+          data: { contractId: contract.id },
+        });
+
+        // -- Disbursement
+        const existingDisbursement = await p.disbursement.findFirst({ where: { contractId: contract.id } });
+        if (!existingDisbursement) {
+          await p.disbursement.create({
+            data: {
+              tenantId: tenant.id,
+              contractId: contract.id,
+              customerId: custRec.id,
+              amount: principal,
+              currency: sp.currency,
+              channel: sp.externalSource,
+              destination: sp.phonePrefix + phoneDigits(sp.phonePadLen, (spIdx + 10) * 10000 + custRec.idx),
+              externalRef: `STG-DISB-${STAGING_COUNTRY_SHORT[sp.country] ?? sp.countryCode}-${String(contractSeq).padStart(6, '0')}`,
+              status: 'completed',
+              completedAt: startDate,
+            },
+          });
+        }
+
+        // -- Repayment Schedule (4 installments)
+        const numInstallments = 4;
+        const existingScheduleCount = await p.repaymentScheduleEntry.count({ where: { contractId: contract.id } });
+        if (existingScheduleCount === 0) {
+          const installmentPrincipal = Math.round(principal / numInstallments);
+          const installmentInterest = Math.round(interestAmount / numInstallments);
+          const installmentFee = Math.round(totalFees / numInstallments);
+          const installmentTotal = installmentPrincipal + installmentInterest + installmentFee;
+          const intervalDays = Math.round(tenorDays / numInstallments);
+
+          const scheduleData: Prisma.RepaymentScheduleEntryCreateManyInput[] = [];
+          for (let si = 0; si < numInstallments; si++) {
+            const dueDate = new Date(startDate.getTime() + (si + 1) * intervalDays * 24 * 60 * 60 * 1000);
+            const isPast = dueDate < new Date();
+            let entryStatus: 'paid' | 'pending' | 'overdue' = 'pending';
+            let paidAmount = 0;
+            let paidAt: Date | null = null;
+
+            if (isSettled) {
+              entryStatus = 'paid';
+              paidAmount = installmentTotal;
+              paidAt = new Date(dueDate.getTime() - 2 * 24 * 60 * 60 * 1000);
+            } else if (spec.dpd === 0 && spec.status === 'active') {
+              if (isPast) {
+                entryStatus = 'paid';
+                paidAmount = installmentTotal;
+                paidAt = new Date(dueDate.getTime() - 1 * 24 * 60 * 60 * 1000);
+                // Early partial payment: last paid installment only partial
+                if (spec.earlyPartialPayment && si === Math.floor(numInstallments * spec.paidPct) - 1) {
+                  paidAmount = Math.round(installmentTotal * 1.5); // overpaid
+                }
+              }
+            } else if (spec.dpd > 0) {
+              const paidInstallments = Math.max(0, Math.floor(numInstallments * spec.paidPct));
+              if (si < paidInstallments) {
+                entryStatus = 'paid';
+                paidAmount = installmentTotal;
+                paidAt = new Date(dueDate.getTime() + 1 * 24 * 60 * 60 * 1000);
+              } else if (isPast) {
+                entryStatus = 'overdue';
+              }
+            }
+
+            scheduleData.push({
+              tenantId: tenant.id,
+              contractId: contract.id,
+              installmentNumber: si + 1,
+              dueDate,
+              principalAmount: installmentPrincipal,
+              interestAmount: installmentInterest,
+              feeAmount: installmentFee,
+              totalAmount: installmentTotal,
+              paidAmount,
+              status: entryStatus,
+              paidAt,
+            });
+          }
+          await p.repaymentScheduleEntry.createMany({ data: scheduleData });
+        }
+
+        // -- Repayments matching paid schedule entries
+        const existingRepayments = await p.repayment.count({ where: { contractId: contract.id } });
+        if (existingRepayments === 0) {
+          const paidEntries = await p.repaymentScheduleEntry.findMany({
+            where: { contractId: contract.id, status: 'paid' },
+            orderBy: { installmentNumber: 'asc' },
+          });
+
+          const repaymentData: Prisma.RepaymentCreateManyInput[] = [];
+          for (let ri = 0; ri < paidEntries.length; ri++) {
+            const entry = paidEntries[ri];
+            repaymentData.push({
+              tenantId: tenant.id,
+              contractId: contract.id,
+              customerId: custRec.id,
+              amount: Number(entry.paidAmount),
+              currency: sp.currency,
+              method: ri % 2 === 0 ? 'auto_deduction' : 'manual',
+              source: sp.externalSource,
+              externalRef: `STG-PAY-${STAGING_COUNTRY_SHORT[sp.country] ?? sp.countryCode}-${String(contractSeq).padStart(4, '0')}-${String(ri + 1).padStart(2, '0')}`,
+              allocatedPrincipal: Number(entry.principalAmount ?? 0),
+              allocatedInterest: Number(entry.interestAmount ?? 0),
+              allocatedFees: Number(entry.feeAmount ?? 0),
+              allocatedPenalties: 0,
+              status: 'completed',
+              receiptNumber: `STG-RCT-${String(contractSeq).padStart(4, '0')}-${String(ri + 1).padStart(2, '0')}`,
+              completedAt: entry.paidAt ?? daysAgo(30 - ri),
+            });
+          }
+          if (repaymentData.length > 0) {
+            await p.repayment.createMany({ data: repaymentData });
+          }
+        }
+
+        // -- Ledger entries (double-entry: debit + credit for disbursement, each repayment)
+        const existingLedger = await p.ledgerEntry.count({ where: { contractId: contract.id } });
+        if (existingLedger === 0) {
+          const ledgerData: Prisma.LedgerEntryCreateManyInput[] = [];
+          let runningBalance = principal + interestAmount + totalFees;
+
+          // Disbursement entry (debit — customer owes)
+          ledgerData.push({
+            tenantId: tenant.id,
+            contractId: contract.id,
+            entryType: 'disbursement',
+            debitCredit: 'debit',
+            amount: principal,
+            currency: sp.currency,
+            runningBalance,
+            effectiveDate: startDate,
+            valueDate: startDate,
+            description: `Disbursement of ${sp.currency} ${principal.toFixed(4)} to customer`,
+          });
+
+          // Interest accrual
+          ledgerData.push({
+            tenantId: tenant.id,
+            contractId: contract.id,
+            entryType: 'interest_accrual',
+            debitCredit: 'debit',
+            amount: interestAmount,
+            currency: sp.currency,
+            runningBalance,
+            effectiveDate: startDate,
+            valueDate: startDate,
+            description: `Interest accrual of ${sp.currency} ${interestAmount.toFixed(4)}`,
+          });
+
+          // Fee
+          ledgerData.push({
+            tenantId: tenant.id,
+            contractId: contract.id,
+            entryType: 'fee',
+            debitCredit: 'debit',
+            amount: totalFees,
+            currency: sp.currency,
+            runningBalance,
+            effectiveDate: startDate,
+            valueDate: startDate,
+            description: `Origination fee of ${sp.currency} ${totalFees.toFixed(4)}`,
+          });
+
+          // Repayment credits
+          const paidScheduleEntries = await p.repaymentScheduleEntry.findMany({
+            where: { contractId: contract.id, status: 'paid' },
+            orderBy: { installmentNumber: 'asc' },
+          });
+          for (const entry of paidScheduleEntries) {
+            runningBalance -= Number(entry.paidAmount);
+            ledgerData.push({
+              tenantId: tenant.id,
+              contractId: contract.id,
+              entryType: 'repayment',
+              debitCredit: 'credit',
+              amount: Number(entry.paidAmount),
+              currency: sp.currency,
+              runningBalance: Math.max(0, runningBalance),
+              effectiveDate: entry.paidAt ?? daysAgo(30),
+              valueDate: entry.paidAt ?? daysAgo(30),
+              description: `Repayment installment ${entry.installmentNumber}`,
+            });
+          }
+
+          // Write-off entry if applicable
+          if (isWrittenOff) {
+            ledgerData.push({
+              tenantId: tenant.id,
+              contractId: contract.id,
+              entryType: 'write_off',
+              debitCredit: 'credit',
+              amount: Math.max(0, runningBalance),
+              currency: sp.currency,
+              runningBalance: 0,
+              effectiveDate: daysAgo(30),
+              valueDate: daysAgo(30),
+              description: `Write-off of remaining balance ${sp.currency} ${Math.max(0, runningBalance).toFixed(4)}`,
+            });
+          }
+
+          if (ledgerData.length > 0) {
+            await p.ledgerEntry.createMany({ data: ledgerData });
+          }
+        }
+
+        // -- Collections actions for overdue/delinquent/default contracts
+        if (spec.dpd >= 30) {
+          const existingActions = await p.collectionsAction.count({ where: { contractId: contract.id } });
+          if (existingActions === 0) {
+            const actions: Prisma.CollectionsActionCreateManyInput[] = [
+              {
+                tenantId: tenant.id,
+                contractId: contract.id,
+                actionType: 'sms_reminder',
+                notes: `Automated SMS reminder sent for ${spec.dpd} DPD contract`,
+                actorId: null,
+                createdAt: daysAgo(spec.dpd - 5),
+              },
+            ];
+            if (spec.dpd >= 60) {
+              actions.push({
+                tenantId: tenant.id,
+                contractId: contract.id,
+                actionType: 'phone_call',
+                notes: 'Collections agent phone call — customer promised to pay',
+                actorId: spAdminId || null,
+                promiseDate: daysFromNow(7),
+                createdAt: daysAgo(spec.dpd - 30),
+              });
+            }
+            if (spec.dpd >= 90) {
+              actions.push({
+                tenantId: tenant.id,
+                contractId: contract.id,
+                actionType: 'escalation',
+                notes: 'Escalated to senior collections — no payment received after multiple attempts',
+                actorId: spAdminId || null,
+                createdAt: daysAgo(spec.dpd - 60),
+              });
+            }
+            await p.collectionsAction.createMany({ data: actions });
+          }
+        }
+
+        // -- Notifications
+        const existingNotifications = await p.notification.count({ where: { contractId: contract.id } });
+        if (existingNotifications === 0) {
+          const notifData: Prisma.NotificationCreateManyInput[] = [
+            {
+              tenantId: tenant.id,
+              customerId: custRec.id,
+              contractId: contract.id,
+              eventType: 'loan.disbursed',
+              channel: 'sms',
+              recipient: sp.phonePrefix + phoneDigits(sp.phonePadLen, (spIdx + 10) * 10000 + custRec.idx),
+              templateId: 'disbursement_notification',
+              content: `Your loan of ${sp.currency} ${principal} has been disbursed to your wallet.`,
+              status: 'delivered',
+              sentAt: startDate,
+              deliveredAt: startDate,
+            },
+          ];
+          if (spec.dpd >= 30) {
+            notifData.push({
+              tenantId: tenant.id,
+              customerId: custRec.id,
+              contractId: contract.id,
+              eventType: 'payment.overdue',
+              channel: 'sms',
+              recipient: sp.phonePrefix + phoneDigits(sp.phonePadLen, (spIdx + 10) * 10000 + custRec.idx),
+              templateId: 'overdue_reminder',
+              content: `Your payment is ${spec.dpd} days overdue. Please make a payment to avoid further penalties.`,
+              status: 'delivered',
+              sentAt: daysAgo(spec.dpd - 5),
+              deliveredAt: daysAgo(spec.dpd - 5),
+            });
+          }
+          await p.notification.createMany({ data: notifData });
+        }
+
+        console.log(`  Contract ${contractNumber} [${custRec.profile.tag}]: ${spec.status}, ${spec.dpd} DPD`);
+      }
+    }
+
+    // -----------------------------------------------------------------
+    // 9. Reconciliation, Settlements, Audit Logs
+    // -----------------------------------------------------------------
+    console.log('[STG 9/9] Creating reconciliation, settlements, audit logs...');
+
+    // -- Reconciliation: 2 clean batches + 1 with exceptions
+    const reconDates = [daysAgo(3), daysAgo(2), daysAgo(1)];
+    for (let ri = 0; ri < reconDates.length; ri++) {
+      const reconDate = reconDates[ri];
+      const existingRecon = await p.reconciliationRun.findFirst({
+        where: { tenantId: tenant.id, runDate: reconDate },
+      });
+      if (existingRecon) continue;
+
+      const hasExceptions = ri === 2; // last one has exceptions
+      const totalTxns = 50 + ri * 10;
+      const matchedTxns = hasExceptions ? totalTxns - 3 : totalTxns;
+      const exceptionCount = hasExceptions ? 3 : 0;
+
+      const recon = await p.reconciliationRun.create({
+        data: {
+          tenantId: tenant.id,
+          runDate: reconDate,
+          status: hasExceptions ? 'completed_with_exceptions' : 'completed',
+          matchRate: hasExceptions ? 94.0 : 100.0,
+          totalTxns,
+          matchedTxns,
+          exceptionCount,
+        },
+      });
+
+      if (hasExceptions) {
+        await p.reconciliationException.createMany({
+          data: [
+            {
+              tenantId: tenant.id,
+              reconciliationRunId: recon.id,
+              txnType: 'repayment',
+              externalRef: `STG-RECON-EXC-${sp.country}-001`,
+              exceptionType: 'amount_mismatch',
+              severity: 'medium',
+              amount: base * 5,
+              description: 'External payment amount does not match internal record',
+              resolved: false,
+            },
+            {
+              tenantId: tenant.id,
+              reconciliationRunId: recon.id,
+              txnType: 'disbursement',
+              externalRef: `STG-RECON-EXC-${sp.country}-002`,
+              exceptionType: 'missing_internal',
+              severity: 'high',
+              amount: base * 20,
+              description: 'External disbursement has no matching internal transaction',
+              resolved: false,
+            },
+            {
+              tenantId: tenant.id,
+              reconciliationRunId: recon.id,
+              txnType: 'repayment',
+              externalRef: `STG-RECON-EXC-${sp.country}-003`,
+              exceptionType: 'duplicate',
+              severity: 'low',
+              amount: base * 3,
+              description: 'Potential duplicate repayment detected',
+              resolved: true,
+              resolvedAt: daysAgo(0),
+            },
+          ],
+        });
+      }
+      console.log(`  Reconciliation batch ${ri + 1}: ${hasExceptions ? 'with exceptions' : 'clean'}`);
+    }
+
+    // -- Settlement with revenue splits
+    const existingSettlement = await p.settlementRun.findFirst({
+      where: { tenantId: tenant.id },
+    });
+    if (!existingSettlement) {
+      const totalRevenue = base * 200;
+      const settlement = await p.settlementRun.create({
+        data: {
+          tenantId: tenant.id,
+          periodStart: daysAgo(30),
+          periodEnd: daysAgo(1),
+          status: 'settled',
+          totalRevenue,
+          approvedBy: spAdminId || undefined,
+          approvedAt: daysAgo(0),
+        },
+      });
+
+      // Revenue splits: lender 55%, SP 30%, EMI 10%, Platform 5%
+      const splits = [
+        { partyType: 'lender', partyId: lender.id, sharePct: 55 },
+        { partyType: 'sp', partyId: tenant.id, sharePct: 30 },
+        { partyType: 'emi', partyId: tenant.id, sharePct: 10 },
+        { partyType: 'platform', partyId: tenant.id, sharePct: 5 },
+      ];
+      const lineData: Prisma.SettlementLineCreateManyInput[] = splits.map((s) => ({
+        tenantId: tenant.id,
+        settlementRunId: settlement.id,
+        partyType: s.partyType,
+        partyId: s.partyId,
+        grossRevenue: totalRevenue,
+        sharePercentage: s.sharePct,
+        shareAmount: Math.round(totalRevenue * s.sharePct / 100),
+        deductions: 0,
+        netAmount: Math.round(totalRevenue * s.sharePct / 100),
+      }));
+      await p.settlementLine.createMany({ data: lineData });
+      console.log(`  Settlement: ${sp.currency} ${totalRevenue} with ${splits.length} revenue splits`);
+    }
+
+    // -- Audit logs
+    const existingAuditLogs = await p.auditLog.count({ where: { tenantId: tenant.id } });
+    if (existingAuditLogs === 0) {
+      const auditData: Prisma.AuditLogCreateManyInput[] = [
+        {
+          tenantId: tenant.id,
+          actorId: spAdminId || undefined,
+          actorType: 'user',
+          actorIp: '10.0.1.100',
+          action: 'user.login',
+          resourceType: 'user',
+          resourceId: spAdminId || undefined,
+          metadata: { userAgent: 'Mozilla/5.0', environment: 'staging' },
+          createdAt: daysAgo(1),
+        },
+        {
+          tenantId: tenant.id,
+          actorType: 'system',
+          action: 'contract.status_changed',
+          resourceType: 'contract',
+          beforeValue: { status: 'active' },
+          afterValue: { status: 'overdue' },
+          metadata: { reason: 'Payment overdue by 30 days', environment: 'staging' },
+          createdAt: daysAgo(1),
+        },
+        {
+          tenantId: tenant.id,
+          actorId: spAdminId || undefined,
+          actorType: 'user',
+          actorIp: '10.0.1.100',
+          action: 'product.created',
+          resourceType: 'product',
+          afterValue: { code: activeProductRecords[0]?.code ?? 'unknown', status: 'active' },
+          metadata: { environment: 'staging' },
+          createdAt: daysAgo(5),
+        },
+        {
+          tenantId: tenant.id,
+          actorType: 'system',
+          action: 'reconciliation.completed',
+          resourceType: 'reconciliation_run',
+          metadata: { totalTxns: 50, matchRate: 100.0, environment: 'staging' },
+          createdAt: daysAgo(2),
+        },
+        {
+          tenantId: tenant.id,
+          actorType: 'system',
+          action: 'settlement.executed',
+          resourceType: 'settlement_run',
+          metadata: { totalRevenue: base * 200, currency: sp.currency, environment: 'staging' },
+          createdAt: daysAgo(0),
+        },
+      ];
+      await p.auditLog.createMany({ data: auditData });
+      console.log(`  Audit logs: ${auditData.length} entries`);
+    }
+  }
+
+  console.log('\n============================================================');
+  console.log('  Staging seed complete!');
+  console.log('============================================================');
+}
+
+// ---------------------------------------------------------------------------
 // Run
 // ---------------------------------------------------------------------------
 
 main()
+  .then(async () => {
+    if (process.env.ENVIRONMENT === 'staging') {
+      await seedStagingData(prisma);
+    }
+  })
   .catch((e) => {
     console.error('Seeding failed:', e);
     process.exit(1);

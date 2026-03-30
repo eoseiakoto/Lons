@@ -1,0 +1,46 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alerting-rules.yml"
+
+scrape_configs:
+  - job_name: "graphql-server"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["graphql-server:3000"]
+        labels:
+          service: graphql-server
+
+  - job_name: "rest-server"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["rest-server:3001"]
+        labels:
+          service: rest-server
+
+  - job_name: "scheduler"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["scheduler:3002"]
+        labels:
+          service: scheduler
+
+  - job_name: "notification-worker"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["notification-worker:3003"]
+        labels:
+          service: notification-worker
+
+  - job_name: "scoring-service"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["scoring-service:8000"]
+        labels:
+          service: scoring-service
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

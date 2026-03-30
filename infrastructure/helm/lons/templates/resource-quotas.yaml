@@ -1,0 +1,45 @@
+{{- if .Values.resourceQuotas.enabled }}
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: {{ include "lons.fullname" . }}-quota
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  hard:
+    requests.cpu: {{ .Values.resourceQuotas.requests.cpu | quote }}
+    requests.memory: {{ .Values.resourceQuotas.requests.memory | quote }}
+    limits.cpu: {{ .Values.resourceQuotas.limits.cpu | quote }}
+    limits.memory: {{ .Values.resourceQuotas.limits.memory | quote }}
+    pods: {{ .Values.resourceQuotas.maxPods | quote }}
+    services: {{ .Values.resourceQuotas.maxServices | default "20" | quote }}
+    persistentvolumeclaims: {{ .Values.resourceQuotas.maxPVCs | default "10" | quote }}
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: {{ include "lons.fullname" . }}-limits
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  limits:
+    - type: Container
+      default:
+        cpu: {{ .Values.resourceQuotas.defaultLimits.cpu | default "500m" }}
+        memory: {{ .Values.resourceQuotas.defaultLimits.memory | default "512Mi" }}
+      defaultRequest:
+        cpu: {{ .Values.resourceQuotas.defaultRequests.cpu | default "100m" }}
+        memory: {{ .Values.resourceQuotas.defaultRequests.memory | default "128Mi" }}
+      max:
+        cpu: {{ .Values.resourceQuotas.maxLimits.cpu | default "4000m" }}
+        memory: {{ .Values.resourceQuotas.maxLimits.memory | default "4Gi" }}
+      min:
+        cpu: "10m"
+        memory: "32Mi"
+    - type: Pod
+      max:
+        cpu: {{ .Values.resourceQuotas.maxPodLimits.cpu | default "8000m" }}
+        memory: {{ .Values.resourceQuotas.maxPodLimits.memory | default "8Gi" }}
+{{- end }}

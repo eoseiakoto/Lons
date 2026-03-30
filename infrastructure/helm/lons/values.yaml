@@ -1,0 +1,329 @@
+## Global settings
+global:
+  imageRegistry: ghcr.io
+  imagePullPolicy: IfNotPresent
+  imageTag: ""
+  environment: staging
+  imagePullSecrets:
+    - name: ghcr-credentials
+
+## GraphQL Server
+graphqlServer:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/lons/graphql-server
+    tag: latest
+  port: 3000
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  healthCheck:
+    path: /health
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+## REST Server
+restServer:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/lons/rest-server
+    tag: latest
+  port: 3001
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  healthCheck:
+    path: /health
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+## Scheduler
+scheduler:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/lons/scheduler
+    tag: latest
+  port: 3002
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  healthCheck:
+    path: /health
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+## Notification Worker
+notificationWorker:
+  replicaCount: 1
+  image:
+    repository: ghcr.io/lons/notification-worker
+    tag: latest
+  port: 3003
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  healthCheck:
+    path: /health
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+## Scoring Service (Python FastAPI)
+scoringService:
+  replicaCount: 2
+  image:
+    repository: ghcr.io/lons/scoring-service
+    tag: latest
+  port: 8000
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+  healthCheck:
+    path: /health
+    initialDelaySeconds: 30
+    periodSeconds: 10
+
+## Ingress
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+  host: api.lons.io
+  paths:
+    - path: /graphql
+      pathType: Prefix
+      service: graphql-server
+      port: 3000
+    - path: /v1
+      pathType: Prefix
+      service: rest-server
+      port: 3001
+  tls:
+    enabled: true
+    secretName: lons-tls
+
+## PostgreSQL (external)
+postgresql:
+  external: true
+  host: ""
+  port: 5432
+  database: lons
+  existingSecret: lons-db-credentials
+  secretKeys:
+    url: DATABASE_URL
+
+## Redis (external)
+redis:
+  external: true
+  host: ""
+  port: 6379
+  existingSecret: lons-redis-credentials
+  secretKeys:
+    url: REDIS_URL
+
+## Config
+config:
+  nodeEnv: production
+  logLevel: info
+  enableTracing: "false"
+  scoringServiceUrl: "http://lons-scoring-service:8000"
+
+## Metrics / Monitoring
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+
+monitoring:
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      interval: 30s
+      scrapeTimeout: 10s
+  alerts:
+    enabled: false
+  alertmanager:
+    enabled: false
+    webhookUrl: ""
+    criticalWebhookUrl: ""
+    securityWebhookUrl: ""
+    dataWebhookUrl: ""
+    businessWebhookUrl: ""
+    slackWebhookUrl: ""
+    pagerdutyIntegrationKey: ""
+  dashboards:
+    enabled: false
+  prometheusName: kube-prometheus
+
+## Network Policies
+networkPolicy:
+  enabled: true
+
+## Service Mesh (Linkerd) Configuration
+serviceMesh:
+  enabled: false
+  proxy:
+    cpuRequest: "25m"
+    memoryRequest: "64Mi"
+    cpuLimit: "250m"
+    memoryLimit: "256Mi"
+  authorization:
+    enabled: false
+
+## Cert-Manager TLS automation
+certManager:
+  enabled: false
+  email: platform@lons.io
+  issuer: letsencrypt-prod
+  aws:
+    region: eu-west-1
+    hostedZoneID: ""
+  additionalDomains: []
+
+## Admin Portal
+adminPortal:
+  enabled: true
+  replicaCount: 2
+  image:
+    repository: ghcr.io/lons/admin-portal
+    tag: latest
+  port: 3100
+  host: admin.lons.io
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  healthCheck:
+    path: /
+    initialDelaySeconds: 15
+    periodSeconds: 10
+
+## External Secrets Operator
+externalSecrets:
+  enabled: false
+  aws:
+    region: eu-west-1
+  serviceAccount:
+    name: external-secrets-sa
+    namespace: external-secrets
+  refreshInterval: 1h
+
+## Centralized Logging Configuration
+logging:
+  enabled: false
+  aws:
+    region: eu-west-1
+  retentionDays: 30
+  retention:
+    hot: 30
+    warm: 90
+    cold: 365
+
+## OpenTelemetry Distributed Tracing
+tracing:
+  enabled: false
+  collector:
+    image:
+      repository: otel/opentelemetry-collector-contrib
+      tag: "0.96.0"
+    replicaCount: 1
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+    port: 4317
+    httpPort: 4318
+    metricsPort: 8888
+    healthPort: 13133
+  aws:
+    region: eu-west-1
+  endpoint: "http://lons-otel-collector:4317"
+  debug: false
+
+## Canary Deployments (Argo Rollouts)
+canary:
+  enabled: false
+
+## Resource Quotas and Limit Ranges
+resourceQuotas:
+  enabled: false
+  requests:
+    cpu: "8"
+    memory: "16Gi"
+  limits:
+    cpu: "16"
+    memory: "32Gi"
+  maxPods: "50"
+  maxServices: "20"
+  maxPVCs: "10"
+  defaultLimits:
+    cpu: "500m"
+    memory: "512Mi"
+  defaultRequests:
+    cpu: "100m"
+    memory: "128Mi"
+  maxLimits:
+    cpu: "4000m"
+    memory: "4Gi"
+  maxPodLimits:
+    cpu: "8000m"
+    memory: "8Gi"
+
+## Pod Topology Spread Constraints
+topologySpread:
+  enabled: false
+  whenUnsatisfiable: ScheduleAnyway

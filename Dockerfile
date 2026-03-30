@@ -21,23 +21,65 @@ COPY services/recovery-service/package.json services/recovery-service/
 COPY apps/graphql-server/package.json apps/graphql-server/
 COPY apps/rest-server/package.json apps/rest-server/
 COPY apps/scheduler/package.json apps/scheduler/
+COPY apps/admin-portal/package.json apps/admin-portal/
+COPY apps/platform-portal/package.json apps/platform-portal/
 RUN pnpm install --frozen-lockfile
 
 FROM base AS builder
-COPY --from=deps /app/node_modules ./node_modules
+RUN apk add --no-cache openssl
+COPY --from=deps /app ./
 COPY . .
+RUN mkdir -p apps/admin-portal/public
 RUN pnpm run build
 
-FROM base AS graphql-server
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/apps/graphql-server/dist ./apps/graphql-server/dist
-COPY --from=builder /app/packages ./packages
+# ── GraphQL Server ──
+FROM node:20-alpine AS graphql-server
+RUN apk add --no-cache openssl
+RUN addgroup -g 1001 -S nodejs && adduser -S nestjs -u 1001
+WORKDIR /app
+COPY --from=builder --chown=nestjs:nodejs /app ./
+USER nestjs
 EXPOSE 3000
 CMD ["node", "apps/graphql-server/dist/main.js"]
 
-FROM base AS rest-server
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/apps/rest-server/dist ./apps/rest-server/dist
-COPY --from=builder /app/packages ./packages
+# ── REST Server ──
+FROM node:20-alpine AS rest-server
+RUN apk add --no-cache openssl
+RUN addgroup -g 1001 -S nodejs && adduser -S nestjs -u 1001
+WORKDIR /app
+COPY --from=builder --chown=nestjs:nodejs /app ./
+USER nestjs
 EXPOSE 3001
 CMD ["node", "apps/rest-server/dist/main.js"]
+
+# ── Scheduler ──
+FROM node:20-alpine AS scheduler
+RUN apk add --no-cache openssl
+RUN addgroup -g 1001 -S nodejs && adduser -S nestjs -u 1001
+WORKDIR /app
+COPY --from=builder --chown=nestjs:nodejs /app ./
+USER nestjs
+EXPOSE 3002
+CMD ["node", "apps/scheduler/dist/main.js"]
+
+# ── Notification Worker ──
+FROM node:20-alpine AS notification-worker
+RUN apk add --no-cache openssl
+RUN addgroup -g 1001 -S nodejs && adduser -S nestjs -u 1001
+WORKDIR /app
+COPY --from=builder --chown=nestjs:nodejs /app ./
+USER nestjs
+EXPOSE 3003
+CMD ["node", "services/notification-service/dist/main.js"]
+
+# ── Admin Portal (Next.js) ──
+FROM node:20-alpine AS admin-portal
+RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
+WORKDIR /app
+COPY --from=builder --chown=nextjs:nodejs /app/apps/admin-portal/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/admin-portal/.next/static ./apps/admin-portal/.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/admin-portal/public ./apps/admin-portal/public
+USER nextjs
+EXPOSE 3100
+ENV NODE_ENV=production
+CMD ["node", "apps/admin-portal/server.js"]

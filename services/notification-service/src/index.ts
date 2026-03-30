@@ -4,4 +4,7 @@ export * from './adapters/console-notification.adapter';
 export * from './adapters/sms-notification.adapter';
 export * from './adapters/email-notification.adapter';
 export * from './adapters/notification-adapter.factory';
+export * from './adapters/recording-notification.adapter';
+export * from './adapters/notification-adapter-resolver.service';
 export * from './templates/template-renderer';
+export * from './webhooks';

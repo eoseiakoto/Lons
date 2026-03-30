@@ -1,5 +1,6 @@
 import { Resolver, Mutation, Args, ID, Float } from '@nestjs/graphql';
 import { SubscriptionService, CurrentTenant, Roles } from '@lons/entity-service';
+import { AuditAction, AuditActionType, AuditResourceType } from '@lons/common';
 
 import { SubscriptionType } from '../types/subscription.type';
 
@@ -8,6 +9,7 @@ export class SubscriptionResolver {
   constructor(private subscriptionService: SubscriptionService) {}
 
   @Mutation(() => SubscriptionType)
+  @AuditAction(AuditActionType.CREATE, AuditResourceType.WEBHOOK)
   @Roles('subscription:create')
   async activateSubscription(
     @CurrentTenant() tenantId: string,
@@ -23,6 +25,7 @@ export class SubscriptionResolver {
   }
 
   @Mutation(() => SubscriptionType)
+  @AuditAction(AuditActionType.DELETE, AuditResourceType.WEBHOOK)
   @Roles('subscription:update')
   async deactivateSubscription(
     @CurrentTenant() tenantId: string,

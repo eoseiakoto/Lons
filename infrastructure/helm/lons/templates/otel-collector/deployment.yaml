@@ -1,0 +1,108 @@
+{{- if .Values.tracing.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "lons.fullname" . }}-otel-collector
+  labels:
+    {{- include "lons.componentLabels" (dict "context" . "component" "otel-collector") | nindent 4 }}
+spec:
+  replicas: {{ .Values.tracing.collector.replicaCount | default 1 }}
+  selector:
+    matchLabels:
+      {{- include "lons.selectorLabels" (dict "context" . "component" "otel-collector") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "lons.componentLabels" (dict "context" . "component" "otel-collector") | nindent 8 }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/otel-collector/configmap.yaml") . | sha256sum }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "lons.fullname" . }}-otel-collector
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: otel-collector
+          image: {{ .Values.tracing.collector.image.repository }}:{{ .Values.tracing.collector.image.tag }}
+          imagePullPolicy: {{ .Values.global.imagePullPolicy }}
+          ports:
+            - name: otlp-grpc
+              containerPort: {{ .Values.tracing.collector.port | default 4317 }}
+              protocol: TCP
+            - name: otlp-http
+              containerPort: {{ .Values.tracing.collector.httpPort | default 4318 }}
+              protocol: TCP
+            - name: metrics
+              containerPort: {{ .Values.tracing.collector.metricsPort | default 8888 }}
+              protocol: TCP
+            - name: healthcheck
+              containerPort: {{ .Values.tracing.collector.healthPort | default 13133 }}
+              protocol: TCP
+          env:
+            - name: GOGC
+              value: "80"
+          volumeMounts:
+            - name: otel-config
+              mountPath: /etc/otel/config.yaml
+              subPath: config.yaml
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /
+              port: healthcheck
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: healthcheck
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.tracing.collector.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
+      volumes:
+        - name: otel-config
+          configMap:
+            name: {{ include "lons.fullname" . }}-otel-collector
+      terminationGracePeriodSeconds: 30
+      {{- if .Values.topologySpread.enabled }}
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: {{ .Values.topologySpread.whenUnsatisfiable | default "ScheduleAnyway" }}
+          labelSelector:
+            matchLabels:
+              {{- include "lons.selectorLabels" (dict "context" . "component" "otel-collector") | nindent 14 }}
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "lons.selectorLabels" (dict "context" . "component" "otel-collector") | nindent 14 }}
+      {{- end }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ include "lons.fullname" . }}-otel-collector
+  labels:
+    {{- include "lons.componentLabels" (dict "context" . "component" "otel-collector") | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      {{- include "lons.selectorLabels" (dict "context" . "component" "otel-collector") | nindent 6 }}
+{{- end }}

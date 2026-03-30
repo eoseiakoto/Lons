@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lons.fullname" . }}-scheduler
+  labels:
+    {{- include "lons.componentLabels" (dict "context" . "component" "scheduler") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.scheduler.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "lons.selectorLabels" (dict "context" . "component" "scheduler") | nindent 4 }}

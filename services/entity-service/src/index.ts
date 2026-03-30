@@ -17,5 +17,8 @@ export * from './subscription/subscription.service';
 export * from './subscription/subscription.module';
 export * from './audit/audit.service';
 export * from './audit/audit.module';
+export * from './audit/dto/audit-log-filter.dto';
 export * from './webhook/webhook.service';
 export * from './webhook/webhook.module';
+export * from './api-key';
+export * from './auth/decorators/field-auth.decorator';

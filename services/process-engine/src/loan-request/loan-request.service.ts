@@ -90,6 +90,40 @@ export class LoanRequestService {
     return { items: items.slice(0, take), hasMore: items.length > take };
   }
 
+  async findAll(tenantId: string, filters?: {
+    skip?: number;
+    take?: number;
+    customerId?: string;
+    productId?: string;
+    status?: string;
+  }) {
+    const where: Prisma.LoanRequestWhereInput = { tenantId };
+    if (filters?.customerId) where.customerId = filters.customerId;
+    if (filters?.productId) where.productId = filters.productId;
+    if (filters?.status) where.status = filters.status as LoanRequestStatus;
+
+    return this.prisma.loanRequest.findMany({
+      where,
+      skip: filters?.skip ?? 0,
+      take: filters?.take ?? 20,
+      orderBy: { createdAt: 'desc' },
+      include: { customer: true, product: true },
+    });
+  }
+
+  async count(tenantId: string, filters?: {
+    customerId?: string;
+    productId?: string;
+    status?: string;
+  }) {
+    const where: Prisma.LoanRequestWhereInput = { tenantId };
+    if (filters?.customerId) where.customerId = filters.customerId;
+    if (filters?.productId) where.productId = filters.productId;
+    if (filters?.status) where.status = filters.status as LoanRequestStatus;
+
+    return this.prisma.loanRequest.count({ where });
+  }
+
   async transitionStatus(tenantId: string, id: string, newStatus: LoanRequestStatus, updateData?: Prisma.LoanRequestUpdateInput) {
     const lr = await this.findById(tenantId, id);
     const currentStatus = lr.status;

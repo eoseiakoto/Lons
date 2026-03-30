@@ -33,4 +33,8 @@ export class MockCreditBureauAdapter implements ICreditBureauAdapter {
     this.logger.log(`[SANDBOX] Negative data submitted for ${data.customerId}: ${data.reason}`);
     return true;
   }
+
+  getBureauType(): string {
+    return 'MOCK';
+  }
 }

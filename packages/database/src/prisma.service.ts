@@ -1,10 +1,18 @@
-import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
+import { Injectable, OnModuleInit, OnModuleDestroy, Logger } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
+import { createFieldEncryptionMiddleware, createKeyProvider } from '@lons/common';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(PrismaService.name);
+
   async onModuleInit() {
     await this.$connect();
+
+    // Register PII field encryption middleware
+    const keyProvider = createKeyProvider();
+    this.$use(createFieldEncryptionMiddleware(keyProvider) as any);
+    this.logger.log('PII field encryption middleware registered');
   }
 
   async onModuleDestroy() {

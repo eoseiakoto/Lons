@@ -11,3 +11,8 @@ export * from './ledger.enum';
 export * from './notification.enum';
 export * from './audit.enum';
 export * from './webhook.enum';
+export * from './scoring.enum';
+export * from './recovery.enum';
+export * from './monitoring.enum';
+export * from './adapter.enum';
+export * from './feedback.enum';

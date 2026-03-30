@@ -1,0 +1,34 @@
+{{- if .Values.canary.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ include "lons.fullname" . }}-success-rate
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  args:
+    - name: service-name
+  metrics:
+    - name: success-rate
+      interval: 60s
+      count: 5
+      successCondition: result[0] >= 0.95
+      failureLimit: 2
+      provider:
+        prometheus:
+          address: http://prometheus-server.monitoring:80
+          query: |
+            sum(rate(http_requests_total{service="{{`{{args.service-name}}`}}", code=~"2.."}[5m]))
+            /
+            sum(rate(http_requests_total{service="{{`{{args.service-name}}`}}"}[5m]))
+    - name: latency-p95
+      interval: 60s
+      count: 5
+      successCondition: result[0] <= 0.2
+      failureLimit: 2
+      provider:
+        prometheus:
+          address: http://prometheus-server.monitoring:80
+          query: |
+            histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket{service="{{`{{args.service-name}}`}}"}[5m])) by (le))
+{{- end }}

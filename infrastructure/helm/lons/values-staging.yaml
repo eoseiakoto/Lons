@@ -1,0 +1,237 @@
+## Staging environment overrides
+global:
+  environment: staging
+  imagePullPolicy: Always
+  imageTag: staging-latest
+
+graphqlServer:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+restServer:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+scheduler:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+notificationWorker:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+scoringService:
+  replicaCount: 1
+  autoscaling:
+    enabled: false
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+ingress:
+  enabled: true
+  className: nginx
+  host: api.staging.lons.io
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-staging
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/rate-limit: "250"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    # IP allowlisting for staging access
+    # TODO: Replace "0.0.0.0/0" with Emmanuel's IP and office CIDR before SP prospect access
+    nginx.ingress.kubernetes.io/whitelist-source-range: "0.0.0.0/0"
+    # Alternative: Basic auth for staging (uncomment to enable)
+    # nginx.ingress.kubernetes.io/auth-type: basic
+    # nginx.ingress.kubernetes.io/auth-secret: staging-basic-auth
+    # nginx.ingress.kubernetes.io/auth-realm: "Lons Staging - Authentication Required"
+  tls:
+    enabled: true
+    secretName: lons-staging-tls
+
+config:
+  nodeEnv: staging
+  logLevel: debug
+  enableTracing: "true"
+  allowMockAdapters: "true"    # CRITICAL for staging mock adapter testing
+  scoringServiceUrl: "http://lons-scoring-service:8000"
+  notificationServiceUrl: "http://lons-notification-worker:3003"
+  integrationServiceUrl: "http://lons-rest-server:3001"
+
+## PostgreSQL — host/port should be populated from Terraform outputs
+postgresql:
+  external: true
+  # host: staging-postgres.c1a2b3c4d5e6.rds.amazonaws.com  # From Terraform: aws_rds_cluster.staging.endpoint
+  # port: 5432  # From Terraform: aws_rds_cluster.staging.port
+  host: ""
+  port: 5432
+  database: lons
+  existingSecret: lons-staging-db-credentials
+  secretKeys:
+    url: DATABASE_URL
+
+## Redis — host/port should be populated from Terraform outputs
+redis:
+  external: true
+  # host: staging-redis.abc123.ng.0001.euw1.cache.amazonaws.com  # From Terraform: aws_elasticache_replication_group.staging.configuration_endpoint_address
+  # port: 6379  # From Terraform: aws_elasticache_replication_group.staging.port
+  host: ""
+  port: 6379
+  existingSecret: lons-staging-redis-credentials
+  secretKeys:
+    url: REDIS_URL
+
+certManager:
+  enabled: true
+  issuer: letsencrypt-staging
+
+adminPortal:
+  enabled: true
+  replicaCount: 1
+  image:
+    tag: staging-latest
+  port: 3100
+  host: admin.staging.lons.io
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 512Mi
+  autoscaling:
+    enabled: false
+
+metrics:
+  serviceMonitor:
+    enabled: true
+    interval: 60s
+
+serviceMesh:
+  enabled: true
+  proxy:
+    cpuRequest: "25m"
+    memoryRequest: "64Mi"
+    cpuLimit: "250m"
+    memoryLimit: "256Mi"
+  authorization:
+    enabled: false
+
+networkPolicy:
+  enabled: true
+
+monitoring:
+  alerts:
+    enabled: true
+  dashboards:
+    enabled: true
+  alertmanager:
+    enabled: true
+    slackWebhookUrl: "${SLACK_WEBHOOK_URL}"  # Configure in CI/CD secrets
+    criticalWebhookUrl: "http://localhost:9095/critical"
+    securityWebhookUrl: "http://localhost:9095/security"
+    dataWebhookUrl: "http://localhost:9095/data"
+    businessWebhookUrl: "http://localhost:9095/business"
+    webhookUrl: "http://localhost:9095/alerts"
+    # Email routing for critical alerts
+    emailRouting:
+      enabled: true
+      criticalAlerts:
+        - eoseiakoto@gmail.com
+  prometheusName: kube-prometheus
+
+externalSecrets:
+  enabled: true
+
+logging:
+  enabled: true
+  aws:
+    region: eu-west-1
+  retentionDays: 30
+  retention:
+    hot: 14
+    warm: 60
+    cold: 180
+
+tracing:
+  enabled: true
+  debug: false
+  aws:
+    region: eu-west-1
+  collector:
+    replicaCount: 1
+    image:
+      repository: otel/opentelemetry-collector-k8s
+      tag: "0.88.0"
+    port: 4317
+    httpPort: 4318
+    metricsPort: 8888
+    healthPort: 13133
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+
+canary:
+  enabled: false
+
+resourceQuotas:
+  enabled: true
+  requests:
+    cpu: "4"
+    memory: "8Gi"
+  limits:
+    cpu: "8"
+    memory: "16Gi"
+  maxPods: "30"
+  defaultLimits:
+    cpu: "250m"
+    memory: "256Mi"
+  defaultRequests:
+    cpu: "50m"
+    memory: "64Mi"
+  maxLimits:
+    cpu: "2000m"
+    memory: "2Gi"
+  maxPodLimits:
+    cpu: "4000m"
+    memory: "4Gi"
+
+topologySpread:
+  enabled: true
+  whenUnsatisfiable: ScheduleAnyway

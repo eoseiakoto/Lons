@@ -1,3 +1,21 @@
+// ---------------------------------------------------------------------------
+// Basic smoke / baseline load test
+//
+// Quick 2-minute sanity check of core endpoints.
+//
+// For scenario-specific and comprehensive load tests see:
+//   scripts/load-tests/loan-application.js    - Full loan application flow (10min, 200 peak VUs)
+//   scripts/load-tests/repayment-processing.js - Repayment throughput (5min, 500 txn/min sustained)
+//   scripts/load-tests/graphql-queries.js      - Read query performance (8min, 1000 peak VUs, P95 <200ms)
+//   scripts/load-tests/tenant-isolation.js     - Multi-tenant data isolation (2min, cross-tenant verification)
+//   scripts/load-tests/sla-validation.js       - Full SLA suite (14min, 5000 peak VUs, all products)
+//
+// Run:
+//   k6 run scripts/load-test.js                                      # Default (dev, smoke)
+//   k6 run -e ENVIRONMENT=staging scripts/load-test.js                # Staging smoke
+//   k6 run scripts/load-tests/sla-validation.js -e ENVIRONMENT=preprod # Full SLA validation
+// ---------------------------------------------------------------------------
+
 import http from 'k6/http';
 import { check, sleep } from 'k6';
 
@@ -24,7 +42,7 @@ export default function () {
     'health response time < 200ms': (r) => r.timings.duration < 200,
   });
 
-  // GraphQL query
+  // GraphQL introspection query
   const gqlRes = http.post(GQL_URL, JSON.stringify({
     query: '{ __typename }',
   }), { headers: { 'Content-Type': 'application/json' } });

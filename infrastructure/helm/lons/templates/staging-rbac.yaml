@@ -1,0 +1,179 @@
+{{- if eq .Values.global.environment "staging" -}}
+---
+# ServiceAccount for seed job execution
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "lons.fullname" . }}-seed
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db-seed
+---
+# Read-only role for staging developers
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "lons.fullname" . }}-staging-developer
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+rules:
+  # Pod operations - read and debug access
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["get", "create"]
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["get", "create"]
+
+  # Services - read access
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list"]
+
+  # ConfigMaps - read access
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch"]
+
+  # Deployments - read access only
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+
+  # ReplicaSets - read access only
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+
+  # StatefulSets - read access only
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "list", "watch"]
+
+  # Jobs - read access only
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch"]
+
+  # Events - read access
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+---
+# Admin role for staging administrators
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "lons.fullname" . }}-staging-admin
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+rules:
+  # Full access to pods
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["get", "create"]
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["get", "create"]
+
+  # Full access to services
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Full access to configmaps
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Full access to secrets
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Full access to deployments
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+
+  # Full access to replicasets
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Full access to statefulsets
+  - apiGroups: ["apps"]
+    resources: ["statefulsets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Full access to jobs
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Full access to events
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+  # Full access to persistentvolumeclaims
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+# RoleBinding: staging-admin for Emmanuel (platform owner)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "lons.fullname" . }}-emmanuel-staging-admin
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "lons.fullname" . }}-staging-admin
+subjects:
+  - kind: User
+    name: emmanuel@lons.io
+    apiGroup: rbac.authorization.k8s.io
+---
+# RoleBinding: seed ServiceAccount to staging-admin for job execution
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "lons.fullname" . }}-seed-admin
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rbac
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "lons.fullname" . }}-staging-admin
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "lons.fullname" . }}-seed
+    namespace: {{ .Release.Namespace }}
+{{- end }}

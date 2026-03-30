@@ -17,3 +17,4 @@ export * from './repayment.interface';
 export * from './ledger-entry.interface';
 export * from './audit-log.interface';
 export * from './notification.interface';
+export * from './recovery-strategy.interface';
