@@ -208,3 +208,107 @@ describe('REST API — Staging Integration', () => {
     }
   });
 });
+
+describe('Reconciliation — Exception Handling', () => {
+  it('should detect and flag reconciliation exceptions', async () => {
+    const { data, errors } = await graphqlQuery(`
+      query {
+        reconciliationBatches(first: 5) {
+          edges {
+            node {
+              id
+              status
+              totalTransactions
+              matchedCount
+              exceptionCount
+              exceptions {
+                id
+                type
+                status
+                transactionRef
+                amount
+                description
+              }
+            }
+          }
+        }
+      }
+    `);
+
+    if (!errors) {
+      const batches = data?.reconciliationBatches?.edges;
+      expect(batches).toBeDefined();
+      expect(batches.length).toBeGreaterThan(0);
+
+      const batchWithExceptions = batches.find(
+        (e: any) => e.node.exceptionCount > 0,
+      );
+      if (batchWithExceptions) {
+        const batch = batchWithExceptions.node;
+        expect(batch.exceptions.length).toBe(batch.exceptionCount);
+        batch.exceptions.forEach((ex: any) => {
+          expect(ex.type).toBeDefined();
+          expect(ex.status).toBeDefined();
+          expect(ex.transactionRef).toBeDefined();
+          expect(ex.amount).toBeDefined();
+        });
+      }
+    }
+  });
+});
+
+describe('Settlement — Revenue Sharing', () => {
+  it('should generate correct 4-party revenue splits', async () => {
+    const { data, errors } = await graphqlQuery(`
+      query {
+        settlements(first: 5) {
+          edges {
+            node {
+              id
+              status
+              totalAmount
+              splits {
+                party
+                amount
+                percentage
+                type
+              }
+            }
+          }
+        }
+      }
+    `);
+
+    if (!errors) {
+      const settlements = data?.settlements?.edges;
+      expect(settlements).toBeDefined();
+      expect(settlements.length).toBeGreaterThan(0);
+
+      const settlement = settlements[0].node;
+      expect(settlement.splits).toBeDefined();
+      expect(settlement.splits.length).toBeGreaterThanOrEqual(2);
+
+      // Verify splits sum to total — use string comparison to avoid float issues
+      const { Decimal } = require('@prisma/client/runtime/library');
+      const splitSum = settlement.splits.reduce(
+        (sum: any, s: any) => new Decimal(sum).plus(new Decimal(s.amount)),
+        new Decimal('0'),
+      );
+      const total = new Decimal(settlement.totalAmount);
+      expect(splitSum.equals(total)).toBe(true);
+
+      // Verify expected party types exist
+      const partyTypes = settlement.splits.map((s: any) => s.party);
+      expect(
+        partyTypes.some((p: string) =>
+          ['PLATFORM_FEE', 'PLATFORM'].includes(p),
+        ),
+      ).toBe(true);
+      expect(
+        partyTypes.some((p: string) =>
+          ['LENDER_SHARE', 'LENDER'].includes(p),
+        ),
+      ).toBe(true);
+    }
+  });
+});

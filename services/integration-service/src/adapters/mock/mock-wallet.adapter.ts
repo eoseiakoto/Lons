@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { createHash, randomUUID } from 'crypto';
+import { Decimal } from '@prisma/client/runtime/library';
 import {
   IWalletAdapter,
   TransferParams,
@@ -167,7 +168,7 @@ export class MockWalletAdapter implements IWalletAdapter {
 
     const state = this.getOrCreateState(params.destination, params.currency);
     // For disbursement, we're sending TO a wallet, so balance increases for recipient
-    const newBalance = (parseFloat(state.balance) + parseFloat(params.amount)).toFixed(4);
+    const newBalance = new Decimal(state.balance).plus(new Decimal(params.amount)).toFixed(4);
     state.balance = newBalance;
 
     const externalRef = `mock-tx-${randomUUID().slice(0, 12)}`;
@@ -210,7 +211,7 @@ export class MockWalletAdapter implements IWalletAdapter {
 
     const state = this.getOrCreateState(params.source, params.currency);
 
-    if (parseFloat(state.balance) < parseFloat(params.amount)) {
+    if (new Decimal(state.balance).lessThan(new Decimal(params.amount))) {
       return { success: false, failureReason: 'INSUFFICIENT_FUNDS' };
     }
 
@@ -219,7 +220,7 @@ export class MockWalletAdapter implements IWalletAdapter {
       return { success: false, failureReason: 'SIMULATED_FAILURE' };
     }
 
-    const newBalance = (parseFloat(state.balance) - parseFloat(params.amount)).toFixed(4);
+    const newBalance = new Decimal(state.balance).minus(new Decimal(params.amount)).toFixed(4);
     state.balance = newBalance;
 
     const externalRef = `mock-col-${randomUUID().slice(0, 12)}`;

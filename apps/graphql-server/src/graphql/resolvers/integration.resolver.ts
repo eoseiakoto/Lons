@@ -169,6 +169,26 @@ export class IntegrationResolver {
     return result;
   }
 
+  @Query(() => [WalletProviderConfigType], { name: 'allWalletProviderConfigs' })
+  @Roles('platform_admin')
+  async allWalletProviderConfigs(
+    @CurrentUser() user: any,
+  ): Promise<WalletProviderConfigType[]> {
+    this.logger.log(`Platform admin ${user.userId} fetching all wallet provider configs`);
+
+    const configs = await this.prisma.walletProviderConfig.findMany({
+      where: { deletedAt: null },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return configs.map((config) => ({
+      ...config,
+      configJson: config.configJson
+        ? maskSensitiveConfigFields(config.configJson as Record<string, unknown>)
+        : null,
+    })) as unknown as WalletProviderConfigType[];
+  }
+
   // ---------------------------------------------------------------------------
   // Mutations
   // ---------------------------------------------------------------------------

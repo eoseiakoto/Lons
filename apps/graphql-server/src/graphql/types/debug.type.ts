@@ -1,4 +1,4 @@
-import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
+import { ObjectType, Field, ID, Int, Float } from '@nestjs/graphql';
 import { GraphQLJSON } from 'graphql-type-json';
 
 @ObjectType()
@@ -92,4 +92,52 @@ export class DebugStateTransition {
 
   @Field()
   timestamp!: Date;
+}
+
+@ObjectType()
+export class DebugScoringRule {
+  @Field()
+  ruleName!: string;
+
+  @Field()
+  passed!: boolean;
+
+  @Field(() => Float)
+  score!: number;
+
+  @Field(() => Float)
+  weight!: number;
+
+  @Field(() => Float)
+  weightedScore!: number;
+
+  @Field({ nullable: true })
+  reason?: string;
+}
+
+@ObjectType()
+export class DebugScoringBreakdown {
+  @Field(() => ID)
+  id!: string;
+
+  @Field()
+  customerId!: string;
+
+  @Field()
+  loanRequestId!: string;
+
+  @Field()
+  scoringModel!: string;
+
+  @Field(() => Float)
+  finalScore!: number;
+
+  @Field()
+  decision!: string;
+
+  @Field(() => [DebugScoringRule])
+  rules!: DebugScoringRule[];
+
+  @Field()
+  executedAt!: Date;
 }

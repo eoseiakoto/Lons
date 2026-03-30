@@ -86,6 +86,7 @@ config:
   logLevel: debug
   enableTracing: "true"
   allowMockAdapters: "true"    # CRITICAL for staging mock adapter testing
+  defaultWalletProvider: "MOCK"  # Fallback for new SPs without WalletProviderConfig
   scoringServiceUrl: "http://lons-scoring-service:8000"
   notificationServiceUrl: "http://lons-notification-worker:3003"
   integrationServiceUrl: "http://lons-rest-server:3001"
@@ -124,6 +125,8 @@ adminPortal:
     tag: staging-latest
   port: 3100
   host: admin.staging.lons.io
+  env:
+    NEXT_PUBLIC_STAGING_DEBUG_MODE: "true"
   resources:
     requests:
       cpu: 100m

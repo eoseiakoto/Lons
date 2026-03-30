@@ -55,7 +55,7 @@ describe('MockWalletAdapter', () => {
       expect(result.externalRef).toBeTruthy();
 
       const balance = await adapter.getBalance('wallet-abc');
-      expect(parseFloat(balance.available)).toBe(51000.0);
+      expect(balance.available).toBe('51000.0000');
     });
 
     it('returns externalRef on success', async () => {
@@ -80,7 +80,7 @@ describe('MockWalletAdapter', () => {
       expect(result.success).toBe(true);
 
       const balance = await adapter.getBalance('wallet-collect');
-      expect(parseFloat(balance.available)).toBe(49500.0);
+      expect(balance.available).toBe('49500.0000');
     });
 
     it('fails with INSUFFICIENT_FUNDS when balance too low', async () => {
@@ -185,7 +185,7 @@ describe('MockWalletAdapter', () => {
       // Balance: 53000
 
       const balance = await adapter.getBalance('wallet-track');
-      expect(parseFloat(balance.available)).toBe(53000.0);
+      expect(balance.available).toBe('53000.0000');
     });
   });
 });
