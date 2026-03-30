@@ -197,6 +197,13 @@ monitoring:
   dashboards:
     enabled: false
   prometheusName: kube-prometheus
+  grafana:
+    ingress:
+      enabled: false
+      host: grafana.lons.io
+      annotations: {}
+    serviceName: kube-prometheus-grafana
+    servicePort: 80
 
 ## Network Policies
 networkPolicy:
@@ -243,6 +250,35 @@ adminPortal:
     enabled: true
     minReplicas: 2
     maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  healthCheck:
+    path: /
+    initialDelaySeconds: 15
+    periodSeconds: 10
+
+platformPortal:
+  enabled: false
+  replicaCount: 2
+  image:
+    repository: ghcr.io/lons/platform-portal
+    tag: latest
+  port: 3200
+  host: platform.lons.io
+  env:
+    NEXT_PUBLIC_GRAPHQL_URL: "http://localhost:3000/graphql"
+    NEXT_PUBLIC_REST_URL: "http://localhost:3002"
+    NEXT_PUBLIC_SCORING_URL: "http://localhost:8000"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 5
     targetCPUUtilizationPercentage: 70
   healthCheck:
     path: /

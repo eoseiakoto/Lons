@@ -1,0 +1,22 @@
+{{- if and .Values.platformPortal.enabled .Values.platformPortal.autoscaling.enabled }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "lons.fullname" . }}-platform-portal
+  labels:
+    {{- include "lons.componentLabels" (dict "context" . "component" "platform-portal") | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "lons.fullname" . }}-platform-portal
+  minReplicas: {{ .Values.platformPortal.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.platformPortal.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.platformPortal.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}

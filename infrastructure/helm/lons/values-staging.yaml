@@ -142,6 +142,31 @@ metrics:
     enabled: true
     interval: 60s
 
+platformPortal:
+  enabled: true
+  replicaCount: 1
+  image:
+    tag: staging-latest
+  port: 3200
+  host: platform.staging.lons.io
+  env:
+    NEXT_PUBLIC_GRAPHQL_URL: "https://api.staging.lons.io/graphql"
+    NEXT_PUBLIC_REST_URL: "https://api.staging.lons.io/v1"
+    NEXT_PUBLIC_SCORING_URL: "http://lons-scoring-service:8000"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 512Mi
+  autoscaling:
+    enabled: false
+  healthCheck:
+    path: /
+    initialDelaySeconds: 15
+    periodSeconds: 10
+
 serviceMesh:
   enabled: true
   proxy:
@@ -174,6 +199,17 @@ monitoring:
       criticalAlerts:
         - eoseiakoto@gmail.com
   prometheusName: kube-prometheus
+  grafana:
+    ingress:
+      enabled: true
+      host: grafana.staging.lons.io
+      annotations:
+        nginx.ingress.kubernetes.io/whitelist-source-range: "0.0.0.0/0"
+    serviceName: kube-prometheus-grafana
+    servicePort: 80
+    credentials:
+      username: admin
+      password: LonsStaging2026!
 
 externalSecrets:
   enabled: true

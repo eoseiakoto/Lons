@@ -30,6 +30,7 @@ RUN apk add --no-cache openssl
 COPY --from=deps /app ./
 COPY . .
 RUN mkdir -p apps/admin-portal/public
+RUN mkdir -p apps/platform-portal/public
 RUN pnpm run build
 
 # ── GraphQL Server ──
@@ -83,3 +84,15 @@ USER nextjs
 EXPOSE 3100
 ENV NODE_ENV=production
 CMD ["node", "apps/admin-portal/server.js"]
+
+# ── Platform Portal (Next.js) ──
+FROM node:20-alpine AS platform-portal
+RUN addgroup -g 1001 -S nodejs && adduser -S nextjs -u 1001
+WORKDIR /app
+COPY --from=builder --chown=nextjs:nodejs /app/apps/platform-portal/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/platform-portal/.next/static ./apps/platform-portal/.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/platform-portal/public ./apps/platform-portal/public
+USER nextjs
+EXPOSE 3200
+ENV NODE_ENV=production
+CMD ["node", "apps/platform-portal/server.js"]

@@ -26,11 +26,11 @@ export default function SettingsPage() {
           </div>
           <div>
             <p className="text-xs text-white/40 uppercase tracking-wider">GraphQL Endpoint</p>
-            <p className="text-sm text-white/60 mt-1 font-mono">http://localhost:3000/graphql</p>
+            <p className="text-sm text-white/60 mt-1 font-mono">{process.env.NEXT_PUBLIC_GRAPHQL_URL || 'http://localhost:3000/graphql'}</p>
           </div>
           <div>
             <p className="text-xs text-white/40 uppercase tracking-wider">REST Endpoint</p>
-            <p className="text-sm text-white/60 mt-1 font-mono">http://localhost:3002</p>
+            <p className="text-sm text-white/60 mt-1 font-mono">{process.env.NEXT_PUBLIC_REST_URL || 'http://localhost:3002'}</p>
           </div>
         </div>
       </div>
@@ -43,7 +43,7 @@ export default function SettingsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <p className="text-xs text-white/40 uppercase tracking-wider">Scoring Service</p>
-            <p className="text-sm text-white/60 mt-1 font-mono">http://localhost:8000</p>
+            <p className="text-sm text-white/60 mt-1 font-mono">{process.env.NEXT_PUBLIC_SCORING_URL || 'http://localhost:8000'}</p>
           </div>
           <div>
             <p className="text-xs text-white/40 uppercase tracking-wider">Database</p>

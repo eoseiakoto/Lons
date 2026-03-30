@@ -1,0 +1,17 @@
+{{- if .Values.platformPortal.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lons.fullname" . }}-platform-portal
+  labels:
+    {{- include "lons.componentLabels" (dict "context" . "component" "platform-portal") | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.platformPortal.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "lons.selectorLabels" (dict "context" . "component" "platform-portal") | nindent 4 }}
+{{- end }}

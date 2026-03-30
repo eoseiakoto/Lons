@@ -10,10 +10,14 @@ interface ServiceStatus {
   detail?: string;
 }
 
+const GRAPHQL_URL = process.env.NEXT_PUBLIC_GRAPHQL_URL || 'http://localhost:3000/graphql';
+const REST_URL = process.env.NEXT_PUBLIC_REST_URL || 'http://localhost:3001';
+const SCORING_URL = process.env.NEXT_PUBLIC_SCORING_URL || 'http://localhost:8000';
+
 const SERVICES = [
-  { name: 'GraphQL Server', endpoint: 'http://localhost:3000/graphql', method: 'POST', body: '{"query":"{ __typename }"}' },
-  { name: 'REST Server', endpoint: 'http://localhost:3001/v1/health', method: 'GET' },
-  { name: 'Scoring Service', endpoint: 'http://localhost:8000/health', method: 'GET' },
+  { name: 'GraphQL Server', endpoint: GRAPHQL_URL, method: 'POST', body: '{"query":"{ __typename }"}' },
+  { name: 'REST Server', endpoint: `${REST_URL}/health`, method: 'GET' },
+  { name: 'Scoring Service', endpoint: `${SCORING_URL}/health`, method: 'GET' },
 ];
 
 async function checkHealth(service: typeof SERVICES[0]): Promise<{ healthy: boolean; detail?: string }> {

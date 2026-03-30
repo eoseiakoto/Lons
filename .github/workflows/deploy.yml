@@ -68,7 +68,7 @@ jobs:
       - name: Retag and push images to ECR
         run: |
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-          for service in graphql-server rest-server scheduler notification-worker admin-portal scoring-service; do
+          for service in graphql-server rest-server scheduler notification-worker admin-portal platform-portal scoring-service; do
             GHCR_IMAGE="ghcr.io/${{ github.repository }}/$service:$SHORT_SHA"
             ECR_IMAGE="${{ env.ECR_REGISTRY }}/lons-$service:$SHORT_SHA"
 
@@ -164,7 +164,7 @@ jobs:
       - name: Retag and push images to ECR
         run: |
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-          for service in graphql-server rest-server scheduler notification-worker admin-portal scoring-service; do
+          for service in graphql-server rest-server scheduler notification-worker admin-portal platform-portal scoring-service; do
             GHCR_IMAGE="ghcr.io/${{ github.repository }}/$service:$SHORT_SHA"
             ECR_IMAGE="${{ env.ECR_REGISTRY }}/lons-$service:$SHORT_SHA"
 
@@ -321,7 +321,7 @@ jobs:
       - name: Retag and push images to ECR
         run: |
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-          for service in graphql-server rest-server scheduler notification-worker admin-portal scoring-service; do
+          for service in graphql-server rest-server scheduler notification-worker admin-portal platform-portal scoring-service; do
             GHCR_IMAGE="ghcr.io/${{ github.repository }}/$service:$SHORT_SHA"
             ECR_IMAGE="${{ env.ECR_REGISTRY }}/lons-$service:$SHORT_SHA"
 
@@ -412,7 +412,7 @@ jobs:
       - name: Retag and push images to ECR
         run: |
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
-          for service in graphql-server rest-server scheduler notification-worker admin-portal scoring-service; do
+          for service in graphql-server rest-server scheduler notification-worker admin-portal platform-portal scoring-service; do
             GHCR_IMAGE="ghcr.io/${{ github.repository }}/$service:$SHORT_SHA"
             ECR_IMAGE="${{ env.ECR_REGISTRY }}/lons-$service:$SHORT_SHA"
 

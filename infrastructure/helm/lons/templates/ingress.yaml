@@ -29,6 +29,9 @@ spec:
         {{- if .Values.adminPortal.enabled }}
         - {{ .Values.adminPortal.host | quote }}
         {{- end }}
+        {{- if .Values.platformPortal.enabled }}
+        - {{ .Values.platformPortal.host | quote }}
+        {{- end }}
       secretName: {{ .Values.ingress.tls.secretName }}
   {{- end }}
   rules:
@@ -55,5 +58,17 @@ spec:
                 name: {{ include "lons.fullname" . }}-admin-portal
                 port:
                   number: {{ .Values.adminPortal.port }}
+    {{- end }}
+    {{- if .Values.platformPortal.enabled }}
+    - host: {{ .Values.platformPortal.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "lons.fullname" . }}-platform-portal
+                port:
+                  number: {{ .Values.platformPortal.port }}
     {{- end }}
 {{- end }}

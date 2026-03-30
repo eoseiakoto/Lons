@@ -113,6 +113,9 @@ jobs:
           - name: admin-portal
             context: .
             dockerfile: infrastructure/docker/admin-portal.Dockerfile
+          - name: platform-portal
+            context: .
+            dockerfile: infrastructure/docker/platform-portal.Dockerfile
           - name: scoring-service
             context: services/scoring-service
             dockerfile: services/scoring-service/Dockerfile

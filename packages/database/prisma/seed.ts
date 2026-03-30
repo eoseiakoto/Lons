@@ -1520,21 +1520,7 @@ async function seedStagingData(p: PrismaClient) {
   // -----------------------------------------------------------------------
   // 1. Platform Admin for staging
   // -----------------------------------------------------------------------
-  console.log('[STG 1/9] Creating staging platform admin...');
-  const stagingAdminHash = await hashPassword('StagingAdmin123!@#');
-  await p.platformUser.upsert({
-    where: { email: 'superadmin@lons.io' },
-    update: { passwordHash: stagingAdminHash },
-    create: {
-      email: 'superadmin@lons.io',
-      passwordHash: stagingAdminHash,
-      name: 'Staging Super Admin',
-      role: 'platform_admin',
-      mfaEnabled: false,
-      status: 'active',
-    },
-  });
-  console.log('  Created superadmin@lons.io');
+  console.log('[STG 1/9] Platform admin (admin@lons.io) already created by base seed...');
 
   // -----------------------------------------------------------------------
   // Loop SPs
