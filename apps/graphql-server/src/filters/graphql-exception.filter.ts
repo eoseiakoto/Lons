@@ -1,10 +1,12 @@
-import { Catch, ArgumentsHost, HttpException } from '@nestjs/common';
+import { Catch, ArgumentsHost, HttpException, Logger } from '@nestjs/common';
 import { GqlExceptionFilter } from '@nestjs/graphql';
 import { LonsBaseError } from '@lons/common';
 import { GraphQLError } from 'graphql';
 
 @Catch()
 export class GraphqlExceptionFilter implements GqlExceptionFilter {
+  private readonly logger = new Logger(GraphqlExceptionFilter.name);
+
   catch(exception: unknown, _host: ArgumentsHost) {
     if (exception instanceof LonsBaseError) {
       return new GraphQLError(exception.message, {
@@ -29,6 +31,12 @@ export class GraphqlExceptionFilter implements GqlExceptionFilter {
         },
       });
     }
+
+    // Log the actual error so we can diagnose "Internal server error" responses
+    this.logger.error(
+      'Unhandled exception in GraphQL resolver',
+      exception instanceof Error ? exception.stack : String(exception),
+    );
 
     return new GraphQLError('Internal server error', {
       extensions: { code: 'INTERNAL_ERROR' },

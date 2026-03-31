@@ -3,6 +3,7 @@ import { PrismaService, NotificationChannel, NotificationStatus } from '@lons/da
 
 import { NotificationService } from './notification.service';
 import { ConsoleNotificationAdapter } from './adapters/console-notification.adapter';
+import { NotificationAdapterResolver } from './adapters/notification-adapter-resolver.service';
 import { renderTemplate, NOTIFICATION_TEMPLATES } from './templates/template-renderer';
 
 describe('NotificationService', () => {
@@ -43,6 +44,10 @@ describe('NotificationService', () => {
   };
 
   beforeEach(async () => {
+    adapter = {
+      send: jest.fn().mockResolvedValue(mockNotification),
+    } as any;
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NotificationService,
@@ -58,9 +63,9 @@ describe('NotificationService', () => {
           },
         },
         {
-          provide: ConsoleNotificationAdapter,
+          provide: NotificationAdapterResolver,
           useValue: {
-            send: jest.fn().mockResolvedValue(mockNotification),
+            resolve: jest.fn().mockResolvedValue(adapter),
           },
         },
       ],
@@ -68,7 +73,6 @@ describe('NotificationService', () => {
 
     service = module.get<NotificationService>(NotificationService);
     prisma = module.get<PrismaService>(PrismaService);
-    adapter = module.get<ConsoleNotificationAdapter>(ConsoleNotificationAdapter);
   });
 
   describe('Template Rendering', () => {

@@ -30,6 +30,8 @@ export class NotificationService {
       select: { phonePrimary: true, email: true },
     });
 
+    if (!customer) return null;
+
     const recipient = channel === 'email' ? (customer?.email || '') : (customer?.phonePrimary || '');
 
     // Resolve the correct adapter for this tenant + channel

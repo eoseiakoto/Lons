@@ -1,4 +1,5 @@
 import { Test } from '@nestjs/testing';
+import { PrismaService } from '@lons/database';
 import { NotificationTemplateService } from '../notification-template.service';
 
 const mockPrisma = {
@@ -16,18 +17,14 @@ describe('NotificationTemplateService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
 
-    await Test.createTestingModule({
+    const module = await Test.createTestingModule({
       providers: [
         NotificationTemplateService,
-        { provide: 'PrismaService', useValue: mockPrisma },
+        { provide: PrismaService, useValue: mockPrisma },
       ],
-    })
-      .overrideProvider('PrismaService')
-      .useValue(mockPrisma)
-      .compile();
+    }).compile();
 
-    // Manually instantiate to inject mock
-    service = new NotificationTemplateService(mockPrisma as any);
+    service = module.get<NotificationTemplateService>(NotificationTemplateService);
   });
 
   const tenantId = '11111111-1111-1111-1111-111111111111';

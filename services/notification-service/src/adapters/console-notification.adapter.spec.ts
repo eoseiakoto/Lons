@@ -121,7 +121,7 @@ describe('ConsoleNotificationAdapter', () => {
 
       expect(prisma.notification.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          contractId: 'contract-456',
+          contract: { connect: { id: 'contract-456' } },
         }),
       });
     });
@@ -155,7 +155,7 @@ describe('ConsoleNotificationAdapter', () => {
 
       expect(masked).not.toBe(email);
       expect(masked).toContain('***');
-      expect(masked).toMatch(/j\*\*\*@example\.com/);
+      expect(masked).toMatch(/jo\*\*\*@example\.com/);
     });
 
     it('should mask phone for SMS notifications', async () => {
@@ -365,14 +365,14 @@ describe('ConsoleNotificationAdapter', () => {
       expect(prisma.notification.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
           tenantId,
-          customerId,
-          contractId,
           eventType: 'test_event',
           channel: 'sms',
           recipient: '+233123456789',
           content: 'Test content',
           status: NotificationStatus.sent,
           sentAt: expect.any(Date),
+          customer: { connect: { id: customerId } },
+          contract: { connect: { id: contractId } },
         }),
       });
     });

@@ -195,7 +195,7 @@ describe('JwtService', () => {
 
       beforeExpiry.mockRestore();
 
-      expect(() => service.verifyToken(token)).not.toThrow('Token expired');
+      expect(() => service.verifyToken(token)).toThrow('Token expired');
     });
 
     it('should throw error for malformed token', () => {
