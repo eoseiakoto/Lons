@@ -4,7 +4,7 @@ Tests the complete flow: scorecard creation -> model training -> registry
 verification -> scoring with trained model -> dual-model execution ->
 drift detection. All monetary amounts are validated as strings.
 
-Uses the synchronous httpx TestClient to avoid requiring anyio/pytest-asyncio.
+Uses Starlette's TestClient (bundled with FastAPI) for synchronous ASGI testing.
 """
 
 import uuid
@@ -15,19 +15,16 @@ import pytest
 # Skip all tests in this module if xgboost is not available
 xgb = pytest.importorskip("xgboost")
 
-from httpx import ASGITransport, Client
+from starlette.testclient import TestClient
 
 from app.main import app
 
 TENANT_ID = f"e2e-tenant-{uuid.uuid4().hex[:8]}"
 
-# Use a synchronous transport for tests
-_transport = ASGITransport(app=app)  # type: ignore[arg-type]
-
 
 @pytest.fixture(scope="module")
 def client():
-    with Client(transport=_transport, base_url="http://test") as c:
+    with TestClient(app) as c:
         yield c
 
 
@@ -54,7 +51,7 @@ def _generate_training_data(n_samples: int = 200) -> list[dict]:
 # 1. Health Endpoint
 # ---------------------------------------------------------------------------
 
-def test_health_endpoint(client: Client):
+def test_health_endpoint(client: TestClient):
     """Verify the health endpoint returns ok."""
     resp = client.get("/health")
     assert resp.status_code == 200
@@ -66,7 +63,7 @@ def test_health_endpoint(client: Client):
 # 2. Scorecard Configuration
 # ---------------------------------------------------------------------------
 
-def test_create_scorecard(client: Client):
+def test_create_scorecard(client: TestClient):
     """Create a scorecard configuration for the test tenant."""
     payload = {
         "tenant_id": TENANT_ID,
@@ -106,7 +103,7 @@ def test_create_scorecard(client: Client):
     assert len(body["factors"]) == 2
 
 
-def test_list_scorecards(client: Client):
+def test_list_scorecards(client: TestClient):
     """Verify the scorecard appears in the tenant listing."""
     resp = client.get("/scorecards", params={"tenant_id": TENANT_ID})
     assert resp.status_code == 200
@@ -120,7 +117,7 @@ def test_list_scorecards(client: Client):
 # 3. Model Training
 # ---------------------------------------------------------------------------
 
-def test_train_model(client: Client):
+def test_train_model(client: TestClient):
     """Train a model with synthetic data and verify completion."""
     training_data = _generate_training_data(200)
     payload = {
@@ -151,7 +148,7 @@ def test_train_model(client: Client):
 # 4. Model Registry Verification
 # ---------------------------------------------------------------------------
 
-def test_model_in_registry(client: Client):
+def test_model_in_registry(client: TestClient):
     """Verify the trained model appears in the registry with status active."""
     resp = client.get("/models", params={"tenant_id": TENANT_ID})
     assert resp.status_code == 200
@@ -170,7 +167,7 @@ def test_model_in_registry(client: Client):
     assert len(model["feature_list"]) > 0
 
 
-def test_model_detail(client: Client):
+def test_model_detail(client: TestClient):
     """Retrieve model detail and verify metadata structure."""
     resp = client.get("/models", params={"tenant_id": TENANT_ID})
     models = resp.json()["models"]
@@ -191,7 +188,7 @@ def test_model_detail(client: Client):
 # 5. Score with Trained ML Model
 # ---------------------------------------------------------------------------
 
-def test_score_with_ml_model(client: Client):
+def test_score_with_ml_model(client: TestClient):
     """Score a customer using the trained ML model."""
     payload = {
         "customer_id": "cust-e2e-001",
@@ -234,7 +231,7 @@ def test_score_with_ml_model(client: Client):
 # 6. Dual-Model Execution (Rule + ML)
 # ---------------------------------------------------------------------------
 
-def test_dual_model_rule_only(client: Client):
+def test_dual_model_rule_only(client: TestClient):
     """Score with rule_only strategy: ML model should not be invoked."""
     payload = {
         "customer_id": "cust-e2e-002",
@@ -257,7 +254,7 @@ def test_dual_model_rule_only(client: Client):
     assert isinstance(body["recommended_limit"], str)
 
 
-def test_dual_model_higher(client: Client):
+def test_dual_model_higher(client: TestClient):
     """Score with 'higher' strategy: picks the higher of rule vs ML."""
     payload = {
         "customer_id": "cust-e2e-003",
@@ -280,7 +277,7 @@ def test_dual_model_higher(client: Client):
     assert isinstance(body["recommended_limit"], str)
 
 
-def test_dual_model_lower(client: Client):
+def test_dual_model_lower(client: TestClient):
     """Score with 'lower' strategy: picks the lower of rule vs ML."""
     payload = {
         "customer_id": "cust-e2e-004",
@@ -303,7 +300,7 @@ def test_dual_model_lower(client: Client):
     assert isinstance(body["recommended_limit"], str)
 
 
-def test_dual_model_weighted_average(client: Client):
+def test_dual_model_weighted_average(client: TestClient):
     """Score with 'weighted_average' strategy: blends rule and ML."""
     payload = {
         "customer_id": "cust-e2e-005",
@@ -331,7 +328,7 @@ def test_dual_model_weighted_average(client: Client):
 # 7. Model Metadata After Scoring
 # ---------------------------------------------------------------------------
 
-def test_model_metadata_after_scoring(client: Client):
+def test_model_metadata_after_scoring(client: TestClient):
     """Verify model metadata still correct after multiple scoring requests."""
     resp = client.get("/models", params={"tenant_id": TENANT_ID})
     assert resp.status_code == 200
@@ -342,7 +339,7 @@ def test_model_metadata_after_scoring(client: Client):
     assert model["num_training_samples"] == 200
 
 
-def test_promote_model_to_champion(client: Client):
+def test_promote_model_to_champion(client: TestClient):
     """Promote a model to champion status and verify."""
     resp = client.get("/models", params={"tenant_id": TENANT_ID})
     model_id = resp.json()["models"][0]["model_id"]
@@ -362,7 +359,7 @@ def test_promote_model_to_champion(client: Client):
 # 8. Drift Detection Report
 # ---------------------------------------------------------------------------
 
-def test_drift_detection_report(client: Client):
+def test_drift_detection_report(client: TestClient):
     """Verify drift detection report structure for a trained model."""
     resp = client.get("/models", params={"tenant_id": TENANT_ID})
     model_id = resp.json()["models"][0]["model_id"]
@@ -400,7 +397,7 @@ def test_drift_detection_report(client: Client):
 # 9. Monetary Amount String Validation (cross-cutting)
 # ---------------------------------------------------------------------------
 
-def test_all_monetary_amounts_are_strings(client: Client):
+def test_all_monetary_amounts_are_strings(client: TestClient):
     """Verify that recommended_limit is always a string across strategies."""
     strategies = ["rule_only", "ml_only", "higher", "lower", "weighted_average"]
     for strategy in strategies:
@@ -430,7 +427,7 @@ def test_all_monetary_amounts_are_strings(client: Client):
 # 10. Tenant Isolation
 # ---------------------------------------------------------------------------
 
-def test_tenant_isolation(client: Client):
+def test_tenant_isolation(client: TestClient):
     """Models from one tenant should not be visible to another."""
     other_tenant = f"other-tenant-{uuid.uuid4().hex[:8]}"
     resp = client.get("/models", params={"tenant_id": other_tenant})
