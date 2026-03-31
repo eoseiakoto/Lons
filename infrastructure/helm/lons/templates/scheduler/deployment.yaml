@@ -91,5 +91,4 @@ spec:
   minAvailable: 1
   selector:
     matchLabels:
-      {{- include "lons.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: scheduler
+      {{- include "lons.selectorLabels" (dict "context" . "component" "scheduler") | nindent 6 }}

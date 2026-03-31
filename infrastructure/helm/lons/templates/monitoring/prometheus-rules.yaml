@@ -23,8 +23,8 @@ spec:
             team: platform
             component: infrastructure
           annotations:
-            summary: "Pod {{ $labels.pod }} CPU usage is critical ({{ $value | humanizePercentage }})"
-            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has CPU usage above 95% for more than 2 minutes."
+            summary: "Pod {{"{{" }} $labels.pod {{ "}}" }} CPU usage is critical ({{"{{" }} $value | humanizePercentage {{ "}}" }})"
+            description: "Pod {{"{{" }} $labels.pod {{ "}}" }} in namespace {{"{{" }} $labels.namespace {{ "}}" }} has CPU usage above 95% for more than 2 minutes."
             runbook_url: "https://docs.lons.io/runbooks/HighCPUUsage"
 
         - alert: HighCPUUsage
@@ -37,8 +37,8 @@ spec:
             team: platform
             component: infrastructure
           annotations:
-            summary: "Pod {{ $labels.pod }} CPU usage is high ({{ $value | humanizePercentage }})"
-            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has CPU usage above 80% for more than 5 minutes."
+            summary: "Pod {{"{{" }} $labels.pod {{ "}}" }} CPU usage is high ({{"{{" }} $value | humanizePercentage {{ "}}" }})"
+            description: "Pod {{"{{" }} $labels.pod {{ "}}" }} in namespace {{"{{" }} $labels.namespace {{ "}}" }} has CPU usage above 80% for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/HighCPUUsage"
 
         - alert: HighMemoryUsage
@@ -51,8 +51,8 @@ spec:
             team: platform
             component: infrastructure
           annotations:
-            summary: "Pod {{ $labels.pod }} memory usage is critical ({{ $value | humanizePercentage }})"
-            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has memory usage above 95% for more than 2 minutes."
+            summary: "Pod {{"{{" }} $labels.pod {{ "}}" }} memory usage is critical ({{"{{" }} $value | humanizePercentage {{ "}}" }})"
+            description: "Pod {{"{{" }} $labels.pod {{ "}}" }} in namespace {{"{{" }} $labels.namespace {{ "}}" }} has memory usage above 95% for more than 2 minutes."
             runbook_url: "https://docs.lons.io/runbooks/HighMemoryUsage"
 
         - alert: HighMemoryUsage
@@ -65,8 +65,8 @@ spec:
             team: platform
             component: infrastructure
           annotations:
-            summary: "Pod {{ $labels.pod }} memory usage is high ({{ $value | humanizePercentage }})"
-            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has memory usage above 85% for more than 5 minutes."
+            summary: "Pod {{"{{" }} $labels.pod {{ "}}" }} memory usage is high ({{"{{" }} $value | humanizePercentage {{ "}}" }})"
+            description: "Pod {{"{{" }} $labels.pod {{ "}}" }} in namespace {{"{{" }} $labels.namespace {{ "}}" }} has memory usage above 85% for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/HighMemoryUsage"
 
         - alert: PodCrashLooping
@@ -78,8 +78,8 @@ spec:
             team: platform
             component: infrastructure
           annotations:
-            summary: "Pod {{ $labels.pod }} is crash looping"
-            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has restarted more than 3 times in the last 15 minutes."
+            summary: "Pod {{"{{" }} $labels.pod {{ "}}" }} is crash looping"
+            description: "Pod {{"{{" }} $labels.pod {{ "}}" }} in namespace {{"{{" }} $labels.namespace {{ "}}" }} has restarted more than 3 times in the last 15 minutes."
             runbook_url: "https://docs.lons.io/runbooks/PodCrashLooping"
 
         - alert: PodNotReady
@@ -91,8 +91,8 @@ spec:
             team: platform
             component: infrastructure
           annotations:
-            summary: "Pod {{ $labels.pod }} is not ready"
-            description: "Pod {{ $labels.pod }} in namespace {{ $labels.namespace }} has been in a non-ready state for more than 5 minutes."
+            summary: "Pod {{"{{" }} $labels.pod {{ "}}" }} is not ready"
+            description: "Pod {{"{{" }} $labels.pod {{ "}}" }} in namespace {{"{{" }} $labels.namespace {{ "}}" }} has been in a non-ready state for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/PodNotReady"
 
         - alert: DiskUsageHigh
@@ -104,8 +104,8 @@ spec:
             team: platform
             component: infrastructure
           annotations:
-            summary: "Node {{ $labels.node }} disk usage is critical ({{ $value | humanizePercentage }})"
-            description: "Node {{ $labels.node }} has disk usage above 90% for more than 5 minutes."
+            summary: "Node {{"{{" }} $labels.node {{ "}}" }} disk usage is critical ({{"{{" }} $value | humanizePercentage {{ "}}" }})"
+            description: "Node {{"{{" }} $labels.node {{ "}}" }} has disk usage above 90% for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/DiskUsageHigh"
 
         - alert: DiskUsageHigh
@@ -117,8 +117,8 @@ spec:
             team: platform
             component: infrastructure
           annotations:
-            summary: "Node {{ $labels.node }} disk usage is high ({{ $value | humanizePercentage }})"
-            description: "Node {{ $labels.node }} has disk usage above 80% for more than 10 minutes."
+            summary: "Node {{"{{" }} $labels.node {{ "}}" }} disk usage is high ({{"{{" }} $value | humanizePercentage {{ "}}" }})"
+            description: "Node {{"{{" }} $labels.node {{ "}}" }} has disk usage above 80% for more than 10 minutes."
             runbook_url: "https://docs.lons.io/runbooks/DiskUsageHigh"
 
         - alert: NodeNotReady
@@ -130,8 +130,8 @@ spec:
             team: platform
             component: infrastructure
           annotations:
-            summary: "Node {{ $labels.node }} is not ready"
-            description: "Node {{ $labels.node }} has been in NotReady state for more than 5 minutes."
+            summary: "Node {{"{{" }} $labels.node {{ "}}" }} is not ready"
+            description: "Node {{"{{" }} $labels.node {{ "}}" }} has been in NotReady state for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/NodeNotReady"
 
     # Database Alerts
@@ -147,8 +147,8 @@ spec:
             team: data
             component: database
           annotations:
-            summary: "RDS {{ $labels.DBInstanceIdentifier }} has high connection usage ({{ $value | humanizePercentage }})"
-            description: "RDS instance {{ $labels.DBInstanceIdentifier }} has connection usage above 80% of max for more than 5 minutes."
+            summary: "RDS {{"{{" }} $labels.DBInstanceIdentifier {{ "}}" }} has high connection usage ({{"{{" }} $value | humanizePercentage {{ "}}" }})"
+            description: "RDS instance {{"{{" }} $labels.DBInstanceIdentifier {{ "}}" }} has connection usage above 80% of max for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/RDSHighConnections"
 
         - alert: RDSReplicationLag
@@ -160,8 +160,8 @@ spec:
             team: data
             component: database
           annotations:
-            summary: "RDS {{ $labels.DBInstanceIdentifier }} replication lag is critical ({{ $value }}s)"
-            description: "RDS read replica {{ $labels.DBInstanceIdentifier }} has replication lag above 30 seconds for more than 2 minutes."
+            summary: "RDS {{"{{" }} $labels.DBInstanceIdentifier {{ "}}" }} replication lag is critical ({{"{{" }} $value {{ "}}" }}s)"
+            description: "RDS read replica {{"{{" }} $labels.DBInstanceIdentifier {{ "}}" }} has replication lag above 30 seconds for more than 2 minutes."
             runbook_url: "https://docs.lons.io/runbooks/RDSReplicationLag"
 
         - alert: RDSReplicationLag
@@ -173,8 +173,8 @@ spec:
             team: data
             component: database
           annotations:
-            summary: "RDS {{ $labels.DBInstanceIdentifier }} replication lag is elevated ({{ $value }}s)"
-            description: "RDS read replica {{ $labels.DBInstanceIdentifier }} has replication lag above 10 seconds for more than 5 minutes."
+            summary: "RDS {{"{{" }} $labels.DBInstanceIdentifier {{ "}}" }} replication lag is elevated ({{"{{" }} $value {{ "}}" }}s)"
+            description: "RDS read replica {{"{{" }} $labels.DBInstanceIdentifier {{ "}}" }} has replication lag above 10 seconds for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/RDSReplicationLag"
 
         - alert: SlowQueryDetected
@@ -186,8 +186,8 @@ spec:
             team: data
             component: database
           annotations:
-            summary: "Slow queries detected in {{ $labels.db }}"
-            description: "Database {{ $labels.db }} has queries with mean execution time above 1 second for more than 5 minutes."
+            summary: "Slow queries detected in {{"{{" }} $labels.db {{ "}}" }}"
+            description: "Database {{"{{" }} $labels.db {{ "}}" }} has queries with mean execution time above 1 second for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/SlowQueryDetected"
 
         - alert: RDSStorageUsage
@@ -199,8 +199,8 @@ spec:
             team: data
             component: database
           annotations:
-            summary: "RDS {{ $labels.DBInstanceIdentifier }} storage usage is critical ({{ $value | humanizePercentage }})"
-            description: "RDS instance {{ $labels.DBInstanceIdentifier }} has free storage below 10% for more than 5 minutes."
+            summary: "RDS {{"{{" }} $labels.DBInstanceIdentifier {{ "}}" }} storage usage is critical ({{"{{" }} $value | humanizePercentage {{ "}}" }})"
+            description: "RDS instance {{"{{" }} $labels.DBInstanceIdentifier {{ "}}" }} has free storage below 10% for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/RDSStorageUsage"
 
         - alert: RDSStorageUsage
@@ -212,8 +212,8 @@ spec:
             team: data
             component: database
           annotations:
-            summary: "RDS {{ $labels.DBInstanceIdentifier }} storage usage is high ({{ $value | humanizePercentage }})"
-            description: "RDS instance {{ $labels.DBInstanceIdentifier }} has free storage below 20% for more than 10 minutes."
+            summary: "RDS {{"{{" }} $labels.DBInstanceIdentifier {{ "}}" }} storage usage is high ({{"{{" }} $value | humanizePercentage {{ "}}" }})"
+            description: "RDS instance {{"{{" }} $labels.DBInstanceIdentifier {{ "}}" }} has free storage below 20% for more than 10 minutes."
             runbook_url: "https://docs.lons.io/runbooks/RDSStorageUsage"
 
         - alert: RDSCPUHigh
@@ -225,8 +225,8 @@ spec:
             team: data
             component: database
           annotations:
-            summary: "RDS {{ $labels.DBInstanceIdentifier }} CPU usage is high ({{ $value }}%)"
-            description: "RDS instance {{ $labels.DBInstanceIdentifier }} has CPU usage above 80% for more than 10 minutes."
+            summary: "RDS {{"{{" }} $labels.DBInstanceIdentifier {{ "}}" }} CPU usage is high ({{"{{" }} $value {{ "}}" }}%)"
+            description: "RDS instance {{"{{" }} $labels.DBInstanceIdentifier {{ "}}" }} has CPU usage above 80% for more than 10 minutes."
             runbook_url: "https://docs.lons.io/runbooks/RDSCPUHigh"
 
     # Redis Alerts
@@ -242,8 +242,8 @@ spec:
             team: data
             component: redis
           annotations:
-            summary: "Redis {{ $labels.instance }} memory usage is high ({{ $value | humanizePercentage }})"
-            description: "Redis instance {{ $labels.instance }} has memory usage above 80% for more than 5 minutes."
+            summary: "Redis {{"{{" }} $labels.instance {{ "}}" }} memory usage is high ({{"{{" }} $value | humanizePercentage {{ "}}" }})"
+            description: "Redis instance {{"{{" }} $labels.instance {{ "}}" }} has memory usage above 80% for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/RedisHighMemory"
 
         - alert: RedisConnectionsHigh
@@ -255,8 +255,8 @@ spec:
             team: data
             component: redis
           annotations:
-            summary: "Redis {{ $labels.instance }} connection usage is high ({{ $value | humanizePercentage }})"
-            description: "Redis instance {{ $labels.instance }} has connection usage above 80% of max for more than 5 minutes."
+            summary: "Redis {{"{{" }} $labels.instance {{ "}}" }} connection usage is high ({{"{{" }} $value | humanizePercentage {{ "}}" }})"
+            description: "Redis instance {{"{{" }} $labels.instance {{ "}}" }} has connection usage above 80% of max for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/RedisConnectionsHigh"
 
         - alert: RedisReplicationBroken
@@ -268,8 +268,8 @@ spec:
             team: data
             component: redis
           annotations:
-            summary: "Redis {{ $labels.instance }} replication is broken"
-            description: "Redis instance {{ $labels.instance }} has no connected replicas for more than 2 minutes."
+            summary: "Redis {{"{{" }} $labels.instance {{ "}}" }} replication is broken"
+            description: "Redis instance {{"{{" }} $labels.instance {{ "}}" }} has no connected replicas for more than 2 minutes."
             runbook_url: "https://docs.lons.io/runbooks/RedisReplicationBroken"
 
         - alert: BullMQQueueBacklog
@@ -281,8 +281,8 @@ spec:
             team: platform
             component: queue
           annotations:
-            summary: "BullMQ queue {{ $labels.queue }} backlog is critical ({{ $value }} jobs)"
-            description: "BullMQ queue {{ $labels.queue }} has more than 5000 pending jobs for more than 2 minutes."
+            summary: "BullMQ queue {{"{{" }} $labels.queue {{ "}}" }} backlog is critical ({{"{{" }} $value {{ "}}" }} jobs)"
+            description: "BullMQ queue {{"{{" }} $labels.queue {{ "}}" }} has more than 5000 pending jobs for more than 2 minutes."
             runbook_url: "https://docs.lons.io/runbooks/BullMQQueueBacklog"
 
         - alert: BullMQQueueBacklog
@@ -294,8 +294,8 @@ spec:
             team: platform
             component: queue
           annotations:
-            summary: "BullMQ queue {{ $labels.queue }} backlog is elevated ({{ $value }} jobs)"
-            description: "BullMQ queue {{ $labels.queue }} has more than 1000 pending jobs for more than 5 minutes."
+            summary: "BullMQ queue {{"{{" }} $labels.queue {{ "}}" }} backlog is elevated ({{"{{" }} $value {{ "}}" }} jobs)"
+            description: "BullMQ queue {{"{{" }} $labels.queue {{ "}}" }} has more than 1000 pending jobs for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/BullMQQueueBacklog"
 
     # Application / Business Alerts
@@ -311,7 +311,7 @@ spec:
             team: platform
             component: api
           annotations:
-            summary: "API error rate is critical ({{ $value | humanizePercentage }})"
+            summary: "API error rate is critical ({{"{{" }} $value | humanizePercentage {{ "}}" }})"
             description: "API error rate (5xx responses) has been above 10% for more than 2 minutes."
             runbook_url: "https://docs.lons.io/runbooks/HighErrorRate"
 
@@ -324,7 +324,7 @@ spec:
             team: platform
             component: api
           annotations:
-            summary: "API error rate is elevated ({{ $value | humanizePercentage }})"
+            summary: "API error rate is elevated ({{"{{" }} $value | humanizePercentage {{ "}}" }})"
             description: "API error rate (5xx responses) has been above 5% for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/HighErrorRate"
 
@@ -337,7 +337,7 @@ spec:
             team: platform
             component: api
           annotations:
-            summary: "API P95 latency is critical ({{ $value }}s)"
+            summary: "API P95 latency is critical ({{"{{" }} $value {{ "}}" }}s)"
             description: "API P95 latency has been above 5 seconds for more than 2 minutes."
             runbook_url: "https://docs.lons.io/runbooks/HighLatencyP95"
 
@@ -350,7 +350,7 @@ spec:
             team: platform
             component: api
           annotations:
-            summary: "API P95 latency is elevated ({{ $value }}s)"
+            summary: "API P95 latency is elevated ({{"{{" }} $value {{ "}}" }}s)"
             description: "API P95 latency has been above 2 seconds for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/HighLatencyP95"
 
@@ -363,7 +363,7 @@ spec:
             team: platform
             component: disbursement
           annotations:
-            summary: "Disbursement failure rate is critical ({{ $value | humanizePercentage }})"
+            summary: "Disbursement failure rate is critical ({{"{{" }} $value | humanizePercentage {{ "}}" }})"
             description: "Disbursement process has failure rate above 5% for more than 10 minutes."
             runbook_url: "https://docs.lons.io/runbooks/DisbursementFailureRate"
 
@@ -376,7 +376,7 @@ spec:
             team: data
             component: reconciliation
           annotations:
-            summary: "Unresolved reconciliation exceptions ({{ $value }})"
+            summary: "Unresolved reconciliation exceptions ({{"{{" }} $value {{ "}}" }})"
             description: "There are more than 50 unresolved reconciliation exceptions for more than 1 hour."
             runbook_url: "https://docs.lons.io/runbooks/ReconciliationExceptions"
 
@@ -389,7 +389,7 @@ spec:
             team: platform
             component: scoring
           annotations:
-            summary: "Scoring service timeouts elevated ({{ $value | humanizePercentage }})"
+            summary: "Scoring service timeouts elevated ({{"{{" }} $value | humanizePercentage {{ "}}" }})"
             description: "Scoring service has timeout rate above 10% for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/ScoringServiceTimeout"
 
@@ -402,8 +402,8 @@ spec:
             team: platform
             component: integration
           annotations:
-            summary: "Integration adapter {{ $labels.adapter }} is down"
-            description: "Integration adapter {{ $labels.adapter }} health check has been failing for more than 3 minutes."
+            summary: "Integration adapter {{"{{" }} $labels.adapter {{ "}}" }} is down"
+            description: "Integration adapter {{"{{" }} $labels.adapter {{ "}}" }} health check has been failing for more than 3 minutes."
             runbook_url: "https://docs.lons.io/runbooks/IntegrationOutage"
 
         - alert: HighOverdueRate
@@ -415,7 +415,7 @@ spec:
             team: platform
             component: collections
           annotations:
-            summary: "Portfolio Arrears Rate (PAR) is elevated ({{ $value | humanizePercentage }})"
+            summary: "Portfolio Arrears Rate (PAR) is elevated ({{"{{" }} $value | humanizePercentage {{ "}}" }})"
             description: "Portfolio has overdue contracts above 20% of active contracts for more than 1 hour."
             runbook_url: "https://docs.lons.io/runbooks/HighOverdueRate"
 
@@ -432,7 +432,7 @@ spec:
             team: security
             component: auth
           annotations:
-            summary: "Unauthorized access spike detected ({{ $value }}/sec)"
+            summary: "Unauthorized access spike detected ({{"{{" }} $value {{ "}}" }}/sec)"
             description: "Rate of 401/403 responses has been above 50/min for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/UnauthorizedAccessSpike"
 
@@ -445,7 +445,7 @@ spec:
             team: security
             component: rate-limit
           annotations:
-            summary: "API rate limit exceeded ({{ $value }}/sec)"
+            summary: "API rate limit exceeded ({{"{{" }} $value {{ "}}" }}/sec)"
             description: "Rate of 429 responses has been above 100/min for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/APIRateLimitExceeded"
 
@@ -458,7 +458,7 @@ spec:
             team: security
             component: auth
           annotations:
-            summary: "Suspicious login attempt spike ({{ $value }}/sec)"
+            summary: "Suspicious login attempt spike ({{"{{" }} $value {{ "}}" }}/sec)"
             description: "Rate of failed login attempts has been above 20/min for more than 5 minutes."
             runbook_url: "https://docs.lons.io/runbooks/SuspiciousLoginAttempts"
 {{- end }}

@@ -224,7 +224,7 @@ data:
             "targets": [
               {
                 "expr": "sum by (tenant_id) (lons_contracts_active_total{tenant_id=~\"$tenant_id\",env=~\"$environment\"})",
-                "legendFormat": "{{ tenant_id }}"
+                "legendFormat": "{{ "{{" }} tenant_id {{ "}}" }}"
               }
             ]
           },
@@ -241,7 +241,7 @@ data:
             "targets": [
               {
                 "expr": "sum by (tenant_id) (increase(lons_disbursement_amount_total{tenant_id=~\"$tenant_id\",env=~\"$environment\"}[1h]))",
-                "legendFormat": "{{ tenant_id }}"
+                "legendFormat": "{{ "{{" }} tenant_id {{ "}}" }}"
               }
             ]
           },
@@ -258,7 +258,7 @@ data:
             "targets": [
               {
                 "expr": "sum by (tenant_id) (lons_repayment_collected_total{tenant_id=~\"$tenant_id\",env=~\"$environment\"}) / sum by (tenant_id) (lons_repayment_due_total{tenant_id=~\"$tenant_id\",env=~\"$environment\"})",
-                "legendFormat": "{{ tenant_id }}"
+                "legendFormat": "{{ "{{" }} tenant_id {{ "}}" }}"
               }
             ]
           },
@@ -275,7 +275,7 @@ data:
             "targets": [
               {
                 "expr": "sum by (tenant_id) (lons_contracts_overdue_total{tenant_id=~\"$tenant_id\",env=~\"$environment\"}) / sum by (tenant_id) (lons_contracts_active_total{tenant_id=~\"$tenant_id\",env=~\"$environment\"})",
-                "legendFormat": "{{ tenant_id }}"
+                "legendFormat": "{{ "{{" }} tenant_id {{ "}}" }}"
               }
             ]
           },
@@ -292,7 +292,7 @@ data:
             "targets": [
               {
                 "expr": "sum by (tenant_id) (rate(http_requests_total{tenant_id=~\"$tenant_id\",env=~\"$environment\"}[5m]))",
-                "legendFormat": "{{ tenant_id }}"
+                "legendFormat": "{{ "{{" }} tenant_id {{ "}}" }}"
               }
             ]
           }
@@ -354,7 +354,7 @@ data:
             "targets": [
               {
                 "expr": "lons_integration_health_status{adapter=~\"$adapter\",env=~\"$environment\"}",
-                "legendFormat": "{{ adapter }}"
+                "legendFormat": "{{ "{{" }} adapter {{ "}}" }}"
               }
             ]
           },
@@ -371,7 +371,7 @@ data:
             "targets": [
               {
                 "expr": "histogram_quantile(0.95, sum(rate(lons_wallet_request_duration_seconds_bucket{adapter=~\"$adapter\",env=~\"$environment\"}[5m])) by (le, adapter))",
-                "legendFormat": "{{ adapter }} P95"
+                "legendFormat": "{{ "{{" }} adapter {{ "}}" }} P95"
               }
             ]
           },
@@ -422,7 +422,7 @@ data:
             "targets": [
               {
                 "expr": "sum by (adapter) (rate(lons_integration_errors_total{adapter=~\"$adapter\",env=~\"$environment\"}[5m]))",
-                "legendFormat": "{{ adapter }}"
+                "legendFormat": "{{ "{{" }} adapter {{ "}}" }}"
               }
             ]
           },
@@ -439,7 +439,7 @@ data:
             "targets": [
               {
                 "expr": "lons_circuit_breaker_state{adapter=~\"$adapter\",env=~\"$environment\"}",
-                "legendFormat": "{{ adapter }}"
+                "legendFormat": "{{ "{{" }} adapter {{ "}}" }}"
               }
             ]
           }
