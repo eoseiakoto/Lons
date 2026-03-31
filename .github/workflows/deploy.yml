@@ -68,14 +68,16 @@ jobs:
       - name: Retag and push images to ECR
         run: |
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          IMAGE_TAG="sha-${SHORT_SHA}"
           for service in graphql-server rest-server scheduler notification-worker admin-portal platform-portal scoring-service; do
-            GHCR_IMAGE="ghcr.io/${{ github.repository }}/$service:$SHORT_SHA"
-            ECR_IMAGE="${{ env.ECR_REGISTRY }}/lons-$service:$SHORT_SHA"
+            GHCR_IMAGE="ghcr.io/${{ github.repository }}/$service:${IMAGE_TAG}"
+            ECR_IMAGE="${{ env.ECR_REGISTRY }}/lons-$service:${IMAGE_TAG}"
 
             docker pull $GHCR_IMAGE || true
             docker tag $GHCR_IMAGE $ECR_IMAGE
             docker push $ECR_IMAGE
           done
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
 
       - name: Update kubeconfig
         run: |
@@ -87,7 +89,7 @@ jobs:
         run: |
           helm upgrade --install ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \
             -f ${{ env.HELM_CHART }}/${{ env.VALUES_FILE }} \
-            --set global.imageTag=${{ github.sha }} \
+            --set global.imageTag=${{ env.IMAGE_TAG }} \
             --set global.imageSHA=${{ github.sha }} \
             --namespace ${{ env.NAMESPACE }} \
             --create-namespace \
@@ -164,14 +166,16 @@ jobs:
       - name: Retag and push images to ECR
         run: |
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          IMAGE_TAG="sha-${SHORT_SHA}"
           for service in graphql-server rest-server scheduler notification-worker admin-portal platform-portal scoring-service; do
-            GHCR_IMAGE="ghcr.io/${{ github.repository }}/$service:$SHORT_SHA"
-            ECR_IMAGE="${{ env.ECR_REGISTRY }}/lons-$service:$SHORT_SHA"
+            GHCR_IMAGE="ghcr.io/${{ github.repository }}/$service:${IMAGE_TAG}"
+            ECR_IMAGE="${{ env.ECR_REGISTRY }}/lons-$service:${IMAGE_TAG}"
 
             docker pull $GHCR_IMAGE || true
             docker tag $GHCR_IMAGE $ECR_IMAGE
             docker push $ECR_IMAGE
           done
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
 
       - name: Update kubeconfig
         run: |
@@ -183,7 +187,7 @@ jobs:
         run: |
           helm upgrade --install ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \
             -f ${{ env.HELM_CHART }}/${{ env.VALUES_FILE }} \
-            --set global.imageTag=${{ github.sha }} \
+            --set global.imageTag=${{ env.IMAGE_TAG }} \
             --set global.imageSHA=${{ github.sha }} \
             --namespace ${{ env.NAMESPACE }} \
             --create-namespace \
@@ -321,14 +325,16 @@ jobs:
       - name: Retag and push images to ECR
         run: |
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          IMAGE_TAG="sha-${SHORT_SHA}"
           for service in graphql-server rest-server scheduler notification-worker admin-portal platform-portal scoring-service; do
-            GHCR_IMAGE="ghcr.io/${{ github.repository }}/$service:$SHORT_SHA"
-            ECR_IMAGE="${{ env.ECR_REGISTRY }}/lons-$service:$SHORT_SHA"
+            GHCR_IMAGE="ghcr.io/${{ github.repository }}/$service:${IMAGE_TAG}"
+            ECR_IMAGE="${{ env.ECR_REGISTRY }}/lons-$service:${IMAGE_TAG}"
 
             docker pull $GHCR_IMAGE || true
             docker tag $GHCR_IMAGE $ECR_IMAGE
             docker push $ECR_IMAGE
           done
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
 
       - name: Update kubeconfig
         run: |
@@ -340,7 +346,7 @@ jobs:
         run: |
           helm upgrade --install ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \
             -f ${{ env.HELM_CHART }}/${{ env.VALUES_FILE }} \
-            --set global.imageTag=${{ github.sha }} \
+            --set global.imageTag=${{ env.IMAGE_TAG }} \
             --set global.imageSHA=${{ github.sha }} \
             --namespace ${{ env.NAMESPACE }} \
             --create-namespace \
@@ -412,14 +418,16 @@ jobs:
       - name: Retag and push images to ECR
         run: |
           SHORT_SHA=$(echo ${{ github.sha }} | cut -c1-7)
+          IMAGE_TAG="sha-${SHORT_SHA}"
           for service in graphql-server rest-server scheduler notification-worker admin-portal platform-portal scoring-service; do
-            GHCR_IMAGE="ghcr.io/${{ github.repository }}/$service:$SHORT_SHA"
-            ECR_IMAGE="${{ env.ECR_REGISTRY }}/lons-$service:$SHORT_SHA"
+            GHCR_IMAGE="ghcr.io/${{ github.repository }}/$service:${IMAGE_TAG}"
+            ECR_IMAGE="${{ env.ECR_REGISTRY }}/lons-$service:${IMAGE_TAG}"
 
             docker pull $GHCR_IMAGE || true
             docker tag $GHCR_IMAGE $ECR_IMAGE
             docker push $ECR_IMAGE
           done
+          echo "IMAGE_TAG=${IMAGE_TAG}" >> $GITHUB_ENV
 
       - name: Update kubeconfig
         run: |
@@ -431,7 +439,7 @@ jobs:
         run: |
           helm upgrade --install ${{ env.HELM_RELEASE }} ${{ env.HELM_CHART }} \
             -f ${{ env.HELM_CHART }}/${{ env.VALUES_FILE }} \
-            --set global.imageTag=${{ github.sha }} \
+            --set global.imageTag=${{ env.IMAGE_TAG }} \
             --set global.imageSHA=${{ github.sha }} \
             --namespace ${{ env.NAMESPACE }} \
             --create-namespace \
