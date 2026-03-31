@@ -1,5 +1,4 @@
 import { generateEncryptionKey } from '../aes-gcm.util';
-import { ENCRYPTED_FIELDS } from '../encrypted-fields.config';
 import {
   createFieldEncryptionMiddleware,
   PrismaMiddlewareParams,
