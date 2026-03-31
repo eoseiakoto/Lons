@@ -1,7 +1,6 @@
 'use client';
 
 import { gql, useQuery } from '@apollo/client';
-import { useRouter } from 'next/navigation';
 import { DataTable } from '@/components/ui/data-table';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { formatMoney, formatDate } from '@/lib/utils';
@@ -18,7 +17,7 @@ const LOAN_REQUESTS_QUERY = gql`
 `;
 
 export default function ApplicationsPage() {
-  const router = useRouter();
+  
   const { data, loading } = useQuery(LOAN_REQUESTS_QUERY, {
     variables: { pagination: { first: 50 }, status: 'manual_review' },
   });

@@ -57,12 +57,6 @@ export function PTPTracker() {
   }
 
   const now = new Date();
-  const getPtpRowClass = (ptp: any) => {
-    if (ptp.fulfilled || ptp.status === 'fulfilled') return 'bg-emerald-500/5';
-    const ptpDate = new Date(ptp.ptpDate);
-    if (ptpDate < now) return 'bg-red-500/5';
-    return '';
-  };
 
   return (
     <div className="space-y-4">

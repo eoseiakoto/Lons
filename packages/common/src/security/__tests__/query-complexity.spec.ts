@@ -1,4 +1,4 @@
-import { QueryComplexityPlugin, calculateDepth, calculateCost } from '../query-complexity.plugin';
+import { QueryComplexityPlugin, calculateDepth } from '../query-complexity.plugin';
 
 // ---------------------------------------------------------------------------
 // Helpers to build minimal GraphQL-like AST nodes

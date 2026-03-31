@@ -125,7 +125,7 @@ describe('AwsSecretsManagerKeyProvider', () => {
     await provider.onModuleInit();
     expect(provider.getCurrentKeyId()).toBe('v1');
 
-    const key = await provider.getKey('v2');
+    await provider.getKey('v2');
     expect(provider.getCurrentKeyId()).toBe('v2');
     expect(mockSend).toHaveBeenCalledTimes(2);
   });

@@ -66,6 +66,7 @@ describe('LoggerService', () => {
   });
 
   it('should mask PII fields in logged objects', () => {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const winston = require('winston');
     const winstonLogger = winston.createLogger();
 

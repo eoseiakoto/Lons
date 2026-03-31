@@ -1,7 +1,6 @@
 'use client';
 
 import { use } from 'react';
-import { useRouter } from 'next/navigation';
 import { gql, useQuery, useMutation } from '@apollo/client';
 import { useToast } from '@/components/ui/toast';
 import { ArrowLeft } from 'lucide-react';
@@ -80,7 +79,7 @@ const UPDATE_SP = gql`
 
 export default function TenantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  const router = useRouter();
+  
   const { toast } = useToast();
 
   const { data, loading, error, refetch } = useQuery(GET_TENANT, {

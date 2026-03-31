@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { gql, useQuery, useMutation } from '@apollo/client';
 import { Modal } from '@/components/ui/modal';
 import { useToast } from '@/components/ui/toast';

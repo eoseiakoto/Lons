@@ -1,7 +1,6 @@
 'use client';
 
 import { gql, useQuery } from '@apollo/client';
-import { MetricCard } from '@/components/ui/metric-card';
 
 const PORTFOLIO_METRICS = gql`
   query PortfolioMetricsReport {

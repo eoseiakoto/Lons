@@ -90,7 +90,7 @@ export class TenantThrottlerGuard extends ThrottlerGuard {
     context: ExecutionContext,
     throttlerLimitDetail: ThrottlerLimitDetail,
   ): Promise<void> {
-    const { req, res } = this.getRequestResponse(context);
+    const { res } = this.getRequestResponse(context);
 
     // timeToExpire is in milliseconds — convert to whole seconds (ceil).
     const retryAfterSeconds = Math.ceil(throttlerLimitDetail.timeToExpire / 1_000);

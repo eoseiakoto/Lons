@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
 import { notFound } from 'next/navigation';
 import { gql, useQuery } from '@apollo/client';
 import { Tabs } from '@/components/ui/tabs';

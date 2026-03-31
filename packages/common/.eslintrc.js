@@ -5,6 +5,7 @@ module.exports = {
     tsconfigRootDir: __dirname,
     sourceType: 'module',
   },
+  ignorePatterns: ['src/tracing/**'],
   overrides: [
     {
       files: ['**/*.spec.ts', '**/*.e2e-spec.ts'],

@@ -3,28 +3,6 @@ import { Reflector } from '@nestjs/core';
 import { of } from 'rxjs';
 
 import { AuditEventInterceptor } from '../audit-event.interceptor';
-import { AUDIT_ACTION_KEY } from '../audit-action.decorator';
-
-function makeContext(
-  metadata: { action: string; resource: string } | undefined,
-  user: Record<string, unknown> = {},
-  headers: Record<string, string> = {},
-): ExecutionContext {
-  const reflector = new Reflector();
-  jest.spyOn(reflector, 'get').mockReturnValue(metadata);
-
-  const req = { user, headers, ip: '127.0.0.1' };
-
-  const handler = {} as CallHandler;
-  const context = {
-    getHandler: () => handler,
-    getType: () => 'http',
-    switchToHttp: () => ({ getRequest: () => req }),
-    getArgs: () => [null, null, { req }],
-  } as unknown as ExecutionContext;
-
-  return context;
-}
 
 function makeReflector(metadata: { action: string; resource: string } | undefined): Reflector {
   const reflector = new Reflector();

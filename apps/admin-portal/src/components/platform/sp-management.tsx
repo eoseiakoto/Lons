@@ -30,7 +30,7 @@ const statusBadge = (status: string) => {
 };
 
 export function SpManagement({
-  tenantId,
+  _tenantId,
   serviceProviders,
   onCreateSp,
   onUpdateSp,
