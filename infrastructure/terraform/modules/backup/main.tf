@@ -228,9 +228,9 @@ resource "aws_backup_plan" "main" {
 # AWS Backup Selection (RDS Only)
 # ──────────────────────────────────────────────────────────────────────
 resource "aws_backup_selection" "rds" {
-  name           = "${var.project_name}-${var.environment}-rds-selection"
-  plan_id        = aws_backup_plan.main.id
-  iam_role_arn   = aws_iam_role.backup_service.arn
+  name         = "${var.project_name}-${var.environment}-rds-selection"
+  plan_id      = aws_backup_plan.main.id
+  iam_role_arn = aws_iam_role.backup_service.arn
 
   resources = [
     var.rds_arn
@@ -241,10 +241,10 @@ resource "aws_backup_selection" "rds" {
 # AWS Backup Selection (ElastiCache Redis)
 # ──────────────────────────────────────────────────────────────────────
 resource "aws_backup_selection" "redis" {
-  count          = var.redis_arn != "" ? 1 : 0
-  name           = "${var.project_name}-${var.environment}-redis-selection"
-  plan_id        = aws_backup_plan.main.id
-  iam_role_arn   = aws_iam_role.backup_service.arn
+  count        = var.redis_arn != "" ? 1 : 0
+  name         = "${var.project_name}-${var.environment}-redis-selection"
+  plan_id      = aws_backup_plan.main.id
+  iam_role_arn = aws_iam_role.backup_service.arn
 
   resources = [
     var.redis_arn

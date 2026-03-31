@@ -62,8 +62,8 @@ resource "aws_elasticache_parameter_group" "redis" {
 # ElastiCache Replication Group (primary + replica(s) with automatic failover)
 resource "aws_elasticache_replication_group" "redis" {
   replication_group_id = "${var.project_name}-${var.environment}-redis"
-  description = "Redis replication group for ${var.project_name} ${var.environment}"
-  engine                        = "redis"
+  description          = "Redis replication group for ${var.project_name} ${var.environment}"
+  engine               = "redis"
   engine_version                = var.engine_version
   node_type                     = var.node_type
   num_cache_clusters            = var.num_cache_nodes

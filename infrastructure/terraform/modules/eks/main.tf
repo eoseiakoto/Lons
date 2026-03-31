@@ -95,6 +95,9 @@ resource "aws_eks_node_group" "main" {
   instance_types = var.instance_types
   capacity_type  = var.capacity_type
 
+  # NOTE: block_device_mappings and monitoring_config are configured
+  # via the launch template (aws_launch_template) if needed.
+  # aws_eks_node_group does not support these attributes directly.
 
   labels = {
     Environment = var.environment
@@ -127,7 +130,7 @@ resource "aws_eks_addon" "vpc_cni" {
   addon_version            = data.aws_eks_addon_version.vpc_cni.version
   resolve_conflicts_on_create = "OVERWRITE"
   resolve_conflicts_on_update = "OVERWRITE"
-  service_account_role_arn = aws_iam_role.node_group.arn
+  service_account_role_arn    = aws_iam_role.node_group.arn
 
   tags = merge(var.tags, {
     Name = "${var.cluster_name}-vpc-cni"
