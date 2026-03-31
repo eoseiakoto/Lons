@@ -275,6 +275,24 @@ main() {
   echo ""
 
   # ========================================================================
+  # 6. Grafana Credentials Secret
+  # ========================================================================
+  log_info "Creating Grafana credentials secret..."
+  GRAFANA_SECRET=$(jq -n \
+    --arg username "admin" \
+    --arg password "LonsStaging2026!" \
+    '{
+      "username": $username,
+      "password": $password
+    }')
+
+  create_or_update_secret \
+    "lons/$ENVIRONMENT/grafana" \
+    "$GRAFANA_SECRET" \
+    "Lons staging Grafana admin credentials"
+  echo ""
+
+  # ========================================================================
   # Verification
   # ========================================================================
   log_info "Verifying created secrets..."
@@ -286,6 +304,7 @@ main() {
     "lons/$ENVIRONMENT/jwt"
     "lons/$ENVIRONMENT/encryption"
     "lons/$ENVIRONMENT/integrations"
+    "lons/$ENVIRONMENT/grafana"
   )
 
   local all_found=true

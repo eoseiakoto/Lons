@@ -85,6 +85,31 @@ spec:
           port: {{ .Values.adminPortal.port }}
 {{- end }}
 ---
+# Allow ingress from nginx ingress controller to platform-portal
+{{- if .Values.platformPortal.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-allow-ingress-platform-portal
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: platform-portal
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: {{ .Values.platformPortal.port }}
+{{- end }}
+---
 # Allow graphql-server to reach scoring-service on port 8000
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -160,6 +185,32 @@ spec:
       ports:
         - protocol: TCP
           port: {{ .Values.graphqlServer.port }}
+---
+# Allow platform-portal to reach graphql-server
+{{- if .Values.platformPortal.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-allow-platform-to-graphql
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: graphql-server
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: platform-portal
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.graphqlServer.port }}
+{{- end }}
 ---
 # Allow scheduler to reach notification-worker
 apiVersion: networking.k8s.io/v1
@@ -429,4 +480,41 @@ spec:
           port: 53
         - protocol: TCP
           port: 53
+---
+# Egress: platform-portal can reach graphql-server and DNS
+{{- if .Values.platformPortal.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "lons.fullname" . }}-egress-platform
+  labels:
+    {{- include "lons.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: platform-portal
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  policyTypes:
+    - Egress
+  egress:
+    # To graphql-server
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: graphql-server
+              app.kubernetes.io/instance: {{ .Release.Name }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.graphqlServer.port }}
+    # DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+{{- end }}
 {{- end }}

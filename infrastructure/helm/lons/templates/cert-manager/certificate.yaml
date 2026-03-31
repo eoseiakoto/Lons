@@ -19,6 +19,11 @@ spec:
     - {{ .Values.adminPortal.host }}
     {{- end }}
     {{- end }}
+    {{- if .Values.platformPortal }}
+    {{- if .Values.platformPortal.host }}
+    - {{ .Values.platformPortal.host }}
+    {{- end }}
+    {{- end }}
     {{- range .Values.certManager.additionalDomains }}
     - {{ . }}
     {{- end }}

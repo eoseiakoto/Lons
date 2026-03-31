@@ -208,8 +208,7 @@ monitoring:
     serviceName: kube-prometheus-grafana
     servicePort: 80
     credentials:
-      username: admin
-      password: LonsStaging2026!
+      existingSecret: lons-staging-grafana  # Managed by ExternalSecret — see external-secret.yaml
 
 externalSecrets:
   enabled: true
