@@ -1,5 +1,3 @@
-import { RedisThrottlerStorage } from '../redis-throttler-storage';
-
 /**
  * Mock ioredis so tests do not require a running Redis instance.
  *
@@ -8,62 +6,55 @@ import { RedisThrottlerStorage } from '../redis-throttler-storage';
  *   - PEXPIRE semantics (set TTL on first hit)
  *   - PTTL semantics (remaining TTL in ms)
  */
-jest.mock('ioredis', () => {
-  const store = new Map<string, { hits: number; expiresAt: number }>();
+const mockStore = new Map<string, { hits: number; expiresAt: number }>();
 
-  class MockRedis {
-    private connected = false;
+class MockRedis {
+  private connected = false;
 
-    on(_event: string, _handler: (...args: any[]) => void) {
-      return this;
-    }
-
-    async connect() {
-      this.connected = true;
-    }
-
-    async quit() {
-      this.connected = false;
-    }
-
-    /**
-     * Simulate the Lua script executed via EVAL.
-     *
-     * The real script:
-     *   local hits = redis.call('INCR', KEYS[1])
-     *   if hits == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end
-     *   local pttl = redis.call('PTTL', KEYS[1])
-     *   return {hits, pttl}
-     */
-    async eval(_script: string, _numKeys: number, key: string, ttlStr: string) {
-      const ttl = parseInt(ttlStr, 10);
-      const now = Date.now();
-      const existing = store.get(key);
-
-      if (!existing || existing.expiresAt <= now) {
-        store.set(key, { hits: 1, expiresAt: now + ttl });
-        return [1, ttl];
-      }
-
-      existing.hits += 1;
-      const pttl = Math.max(0, existing.expiresAt - now);
-      return [existing.hits, pttl];
-    }
+  constructor(_url?: string, _options?: any) {
+    // Constructor accepts URL and options like the real Redis
   }
 
-  // Allow tests to clear the mock store between runs.
-  (MockRedis as any).__store = store;
+  on(_event: string, _handler: (...args: any[]) => void) {
+    return this;
+  }
 
-  return { default: MockRedis };
-});
+  async connect() {
+    this.connected = true;
+  }
 
-// ---------------------------------------------------------------------------
-// Access the mock store for cleanup
-// ---------------------------------------------------------------------------
+  async quit() {
+    this.connected = false;
+  }
 
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const MockRedisClass = require('ioredis').default;
-const mockStore: Map<string, unknown> = (MockRedisClass as any).__store;
+  /**
+   * Simulate the Lua script executed via EVAL.
+   *
+   * The real script:
+   *   local hits = redis.call('INCR', KEYS[1])
+   *   if hits == 1 then redis.call('PEXPIRE', KEYS[1], ARGV[1]) end
+   *   local pttl = redis.call('PTTL', KEYS[1])
+   *   return {hits, pttl}
+   */
+  async eval(_script: string, _numKeys: number, key: string, ttlStr: string) {
+    const ttl = parseInt(ttlStr, 10);
+    const now = Date.now();
+    const existing = mockStore.get(key);
+
+    if (!existing || existing.expiresAt <= now) {
+      mockStore.set(key, { hits: 1, expiresAt: now + ttl });
+      return [1, ttl];
+    }
+
+    existing.hits += 1;
+    const pttl = Math.max(0, existing.expiresAt - now);
+    return [existing.hits, pttl];
+  }
+}
+
+jest.mock('ioredis', () => MockRedis);
+
+import { RedisThrottlerStorage } from '../redis-throttler-storage';
 
 describe('RedisThrottlerStorage (with mocked Redis)', () => {
   let storage: RedisThrottlerStorage;

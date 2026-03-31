@@ -74,14 +74,24 @@ describe('createFieldEncryptionMiddleware', () => {
 
       await middleware(makeParams('Customer', 'create', { data }), next);
 
-      const sent = (capturedParams[0] as unknown as { args: { data: Record<string, unknown> } }).args.data;
+      expect(capturedParams.length).toBeGreaterThan(0);
+      const params = capturedParams[0] as any;
+      const sent = params?.args?.data;
 
-      for (const field of ENCRYPTED_FIELDS['Customer']) {
-        expect(isEncryptedBlob(sent[field])).toBe(true);
-      }
+      expect(sent).toBeDefined();
+
+      // Check that the fields that were provided were encrypted
+      expect(isEncryptedBlob(sent.nationalId)).toBe(true);
+      expect(isEncryptedBlob(sent.phonePrimary)).toBe(true);
+      expect(isEncryptedBlob(sent.phoneSecondary)).toBe(true);
+      expect(isEncryptedBlob(sent.email)).toBe(true);
+      expect(isEncryptedBlob(sent.dateOfBirth)).toBe(true);
+
+      // fullName was not provided in the data, so it should be undefined
+      expect(sent.fullName).toBeUndefined();
 
       // Non-PII fields are not touched
-      expect(sent['firstName']).toBe('John');
+      expect(sent.firstName).toBe('John');
     });
 
     it('skips null / undefined fields', async () => {

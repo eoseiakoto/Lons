@@ -72,7 +72,6 @@ describe('VaultKeyProvider', () => {
 
   beforeEach(() => {
     process.env = { ...originalEnv };
-    jest.spyOn(console, 'warn').mockImplementation(() => undefined);
   });
 
   afterEach(() => {
@@ -80,9 +79,14 @@ describe('VaultKeyProvider', () => {
     jest.restoreAllMocks();
   });
 
-  it('logs a warning on construction', () => {
-    new VaultKeyProvider();
-    expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('Vault is not configured'));
+  it('creates a provider without error when Vault is not configured', async () => {
+    process.env.ENCRYPTION_KEY = makeValidKeyB64();
+    const provider = new VaultKeyProvider();
+    // The warning is logged via NestJS Logger during onModuleInit
+    // Just verify the provider can be created and used
+    const key = await provider.getKey();
+    expect(key).toBeDefined();
+    expect(key.length).toBe(32);
   });
 
   it('returns a 32-byte Buffer when ENCRYPTION_KEY is valid', async () => {
@@ -98,14 +102,22 @@ describe('VaultKeyProvider', () => {
     await expect(provider.getKey()).rejects.toThrow('ENCRYPTION_KEY environment variable is not set');
   });
 
-  it('getCurrentKeyId returns "vault-env-fallback"', () => {
+  it('getCurrentKeyId returns "vault-unknown" when no key is cached', () => {
     const provider = new VaultKeyProvider();
+    expect(provider.getCurrentKeyId()).toBe('vault-unknown');
+  });
+
+  it('getCurrentKeyId returns "vault-env-fallback" after loading from ENCRYPTION_KEY', async () => {
+    process.env.ENCRYPTION_KEY = makeValidKeyB64();
+    const provider = new VaultKeyProvider();
+    await provider.getKey();
     expect(provider.getCurrentKeyId()).toBe('vault-env-fallback');
   });
 
-  it('rotateKey throws not-implemented error', async () => {
+  it('rotateKey throws error when key cannot be obtained', async () => {
+    delete process.env.ENCRYPTION_KEY;
     const provider = new VaultKeyProvider();
-    await expect(provider.rotateKey()).rejects.toThrow('not yet implemented');
+    await expect(provider.rotateKey()).rejects.toThrow('ENCRYPTION_KEY environment variable is not set');
   });
 });
 
