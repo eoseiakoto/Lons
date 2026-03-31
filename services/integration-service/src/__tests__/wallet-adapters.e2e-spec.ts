@@ -3,11 +3,11 @@ import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { MtnMomoAdapter } from '../adapters/mtn-momo/mtn-momo.adapter';
 import { MtnMomoAuthService } from '../adapters/mtn-momo/mtn-momo.auth';
-import { MtnMomoWebhookHandler, MoMoWebhookResult } from '../adapters/mtn-momo/mtn-momo.webhook';
+import { MtnMomoWebhookHandler } from '../adapters/mtn-momo/mtn-momo.webhook';
 import { MoMoCallbackPayload } from '../adapters/mtn-momo/mtn-momo.types';
 import { MpesaAdapter } from '../adapters/mpesa/mpesa.adapter';
 import { MpesaAuthService } from '../adapters/mpesa/mpesa.auth';
-import { MpesaWebhookHandler, MpesaWebhookResult } from '../adapters/mpesa/mpesa.webhook';
+import { MpesaWebhookHandler } from '../adapters/mpesa/mpesa.webhook';
 import { DarajaCallbackData } from '../adapters/mpesa/mpesa.types';
 import { GenericWalletAdapter } from '../adapters/generic-wallet/generic-wallet.adapter';
 import {
@@ -88,7 +88,6 @@ function createMockEventBus() {
 describe('MTN MoMo Adapter (E2E)', () => {
   let module: TestingModule;
   let momoAdapter: MtnMomoAdapter;
-  let momoAuth: MtnMomoAuthService;
 
   beforeAll(async () => {
     module = await Test.createTestingModule({
@@ -113,7 +112,6 @@ describe('MTN MoMo Adapter (E2E)', () => {
     }).compile();
 
     momoAdapter = module.get(MtnMomoAdapter);
-    momoAuth = module.get(MtnMomoAuthService);
   });
 
   afterAll(async () => {
@@ -198,7 +196,7 @@ describe('MTN MoMo Adapter (E2E)', () => {
 
     it('should track in-memory transaction state after transfer', async () => {
       // Force a transfer first
-      const transferResult = await momoAdapter.transfer({
+      await momoAdapter.transfer({
         destination: '+233241111111',
         amount: '300.0000',
         currency: 'GHS',
@@ -235,7 +233,6 @@ describe('MTN MoMo Adapter (E2E)', () => {
 describe('MTN MoMo Webhook Handler (E2E)', () => {
   let module: TestingModule;
   let webhookHandler: MtnMomoWebhookHandler;
-  let webhookService: WebhookService;
   let eventBus: ReturnType<typeof createMockEventBus>;
 
   beforeAll(async () => {
@@ -258,7 +255,6 @@ describe('MTN MoMo Webhook Handler (E2E)', () => {
       .compile();
 
     webhookHandler = module.get(MtnMomoWebhookHandler);
-    webhookService = module.get(WebhookService);
   });
 
   afterAll(async () => {

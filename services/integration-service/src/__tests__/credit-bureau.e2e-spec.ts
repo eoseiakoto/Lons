@@ -7,7 +7,7 @@ import { CreditBureauFactory } from '../credit-bureau/credit-bureau-factory';
 import { ConsentService } from '../credit-bureau/consent.service';
 import { CreditBureauService } from '../credit-bureau/credit-bureau.service';
 import { BatchReportingService } from '../credit-bureau/batch-reporting.service';
-import { CreditReport, BatchReportRecord } from '../credit-bureau/credit-bureau.interface';
+import { BatchReportRecord } from '../credit-bureau/credit-bureau.interface';
 
 // ---------------------------------------------------------------------------
 // Mock factories
@@ -332,7 +332,6 @@ describe('CreditBureauFactory (E2E)', () => {
 
     it('should fall back to another adapter when primary fails', async () => {
       // Create a spy that makes the Ghana adapter throw
-      const originalQuery = ghanaAdapter.queryReport.bind(ghanaAdapter);
       jest
         .spyOn(ghanaAdapter, 'queryReport')
         .mockRejectedValueOnce(new Error('Bureau API down'));

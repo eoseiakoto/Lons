@@ -1,4 +1,4 @@
-import { MockWalletAdapter, MockWalletConfig } from './mock-wallet.adapter';
+import { MockWalletAdapter } from './mock-wallet.adapter';
 
 describe('MockWalletAdapter', () => {
   let adapter: MockWalletAdapter;

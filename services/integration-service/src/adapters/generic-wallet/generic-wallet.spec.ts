@@ -1,11 +1,8 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
 import { GenericWalletAdapter } from './generic-wallet.adapter';
 import { IWalletAdapterConfig } from './generic-wallet.types';
 
 describe('GenericWalletAdapter', () => {
   let adapter: GenericWalletAdapter;
-  let configService: ConfigService;
 
   const mockConfig: IWalletAdapterConfig = {
     providerId: 'test-provider-id',

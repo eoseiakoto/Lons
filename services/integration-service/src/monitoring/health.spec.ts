@@ -29,15 +29,15 @@ describe('IntegrationHealthService', () => {
       getRecentFailures: jest.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
+    const testingModule: TestingModule = await Test.createTestingModule({
       providers: [
         IntegrationHealthService,
         { provide: ApiLogService, useValue: mockApiLogService },
       ],
     }).compile();
 
-    healthService = module.get<IntegrationHealthService>(IntegrationHealthService);
-    apiLogService = module.get(ApiLogService);
+    healthService = testingModule.get<IntegrationHealthService>(IntegrationHealthService);
+    apiLogService = testingModule.get(ApiLogService);
   });
 
   it('should return healthy when uptime > 95%', async () => {
@@ -118,7 +118,7 @@ describe('ApiLogService', () => {
       },
     };
 
-    const module: TestingModule = await Test.createTestingModule({
+    await Test.createTestingModule({
       providers: [
         ApiLogService,
         { provide: 'PrismaService', useValue: mockPrisma },
@@ -227,7 +227,7 @@ describe('HealthCheckScheduler', () => {
       emitAndBuild: jest.fn(),
     };
 
-    const module: TestingModule = await Test.createTestingModule({
+    const testingModule: TestingModule = await Test.createTestingModule({
       providers: [
         HealthCheckScheduler,
         { provide: IntegrationHealthService, useValue: mockHealthService },
@@ -235,9 +235,9 @@ describe('HealthCheckScheduler', () => {
       ],
     }).compile();
 
-    scheduler = module.get<HealthCheckScheduler>(HealthCheckScheduler);
-    healthService = module.get(IntegrationHealthService);
-    eventBus = module.get(EventBusService);
+    scheduler = testingModule.get<HealthCheckScheduler>(HealthCheckScheduler);
+    healthService = testingModule.get(IntegrationHealthService);
+    eventBus = testingModule.get(EventBusService);
   });
 
   it('should detect status transitions and emit events', async () => {

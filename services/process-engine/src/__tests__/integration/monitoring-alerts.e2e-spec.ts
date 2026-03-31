@@ -11,7 +11,7 @@
  * - Event emission at each step
  */
 import { MonitoringService, RiskIndicator } from '../../monitoring/monitoring.service';
-import { AlertRulesService, TriggeredAlert } from '../../monitoring/alert-rules.service';
+import { AlertRulesService } from '../../monitoring/alert-rules.service';
 import { AlertService } from '../../monitoring/alert.service';
 import { AdaptiveActionsService } from '../../monitoring/adaptive-actions.service';
 
@@ -602,7 +602,7 @@ describe('Monitoring Alerts E2E Integration', () => {
   describe('Full Monitoring Workflow', () => {
     it('should assess risk -> evaluate rules -> create alert -> trigger action -> acknowledge', async () => {
       // Step 1: Create alert rule
-      const rule = await alertRulesService.create(TENANT_ID, {
+      await alertRulesService.create(TENANT_ID, {
         name: 'Full Workflow Rule',
         conditionType: 'score_threshold',
         conditionConfig: { threshold: 40, operator: 'gte' },

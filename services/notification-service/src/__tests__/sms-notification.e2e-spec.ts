@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import { AfricasTalkingSmsAdapter } from '../adapters/africas-talking/at-sms.adapter';
 import { ATDeliveryReportHandler } from '../adapters/africas-talking/at-delivery-report.handler';
-import { ATDeliveryReport, AT_COST_PER_SMS, AT_DEFAULT_COST } from '../adapters/africas-talking/at-sms.types';
+import { ATDeliveryReport, AT_COST_PER_SMS } from '../adapters/africas-talking/at-sms.types';
 
 // ---------------------------------------------------------------------------
 // Mock helpers

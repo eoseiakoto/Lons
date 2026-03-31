@@ -44,7 +44,7 @@ export class RepaymentController {
   async create(
     @Req() req: any,
     @Body() body: CreateRepaymentDto,
-    @Headers('x-idempotency-key') idempotencyKey?: string,
+    @Headers('x-idempotency-key') _idempotencyKey?: string,
   ): Promise<any> {
     const tenantId = req.tenantId;
     return this.paymentService.processPayment(tenantId, {

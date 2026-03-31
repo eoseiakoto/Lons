@@ -228,7 +228,7 @@ export class ReconciliationResolver {
   @Query(() => ExceptionsSummaryType)
   @Roles('analytics:read')
   async reconciliationExceptionsSummary(
-    @CurrentTenant() tenantId: string,
+    @CurrentTenant() _tenantId: string,
   ): Promise<any> {
     // getExceptionsSummary not yet implemented on ReconciliationService
     return { total: 0, resolved: 0, pending: 0, byType: [] };

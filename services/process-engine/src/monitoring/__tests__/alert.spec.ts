@@ -1,4 +1,3 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { AlertService } from '../alert.service';
 import { AlertSeverity, AlertStatus } from '@lons/shared-types';
 import { EventType } from '@lons/event-contracts';
@@ -222,7 +221,7 @@ describe('AlertService', () => {
       };
       prisma.monitoringAlert.update.mockResolvedValue(acknowledged);
 
-      const result = await service.acknowledgeAlert('alert-001', tenantId, 'user-001');
+      await service.acknowledgeAlert('alert-001', tenantId, 'user-001');
 
       expect(prisma.monitoringAlert.update).toHaveBeenCalledWith({
         where: { id: 'alert-001' },
@@ -272,7 +271,7 @@ describe('AlertService', () => {
       };
       prisma.monitoringAlert.update.mockResolvedValue(resolved);
 
-      const result = await service.resolveAlert('alert-001', tenantId);
+      await service.resolveAlert('alert-001', tenantId);
 
       expect(prisma.monitoringAlert.update).toHaveBeenCalledWith({
         where: { id: 'alert-001' },

@@ -1,4 +1,4 @@
-import { NetworkAnalysisService, GuarantorCandidate } from '../network-analysis.service';
+import { NetworkAnalysisService } from '../network-analysis.service';
 
 describe('NetworkAnalysisService', () => {
   let service: NetworkAnalysisService;

@@ -2,7 +2,6 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { UnauthorizedException, NotFoundException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService, PlatformUserRole, UserStatus } from '@lons/database';
-import { DEFAULTS } from '@lons/shared-types';
 import * as crypto from 'crypto';
 
 import { AuthService } from './auth.service';

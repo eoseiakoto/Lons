@@ -224,7 +224,7 @@ export class AlertRulesService {
 
   private evaluateWalletBalanceThreshold(
     risk: RiskIndicator,
-    config: Record<string, unknown>,
+    _config: Record<string, unknown>,
   ): boolean {
     // Check if wallet balance factor is present in risk indicators
     const walletFactor = risk.factors.find((f) =>
@@ -237,7 +237,7 @@ export class AlertRulesService {
 
   private evaluateIncomeDepositStopped(
     risk: RiskIndicator,
-    config: Record<string, unknown>,
+    _config: Record<string, unknown>,
   ): boolean {
     const factor = risk.factors.find((f) =>
       f.toLowerCase().includes('income deposit'),
@@ -247,7 +247,7 @@ export class AlertRulesService {
 
   private evaluateSpendingPatternChange(
     risk: RiskIndicator,
-    config: Record<string, unknown>,
+    _config: Record<string, unknown>,
   ): boolean {
     const factor = risk.factors.find((f) =>
       f.toLowerCase().includes('spending pattern'),

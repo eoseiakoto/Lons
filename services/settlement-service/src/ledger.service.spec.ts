@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { PrismaService, LedgerEntryType, DebitCredit, Prisma } from '@lons/database';
+import { PrismaService, LedgerEntryType, Prisma } from '@lons/database';
 import { LedgerService } from './ledger.service';
 
 describe('LedgerService', () => {
@@ -15,7 +15,7 @@ describe('LedgerService', () => {
     tenantId,
     contractId,
     entryType: LedgerEntryType.disbursement,
-    debitCredit: DebitCredit.debit,
+    debitCredit: 'debit' as const,
     amount: new Prisma.Decimal('1000.0000'),
     currency,
     runningBalance: new Prisma.Decimal('1000.0000'),
@@ -205,7 +205,7 @@ describe('LedgerService', () => {
 
       jest.spyOn(prisma.ledgerEntry, 'findFirst').mockResolvedValue(originalEntry as any);
 
-      let createdEntries: any[] = [];
+      const createdEntries: any[] = [];
       (prisma.$transaction as jest.Mock).mockImplementation(async (fn) => {
         const tx = {
           ledgerEntry: {
@@ -267,7 +267,7 @@ describe('LedgerService', () => {
         mockLedgerEntry({
           id: 'e1',
           entryType: LedgerEntryType.repayment,
-          debitCredit: DebitCredit.credit,
+          debitCredit: 'credit' as const,
           amount: new Prisma.Decimal('500.0000'),
           runningBalance: new Prisma.Decimal('500.0000'),
           effectiveDate: new Date('2026-03-15'),
@@ -310,9 +310,9 @@ describe('LedgerService', () => {
     it('should calculate summary totals correctly', async () => {
       jest.spyOn(prisma.ledgerEntry, 'findFirst').mockResolvedValue(null);
       jest.spyOn(prisma.ledgerEntry, 'findMany').mockResolvedValue([
-        mockLedgerEntry({ debitCredit: DebitCredit.debit, amount: new Prisma.Decimal('100.0000') }),
-        mockLedgerEntry({ debitCredit: DebitCredit.debit, amount: new Prisma.Decimal('50.0000') }),
-        mockLedgerEntry({ debitCredit: DebitCredit.credit, amount: new Prisma.Decimal('30.0000') }),
+        mockLedgerEntry({ debitCredit: 'debit' as const, amount: new Prisma.Decimal('100.0000') }),
+        mockLedgerEntry({ debitCredit: 'debit' as const, amount: new Prisma.Decimal('50.0000') }),
+        mockLedgerEntry({ debitCredit: 'credit' as const, amount: new Prisma.Decimal('30.0000') }),
       ] as any);
 
       const statement = await service.generateStatement(

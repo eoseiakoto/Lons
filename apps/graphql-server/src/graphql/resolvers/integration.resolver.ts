@@ -199,7 +199,7 @@ export class IntegrationResolver {
   async createWalletProviderConfig(
     @CurrentTenant() tenantId: string,
     @Args('input') input: CreateWalletProviderConfigInput,
-    @Args('idempotencyKey', { nullable: true }) idempotencyKey?: string,
+    @Args('idempotencyKey', { nullable: true }) _idempotencyKey?: string,
   ): Promise<WalletProviderConfigType> {
     this.logger.log(
       `Creating wallet provider config: ${input.displayName} (${input.providerType}) for tenant ${tenantId}`,

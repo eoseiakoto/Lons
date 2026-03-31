@@ -1,4 +1,4 @@
-import { Test, TestingModule } from '@nestjs/testing';
+import { Test } from '@nestjs/testing';
 import { NotificationTemplateService } from '../notification-template.service';
 
 const mockPrisma = {
@@ -16,7 +16,7 @@ describe('NotificationTemplateService', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
 
-    const module: TestingModule = await Test.createTestingModule({
+    await Test.createTestingModule({
       providers: [
         NotificationTemplateService,
         { provide: 'PrismaService', useValue: mockPrisma },

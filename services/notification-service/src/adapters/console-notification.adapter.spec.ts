@@ -93,7 +93,6 @@ describe('ConsoleNotificationAdapter', () => {
     });
 
     it('should set sentAt timestamp', async () => {
-      const beforeTime = new Date();
       await adapter.send(tenantId, {
         customerId,
         contractId,
@@ -102,7 +101,6 @@ describe('ConsoleNotificationAdapter', () => {
         recipient: '+233123456789',
         content: 'Test',
       });
-      const afterTime = new Date();
 
       expect(prisma.notification.create).toHaveBeenCalledWith({
         data: expect.objectContaining({

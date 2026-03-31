@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ScoringStrategy } from '@lons/shared-types';
-import { bankersRound, multiply, add, divide } from '@lons/common';
+import { bankersRound, multiply, add } from '@lons/common';
 
-import { calculateScore, ScorecardConfig, ScoringInput, ScoringOutput } from './scorecard/scorecard-engine';
-import { MlScoringClient, MlScoringResponse, MlScoringUnavailableError } from './ml-scoring.client';
+import { calculateScore, ScorecardConfig, ScoringInput } from './scorecard/scorecard-engine';
+import { MlScoringClient, MlScoringResponse } from './ml-scoring.client';
 
 export interface DualScoringResult {
   finalScore: string;

@@ -1,5 +1,5 @@
 import { Resolver, Query, Mutation, Args, ID, Int, ObjectType, Field } from '@nestjs/graphql';
-import { CollectionsService, AnalyticsService, PortfolioMetrics } from '@lons/process-engine';
+import { CollectionsService, AnalyticsService } from '@lons/process-engine';
 import { CurrentTenant, CurrentUser, Roles, IAuthenticatedUser } from '@lons/entity-service';
 import { AuditAction, AuditActionType, AuditResourceType } from '@lons/common';
 

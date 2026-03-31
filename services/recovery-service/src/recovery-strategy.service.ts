@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService, ContractStatus } from '@lons/database';
+import { PrismaService } from '@lons/database';
 import { NotFoundError } from '@lons/common';
 
 export interface RecoveryStrategy {

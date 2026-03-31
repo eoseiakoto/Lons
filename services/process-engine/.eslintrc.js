@@ -1,0 +1,22 @@
+module.exports = {
+  extends: ['@lons/eslint-config'],
+  parserOptions: {
+    project: 'tsconfig.json',
+    tsconfigRootDir: __dirname,
+    sourceType: 'module',
+  },
+  overrides: [
+    {
+      files: ['**/*.spec.ts', '**/*.e2e-spec.ts'],
+      parserOptions: {
+        project: null,
+      },
+    },
+    {
+      files: ['**/*.d.ts'],
+      parserOptions: {
+        project: null,
+      },
+    },
+  ],
+};

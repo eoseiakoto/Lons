@@ -4,7 +4,7 @@ import { EventBusService } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
 import { DisbursementService } from './disbursement.service';
-import { WALLET_ADAPTER, IWalletAdapter } from './adapters/wallet-adapter.interface';
+import { WALLET_ADAPTER } from './adapters/wallet-adapter.interface';
 import { MockWalletAdapter } from './adapters/mock-wallet.adapter';
 import { LoanRequestService } from '../loan-request/loan-request.service';
 
@@ -212,7 +212,7 @@ describe('DisbursementService', () => {
       walletAdapter.setSuccessRate(0.0); // Always fail
       jest.useFakeTimers();
 
-      const disbursement = await service.initiateDisbursement(tenantId, contractId);
+      await service.initiateDisbursement(tenantId, contractId);
 
       // Advance time to trigger retries
       jest.advanceTimersByTime(5000); // First retry delay (1s) + buffer

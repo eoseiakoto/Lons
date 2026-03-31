@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService, LoanRequestStatus, Prisma } from '@lons/database';
-import { NotFoundError, ValidationError } from '@lons/common';
-import { compare, min as decMin } from '@lons/common';
+import { ValidationError } from '@lons/common';
 
 import { LoanRequestService } from '../loan-request/loan-request.service';
 

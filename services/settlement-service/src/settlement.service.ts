@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { PrismaService, Prisma, RepaymentStatus, SettlementStatus } from '@lons/database';
-import { EventBusService, NotFoundError, ValidationError, add, multiply, divide, bankersRound, percentage } from '@lons/common';
+import { PrismaService, RepaymentStatus, SettlementStatus } from '@lons/database';
+import { EventBusService, NotFoundError, ValidationError, add, bankersRound, percentage } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
 @Injectable()
@@ -74,8 +74,6 @@ export class SettlementService {
     }
 
     // Create settlement lines per party
-    const lines: { partyType: string; partyId: string; grossRevenue: string; sharePercentage: string; shareAmount: string }[] = [];
-
     const partyTotals = new Map<string, { gross: string; share: string; pct: number }>();
 
     for (const [, productData] of productRevenueMap) {

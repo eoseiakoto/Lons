@@ -17,7 +17,7 @@ import {
 import { ScheduleService } from '@lons/repayment-service';
 
 // Import decorators — these come from @lons/entity-service
-import { CurrentTenant, CurrentUser, Roles, IAuthenticatedUser, Public } from '@lons/entity-service';
+import { CurrentTenant, Roles } from '@lons/entity-service';
 
 @Resolver(() => LoanRequestType)
 export class LoanRequestResolver {

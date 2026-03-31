@@ -1,5 +1,4 @@
 import { StrategyRecommenderService } from '../strategy-recommender.service';
-import { PredictiveRiskService } from '../predictive-risk.service';
 import { RecoveryStrategyType } from '@lons/shared-types';
 
 describe('StrategyRecommenderService', () => {

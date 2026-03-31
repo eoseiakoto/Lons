@@ -72,7 +72,7 @@ describe('RestructuringService', () => {
   it('should restructure a loan with tenor extension', async () => {
     const contract = makeContract();
     mockPrisma.contract.findFirst.mockResolvedValue(contract);
-    mockPrisma.$transaction.mockImplementation(async (fn: Function) => {
+    mockPrisma.$transaction.mockImplementation(async (fn: (...args: unknown[]) => unknown) => {
       const tx = {
         contract: { update: jest.fn() },
         repaymentScheduleEntry: { deleteMany: jest.fn() },
@@ -106,7 +106,7 @@ describe('RestructuringService', () => {
   it('should waive penalties and adjust outstanding', async () => {
     const contract = makeContract({ outstandingPenalties: 200, totalOutstanding: 5000 });
     mockPrisma.contract.findFirst.mockResolvedValue(contract);
-    mockPrisma.$transaction.mockImplementation(async (fn: Function) => {
+    mockPrisma.$transaction.mockImplementation(async (fn: (...args: unknown[]) => unknown) => {
       const tx = {
         contract: { update: jest.fn() },
         repaymentScheduleEntry: { deleteMany: jest.fn() },
@@ -129,7 +129,7 @@ describe('RestructuringService', () => {
   it('should add payment holiday days to tenor', async () => {
     const contract = makeContract({ tenorDays: 90 });
     mockPrisma.contract.findFirst.mockResolvedValue(contract);
-    mockPrisma.$transaction.mockImplementation(async (fn: Function) => {
+    mockPrisma.$transaction.mockImplementation(async (fn: (...args: unknown[]) => unknown) => {
       const tx = {
         contract: { update: jest.fn() },
         repaymentScheduleEntry: { deleteMany: jest.fn() },
@@ -151,7 +151,7 @@ describe('RestructuringService', () => {
   it('should modify interest rate', async () => {
     const contract = makeContract({ interestRate: 12 });
     mockPrisma.contract.findFirst.mockResolvedValue(contract);
-    mockPrisma.$transaction.mockImplementation(async (fn: Function) => {
+    mockPrisma.$transaction.mockImplementation(async (fn: (...args: unknown[]) => unknown) => {
       const tx = {
         contract: { update: jest.fn() },
         repaymentScheduleEntry: { deleteMany: jest.fn() },
@@ -173,7 +173,7 @@ describe('RestructuringService', () => {
   it('should use Decimal strings for all monetary values', async () => {
     const contract = makeContract();
     mockPrisma.contract.findFirst.mockResolvedValue(contract);
-    mockPrisma.$transaction.mockImplementation(async (fn: Function) => {
+    mockPrisma.$transaction.mockImplementation(async (fn: (...args: unknown[]) => unknown) => {
       const tx = {
         contract: { update: jest.fn() },
         repaymentScheduleEntry: { deleteMany: jest.fn() },

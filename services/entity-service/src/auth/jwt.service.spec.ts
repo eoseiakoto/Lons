@@ -2,11 +2,9 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { JwtService } from './jwt.service';
-import { IJwtPayload } from './interfaces/jwt-payload.interface';
 
 describe('JwtService', () => {
   let service: JwtService;
-  let configService: ConfigService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -30,7 +28,6 @@ describe('JwtService', () => {
     }).compile();
 
     service = module.get<JwtService>(JwtService);
-    configService = module.get<ConfigService>(ConfigService);
   });
 
   describe('signAccessToken', () => {

@@ -1,5 +1,4 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { maskPhone } from '@lons/common';
 
 export interface GuarantorCandidate {
   customerId: string;

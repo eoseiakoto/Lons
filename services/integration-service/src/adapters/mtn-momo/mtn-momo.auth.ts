@@ -91,7 +91,7 @@ export class MtnMomoAuthService {
     // Production: POST to /{product}/token with Basic auth
     // Authorization: Basic base64(apiKey:apiSecret)
     // Ocp-Apim-Subscription-Key: subscriptionKey
-    const _credentials = Buffer.from(`${this.apiKey}:${this.apiSecret}`).toString('base64');
+    Buffer.from(`${this.apiKey}:${this.apiSecret}`).toString('base64');
 
     // Would use HttpService in production
     this.logger.log(`POST ${this.baseUrl}/${product}/token`);

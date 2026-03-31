@@ -79,7 +79,7 @@ export class IntegrationHealthService {
     return 'unhealthy';
   }
 
-  private getCircuitBreakerState(provider: string): string {
+  private getCircuitBreakerState(_provider: string): string {
     // Circuit breaker instances are managed per-adapter.
     // This returns 'unknown' unless a registry is provided.
     // In production, adapters register their circuit breakers with a shared registry.

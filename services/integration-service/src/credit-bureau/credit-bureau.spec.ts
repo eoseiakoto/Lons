@@ -498,7 +498,6 @@ describe('BatchReportingService', () => {
 
 describe('CreditBureauService (refactored)', () => {
   let service: CreditBureauService;
-  let consentService: ConsentService;
 
   beforeEach(async () => {
     jest.clearAllMocks();
@@ -518,7 +517,6 @@ describe('CreditBureauService (refactored)', () => {
     }).compile();
 
     service = module.get<CreditBureauService>(CreditBureauService);
-    consentService = module.get<ConsentService>(ConsentService);
   });
 
   describe('queryReport()', () => {

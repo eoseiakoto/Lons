@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional, IsEmail, IsDateString, IsEnum } from 'class-validator';
+import { IsString, IsOptional, IsEmail, IsDateString } from 'class-validator';
 
 export class CreateCustomerDto {
   @ApiProperty({ description: 'External customer ID from the SP system' })

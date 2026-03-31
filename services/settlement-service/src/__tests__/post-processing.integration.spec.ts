@@ -1,16 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import {
   PrismaService,
-  Prisma,
   ContractStatus,
   LedgerEntryType,
-  DebitCredit,
   RepaymentStatus,
   RepaymentMethodType,
   SettlementStatus,
-  DisbursementStatus,
 } from '@lons/database';
-import { EventBusService, add, subtract, multiply, divide, bankersRound } from '@lons/common';
+import { EventBusService, add, subtract, bankersRound } from '@lons/common';
 import { LedgerService } from '../ledger.service';
 import { SettlementService } from '../settlement.service';
 
@@ -367,7 +364,7 @@ describe('Post-Processing Integration Pipeline', () => {
       reconciliationRun: makeModelMock(store.reconciliationRuns),
       reconciliationException: makeModelMock(store.reconciliationExceptions),
       // $transaction: execute the callback with the same prisma mock
-      $transaction: jest.fn(async (fn: any, opts?: any) => fn(prisma)),
+      $transaction: jest.fn(async (fn: any, _opts?: any) => fn(prisma)),
     };
 
     const module: TestingModule = await Test.createTestingModule({

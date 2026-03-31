@@ -1,7 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { PrismaService, LoanRequestStatus, ContractStatus, DisbursementStatus } from '@lons/database';
+import { PrismaService, LoanRequestStatus } from '@lons/database';
 import { EventBusService } from '@lons/common';
-import { EventType } from '@lons/event-contracts';
 import { v4 as uuidv4 } from 'uuid';
 import { Decimal } from '@prisma/client/runtime/library';
 
@@ -12,7 +11,6 @@ import { PreQualificationService } from '../pre-qualification/pre-qualification.
 import { ApprovalService } from '../approval/approval.service';
 import { OfferService } from '../offer/offer.service';
 import { ContractService } from '../contract/contract.service';
-import { DisbursementService } from '../disbursement/disbursement.service';
 
 /**
  * Process Engine Integration Tests — Task 4 (Monday ID: 11605364578)
@@ -33,10 +31,8 @@ describe('Process Engine Integration Tests', () => {
   let approvalService: ApprovalService;
   let offerService: OfferService;
   let contractService: ContractService;
-  let disbursementService: DisbursementService;
 
   let tenantId: string;
-  let spId: string;
   let productId: string;
   let lenderId: string;
   let customerId: string;
@@ -56,7 +52,6 @@ describe('Process Engine Integration Tests', () => {
     approvalService = app.get<ApprovalService>(ApprovalService);
     offerService = app.get<OfferService>(OfferService);
     contractService = app.get<ContractService>(ContractService);
-    disbursementService = app.get<DisbursementService>(DisbursementService);
   });
 
   afterAll(async () => {
@@ -142,7 +137,6 @@ describe('Process Engine Integration Tests', () => {
 
   describe('Happy Path — Full State Machine Traversal', () => {
     let loanRequestId: string;
-    let contractId: string;
     const emittedEvents: any[] = [];
 
     beforeEach(async () => {
@@ -183,7 +177,7 @@ describe('Process Engine Integration Tests', () => {
 
       loanRequestId = lr.id;
 
-      const validated = await loanRequestService.validateRequest(tenantId, lr.id);
+      await loanRequestService.validateRequest(tenantId, lr.id);
       const preQualResult = await preQualService.evaluate(tenantId, customerId, productId);
 
       // If pre-qual passes, transition request
@@ -220,7 +214,7 @@ describe('Process Engine Integration Tests', () => {
       }
 
       // Score the customer
-      const scoringResult = await scoringService.scoreCustomer(
+      await scoringService.scoreCustomer(
         tenantId,
         customerId,
         productId,
@@ -303,7 +297,7 @@ describe('Process Engine Integration Tests', () => {
       );
       await loanRequestService.transitionStatus(tenantId, lr.id, LoanRequestStatus.scored);
       const approved = await approvalService.makeDecision(tenantId, lr.id);
-      const offer = await offerService.generateOffer(tenantId, approved.id);
+      await offerService.generateOffer(tenantId, approved.id);
 
       const accepted = await loanRequestService.transitionStatus(
         tenantId,
@@ -314,8 +308,6 @@ describe('Process Engine Integration Tests', () => {
 
       const contract = await contractService.createFromAcceptedRequest(tenantId, lr.id);
       expect(contract.status).toBe(ContractStatus.active);
-
-      contractId = contract.id;
     });
 
     it('should emit events at each state transition', async () => {
@@ -492,7 +484,7 @@ describe('Process Engine Integration Tests', () => {
         });
       }
 
-      const lr = await loanRequestService.create(tenantId, {
+      await loanRequestService.create(tenantId, {
         customerId: overdueLoanCustomerId,
         productId,
         requestedAmount: 1000,

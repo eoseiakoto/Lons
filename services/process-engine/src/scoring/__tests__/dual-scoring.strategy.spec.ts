@@ -241,13 +241,10 @@ describe('DualScoringStrategy', () => {
 
   describe('parallel execution', () => {
     it('should call rule and ML in parallel for HIGHER strategy', async () => {
-      let mlCallTime = 0;
       mockMlClient.score.mockImplementation(async () => {
-        mlCallTime = Date.now();
         return MOCK_ML_RESPONSE;
       });
 
-      const startTime = Date.now();
       await strategy.execute(
         'tenant-1', 'customer-1', 'product-1', 'application',
         '1000.0000', ScoringStrategy.HIGHER,

@@ -1,6 +1,6 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { PrismaService, LoanRequestStatus, DisbursementStatus } from '@lons/database';
-import { EventBusService, NotFoundError, ValidationError } from '@lons/common';
+import { EventBusService, NotFoundError } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
 import { LoanRequestService } from '../loan-request/loan-request.service';

@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService, NotificationChannel, NotificationStatus } from '@lons/database';
-import { EventType } from '@lons/event-contracts';
 
 import { NotificationService } from './notification.service';
 import { ConsoleNotificationAdapter } from './adapters/console-notification.adapter';

@@ -1,9 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@lons/database';
-import { NotFoundError, bankersRound, multiply, divide, compare, maskPhone } from '@lons/common';
+import { NotFoundError, bankersRound, multiply, maskPhone } from '@lons/common';
 import { RecoveryStrategyType } from '@lons/shared-types';
 
-import { PredictiveRiskService, DefaultRiskAssessment } from './predictive-risk.service';
+import { PredictiveRiskService } from './predictive-risk.service';
 
 export interface RankedRecoveryStrategy {
   type: RecoveryStrategyType;

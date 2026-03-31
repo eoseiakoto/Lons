@@ -1,5 +1,6 @@
 import { Provider } from '@nestjs/common';
 import { RedisPubSub } from 'graphql-redis-subscriptions';
+import { PubSub } from 'graphql-subscriptions';
 import Redis from 'ioredis';
 
 export const PUB_SUB = 'PUB_SUB';
@@ -9,7 +10,6 @@ export const PubSubProvider: Provider = {
   useFactory: () => {
     if (process.env.NODE_ENV === 'test') {
       // Use in-memory PubSub for tests
-      const { PubSub } = require('graphql-subscriptions');
       return new PubSub();
     }
 

@@ -460,7 +460,6 @@ describe('Recovery AI E2E Integration', () => {
       });
 
       // Verify the transaction was called with restructured=true
-      const txFn = mockPrisma.$transaction.mock.calls[0][0];
       expect(mockPrisma.$transaction).toHaveBeenCalled();
     });
 

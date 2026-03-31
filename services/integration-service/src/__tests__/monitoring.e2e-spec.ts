@@ -1,13 +1,6 @@
-import { Test, TestingModule } from '@nestjs/testing';
 import { ApiLogService, CreateApiLogInput } from '../monitoring/api-log.service';
 import { IntegrationHealthService } from '../monitoring/health.service';
 import { HealthCheckScheduler } from '../monitoring/health-check.scheduler';
-import {
-  HealthStatus,
-  IntegrationHealthReport,
-  ApiLogEntry,
-  ProviderMetrics,
-} from '../monitoring/health.types';
 import { EventType } from '@lons/event-contracts';
 
 // ---------------------------------------------------------------------------

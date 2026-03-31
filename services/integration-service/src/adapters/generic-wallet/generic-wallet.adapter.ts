@@ -224,8 +224,8 @@ export class GenericWalletAdapter implements IWalletAdapter {
           }
 
           // Production: build and send actual HTTP request
-          const _headers = await this.getAuthHeaders(config.auth);
-          const _body = endpoint.bodyMapping
+          await this.getAuthHeaders(config.auth);
+          endpoint.bodyMapping
             ? this.buildRequestBody(endpoint.bodyMapping, params)
             : undefined;
 
@@ -378,7 +378,7 @@ export class GenericWalletAdapter implements IWalletAdapter {
             };
           }
 
-          const _headers = await this.getAuthHeaders(config.auth);
+          await this.getAuthHeaders(config.auth);
           this.logger.log(
             `${config.name} customerInfo: ${endpoint.method} ${config.baseUrl}${endpoint.path}`,
           );
@@ -427,7 +427,7 @@ export class GenericWalletAdapter implements IWalletAdapter {
             return [];
           }
 
-          const _headers = await this.getAuthHeaders(config.auth);
+          await this.getAuthHeaders(config.auth);
           this.logger.log(
             `${config.name} transactionHistory: ${endpoint.method} ${config.baseUrl}${endpoint.path}`,
           );
@@ -476,7 +476,7 @@ export class GenericWalletAdapter implements IWalletAdapter {
             return { id, events, callbackUrl, active: true };
           }
 
-          const _headers = await this.getAuthHeaders(config.auth);
+          await this.getAuthHeaders(config.auth);
           this.logger.log(
             `${config.name} registerWebhook: ${endpoint.method} ${config.baseUrl}${endpoint.path}`,
           );
@@ -494,7 +494,7 @@ export class GenericWalletAdapter implements IWalletAdapter {
 
   // IWalletAdapter interface — these require a config to be set externally
   // Use transferWithConfig/collectWithConfig for config-driven usage
-  async transfer(params: TransferParams): Promise<TransferResult> {
+  async transfer(_params: TransferParams): Promise<TransferResult> {
     this.logger.warn(
       'GenericWalletAdapter.transfer() called without config — use transferWithConfig() instead',
     );
@@ -504,7 +504,7 @@ export class GenericWalletAdapter implements IWalletAdapter {
     };
   }
 
-  async collect(params: CollectionParams): Promise<TransferResult> {
+  async collect(_params: CollectionParams): Promise<TransferResult> {
     this.logger.warn(
       'GenericWalletAdapter.collect() called without config — use collectWithConfig() instead',
     );
@@ -514,7 +514,7 @@ export class GenericWalletAdapter implements IWalletAdapter {
     };
   }
 
-  async getBalance(walletId: string): Promise<BalanceInfo> {
+  async getBalance(_walletId: string): Promise<BalanceInfo> {
     this.logger.warn(
       'GenericWalletAdapter.getBalance() called without config — use getBalanceWithConfig() instead',
     );
@@ -528,12 +528,12 @@ export class GenericWalletAdapter implements IWalletAdapter {
     return { reference, status: 'failed', failureReason: 'No wallet provider config set' };
   }
 
-  async getCustomerInfo(walletId: string): Promise<WalletCustomerInfo> {
+  async getCustomerInfo(_walletId: string): Promise<WalletCustomerInfo> {
     this.logger.warn(
       'GenericWalletAdapter.getCustomerInfo() called without config — use getCustomerInfoWithConfig() instead',
     );
     return {
-      walletId,
+      walletId: '',
       fullName: 'Unknown',
       kycLevel: 'unknown',
       accountStatus: 'unknown',
@@ -542,7 +542,7 @@ export class GenericWalletAdapter implements IWalletAdapter {
     };
   }
 
-  async getTransactionHistory(walletId: string, dateRange: DateRange): Promise<WalletTransaction[]> {
+  async getTransactionHistory(_walletId: string, _dateRange: DateRange): Promise<WalletTransaction[]> {
     this.logger.warn(
       'GenericWalletAdapter.getTransactionHistory() called without config — use getTransactionHistoryWithConfig() instead',
     );

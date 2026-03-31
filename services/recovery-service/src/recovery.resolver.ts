@@ -61,7 +61,7 @@ export class RecoveryResolver {
     @Args('contractId', { type: () => ID }) contractId: string,
     @Args('strategyType') strategyType: string,
     @Args('params', { nullable: true }) params: string,
-    @Args('idempotencyKey') idempotencyKey: string,
+    @Args('idempotencyKey') _idempotencyKey: string,
   ): Promise<any> {
     const outcome = await this.outcomeTracker.recordOutcome(tenantId, contractId, {
       strategyType: strategyType as RecoveryStrategyType,
@@ -98,7 +98,7 @@ export class RecoveryResolver {
     @CurrentTenant() tenantId: string,
     @Args('contractId', { type: () => ID }) contractId: string,
     @Args('params') params: RestructuringInput,
-    @Args('idempotencyKey') idempotencyKey: string,
+    @Args('idempotencyKey') _idempotencyKey: string,
   ): Promise<any> {
     return this.restructuringService.restructureLoan(tenantId, contractId, {
       newTenorDays: params.newTenorDays,

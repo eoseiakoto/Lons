@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import { WebhookSigner } from '../webhook-signer';
 
 describe('WebhookSigner', () => {
@@ -22,15 +23,6 @@ describe('WebhookSigner', () => {
 
     it('should produce deterministic signatures for the same input and timestamp', () => {
       const payload = { event: 'loan.disbursed', amount: '500.00' };
-      const timestamp = 1700000000;
-
-      // Manually build expected
-      const signedPayload = `${timestamp}.${JSON.stringify(payload)}`;
-      const crypto = require('crypto');
-      const expected = crypto
-        .createHmac('sha256', secret)
-        .update(signedPayload)
-        .digest('hex');
 
       const result = signer.sign(payload, secret);
       // Verify the signedPayload format

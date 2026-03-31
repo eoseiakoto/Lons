@@ -89,7 +89,6 @@ describe('MtnMomoAuthService', () => {
 
 describe('MtnMomoAdapter', () => {
   let adapter: MtnMomoAdapter;
-  let authService: MtnMomoAuthService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -106,7 +105,6 @@ describe('MtnMomoAdapter', () => {
     }).compile();
 
     adapter = module.get<MtnMomoAdapter>(MtnMomoAdapter);
-    authService = module.get<MtnMomoAuthService>(MtnMomoAuthService);
   });
 
   it('should be defined', () => {

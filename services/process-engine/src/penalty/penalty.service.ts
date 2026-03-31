@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@lons/database';
-import { EventBusService, NotFoundError, multiply, divide, bankersRound, add, subtract, min as decMin, percentage } from '@lons/common';
+import { EventBusService, NotFoundError, bankersRound, add, subtract, min as decMin, percentage } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
 export interface PenaltyConfig {

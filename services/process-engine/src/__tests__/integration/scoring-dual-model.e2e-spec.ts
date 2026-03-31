@@ -10,11 +10,11 @@
  * - Credit limit derivation with exposure cap
  * - All scores are Decimal strings
  */
-import { DualScoringStrategy, DualScoringResult } from '../../scoring/dual-scoring.strategy';
-import { MlScoringClient, MlScoringUnavailableError, MlScoringResponse } from '../../scoring/ml-scoring.client';
+import { DualScoringStrategy } from '../../scoring/dual-scoring.strategy';
+import { MlScoringClient, MlScoringResponse } from '../../scoring/ml-scoring.client';
 import { CreditLimitService } from '../../scoring/credit-limit.service';
 import { ScoringService } from '../../scoring/scoring.service';
-import { ScorecardConfig, calculateScore } from '../../scoring/scorecard/scorecard-engine';
+import { ScorecardConfig } from '../../scoring/scorecard/scorecard-engine';
 import { ScoringStrategy } from '@lons/shared-types';
 
 const TENANT_ID = 'tenant-scoring-e2e';
@@ -473,7 +473,7 @@ describe('Dual-Model Scoring E2E Integration', () => {
     });
 
     it('should create scoring result with rule_based model type', async () => {
-      const result = await scoringService.scoreCustomer(
+      await scoringService.scoreCustomer(
         TENANT_ID, CUSTOMER_ID, PRODUCT_ID,
         'application', '10000.0000',
       );
@@ -575,6 +575,7 @@ describe('Dual-Model Scoring E2E Integration', () => {
         TEST_SCORECARD, GOOD_FEATURES,
       );
 
+      expect(result).toBeDefined();
       expect(typeof result.finalScore).toBe('string');
       expect(typeof result.recommendedLimit).toBe('string');
       expect(typeof result.confidence).toBe('string');

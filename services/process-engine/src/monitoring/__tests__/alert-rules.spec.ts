@@ -1,5 +1,5 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { AlertRulesService, TriggeredAlert } from '../alert-rules.service';
+import { Test } from '@nestjs/testing';
+import { AlertRulesService } from '../alert-rules.service';
 import { RiskIndicator } from '../monitoring.service';
 import { AlertSeverity, AdaptiveActionType } from '@lons/shared-types';
 
@@ -41,7 +41,7 @@ describe('AlertRulesService', () => {
       },
     };
 
-    const module: TestingModule = await Test.createTestingModule({
+    await Test.createTestingModule({
       providers: [
         AlertRulesService,
         { provide: 'PrismaService', useValue: prisma },

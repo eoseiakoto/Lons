@@ -161,7 +161,6 @@ describe('MlScoringClient', () => {
       expect(client._getCircuitBreakerState().state).toBe('open');
 
       // Simulate time passing by manipulating lastFailureTime
-      const state = client._getCircuitBreakerState();
       // Access private field through the test helper — we set lastFailureTime to the past
       (client as any).circuitBreaker.lastFailureTime = Date.now() - 31_000;
 

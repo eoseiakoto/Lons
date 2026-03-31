@@ -83,7 +83,7 @@ export class MpesaAdapter implements IWalletAdapter {
 
         // Production: POST /mpesa/stkpush/v1/processrequest
         const timestamp = this.authService.generateTimestamp();
-        const _password = this.authService.generatePassword(timestamp);
+        this.authService.generatePassword(timestamp);
 
         this.logger.log(
           `POST ${this.authService.getBaseUrl()}/mpesa/stkpush/v1/processrequest [checkout: ${checkoutRequestId}]`,

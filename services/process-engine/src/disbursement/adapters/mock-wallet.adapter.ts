@@ -37,7 +37,7 @@ export class MockWalletAdapter implements IWalletAdapter {
     return { success: false, failureReason: 'Mock collection failed (simulated)' };
   }
 
-  async getBalance(walletId: string): Promise<BalanceInfo> {
+  async getBalance(_walletId: string): Promise<BalanceInfo> {
     return {
       available: '50000.0000',
       currency: 'GHS',

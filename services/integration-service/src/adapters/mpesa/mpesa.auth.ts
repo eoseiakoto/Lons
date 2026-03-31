@@ -120,7 +120,7 @@ export class MpesaAuthService {
 
     // Production: GET /oauth/v1/generate?grant_type=client_credentials
     // Authorization: Basic base64(consumerKey:consumerSecret)
-    const _credentials = this.getBasicAuthHeader();
+    this.getBasicAuthHeader();
 
     this.logger.log(`GET ${this.baseUrl}/oauth/v1/generate?grant_type=client_credentials`);
 

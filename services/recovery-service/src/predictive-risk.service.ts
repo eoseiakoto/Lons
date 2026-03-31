@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@lons/database';
-import { NotFoundError, bankersRound, divide, multiply, subtract, add, compare, maskPhone } from '@lons/common';
+import { NotFoundError, bankersRound, divide, multiply, add, compare, maskPhone } from '@lons/common';
 
 export interface RiskFactor {
   factor: string;

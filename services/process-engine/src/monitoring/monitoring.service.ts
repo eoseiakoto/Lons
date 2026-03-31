@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService, ContractStatus } from '@lons/database';
+import { PrismaService } from '@lons/database';
 
 export interface RiskIndicator {
   contractId: string;
@@ -31,7 +31,6 @@ export class MonitoringService {
 
     // Outstanding ratio
     const totalCost = Number(contract.totalCostCredit || contract.principalAmount);
-    const outstanding = Number(contract.totalOutstanding || 0);
     const paid = Number(contract.totalPaid || 0);
     if (totalCost > 0 && paid / totalCost < 0.1 && contract.daysPastDue > 7) {
       score += 20;

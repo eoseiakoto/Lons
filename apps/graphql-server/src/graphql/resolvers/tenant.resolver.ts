@@ -1,4 +1,4 @@
-import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
+import { Resolver, Query, Args, ID } from '@nestjs/graphql';
 import { TenantService, Roles } from '@lons/entity-service';
 import { encodeCursor } from '@lons/common';
 

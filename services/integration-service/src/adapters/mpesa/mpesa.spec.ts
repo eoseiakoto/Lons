@@ -82,7 +82,6 @@ describe('MpesaAuthService', () => {
 
 describe('MpesaAdapter', () => {
   let adapter: MpesaAdapter;
-  let authService: MpesaAuthService;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -99,7 +98,6 @@ describe('MpesaAdapter', () => {
     }).compile();
 
     adapter = module.get<MpesaAdapter>(MpesaAdapter);
-    authService = module.get<MpesaAuthService>(MpesaAuthService);
   });
 
   it('should be defined', () => {
@@ -355,8 +353,6 @@ describe('MpesaAdapter', () => {
 
 describe('MpesaWebhookHandler', () => {
   let webhookHandler: MpesaWebhookHandler;
-  let webhookService: WebhookService;
-  let eventBus: EventBusService;
 
   const mockWebhookService = {
     verifySignature: jest.fn().mockReturnValue(true),
@@ -382,8 +378,6 @@ describe('MpesaWebhookHandler', () => {
     }).compile();
 
     webhookHandler = module.get<MpesaWebhookHandler>(MpesaWebhookHandler);
-    webhookService = module.get<WebhookService>(WebhookService);
-    eventBus = module.get<EventBusService>(EventBusService);
   });
 
   describe('STK Push callback', () => {

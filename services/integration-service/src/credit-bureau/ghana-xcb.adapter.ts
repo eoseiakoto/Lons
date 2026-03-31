@@ -48,7 +48,6 @@ export class GhanaXcbAdapter implements ICreditBureauAdapter {
       // Generate realistic Ghana-specific credit report
       const score = this.generateScore(nationalId);
       const activeFacilities = Math.floor(Math.random() * 6); // 0-5
-      const hasArrears = Math.random() > 0.7;
       const defaultCount = Math.random() > 0.85 ? Math.floor(Math.random() * 3) + 1 : 0;
 
       const report: CreditReport = {

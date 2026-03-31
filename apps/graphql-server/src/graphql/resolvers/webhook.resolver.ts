@@ -6,7 +6,6 @@ import {
   WebhookEndpointType,
   CreateWebhookEndpointInput,
   UpdateWebhookEndpointInput,
-  WebhookDeliveryLogType,
   WebhookDeliveryLogConnection,
 } from '@lons/notification-service';
 
