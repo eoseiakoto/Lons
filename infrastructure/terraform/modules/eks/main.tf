@@ -95,22 +95,6 @@ resource "aws_eks_node_group" "main" {
   instance_types = var.instance_types
   capacity_type  = var.capacity_type
 
-  # Ensure EBS optimization for better performance
-  block_device_mappings {
-    device_name = "/dev/xvda"
-
-    ebs {
-      volume_size           = 100
-      volume_type           = "gp3"
-      delete_on_termination = true
-      encrypted             = true
-    }
-  }
-
-  # Enable detailed monitoring
-  monitoring_config {
-    enabled = true
-  }
 
   labels = {
     Environment = var.environment
@@ -141,7 +125,8 @@ resource "aws_eks_addon" "vpc_cni" {
   cluster_name             = aws_eks_cluster.main.name
   addon_name               = "vpc-cni"
   addon_version            = data.aws_eks_addon_version.vpc_cni.version
-  resolve_conflicts        = "OVERWRITE"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
   service_account_role_arn = aws_iam_role.node_group.arn
 
   tags = merge(var.tags, {
@@ -156,7 +141,8 @@ resource "aws_eks_addon" "coredns" {
   cluster_name      = aws_eks_cluster.main.name
   addon_name        = "coredns"
   addon_version     = data.aws_eks_addon_version.coredns.version
-  resolve_conflicts = "OVERWRITE"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
 
   tags = merge(var.tags, {
     Name = "${var.cluster_name}-coredns"
@@ -170,7 +156,8 @@ resource "aws_eks_addon" "kube_proxy" {
   cluster_name      = aws_eks_cluster.main.name
   addon_name        = "kube-proxy"
   addon_version     = data.aws_eks_addon_version.kube_proxy.version
-  resolve_conflicts = "OVERWRITE"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
 
   tags = merge(var.tags, {
     Name = "${var.cluster_name}-kube-proxy"
@@ -185,7 +172,8 @@ resource "aws_eks_addon" "ebs_csi_driver" {
   addon_name               = "aws-ebs-csi-driver"
   addon_version            = data.aws_eks_addon_version.ebs_csi_driver.version
   service_account_role_arn = aws_iam_role.ebs_csi_driver.arn
-  resolve_conflicts        = "OVERWRITE"
+  resolve_conflicts_on_create = "OVERWRITE"
+  resolve_conflicts_on_update = "OVERWRITE"
 
   tags = merge(var.tags, {
     Name = "${var.cluster_name}-ebs-csi"

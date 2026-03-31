@@ -280,7 +280,7 @@ output "cluster_endpoint" {
 # Sprint 2 — RDS Outputs
 output "db_endpoint" {
   description = "RDS database endpoint"
-  value       = module.rds.db_endpoint
+  value       = module.rds.db_instance_endpoint
 }
 
 # Sprint 2 — ElastiCache Outputs

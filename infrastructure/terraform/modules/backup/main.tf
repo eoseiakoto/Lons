@@ -160,7 +160,7 @@ resource "aws_backup_plan" "main" {
 
   rule {
     rule_name         = "daily_snapshot"
-    target_backup_vault_name = aws_backup_vault.main.name
+    target_vault_name = aws_backup_vault.main.name
     schedule          = "cron(0 2 ? * * *)"  # 2 AM UTC daily
     start_window      = 60
     completion_window = 120
@@ -189,7 +189,7 @@ resource "aws_backup_plan" "main" {
 
   rule {
     rule_name         = "monthly_snapshot"
-    target_backup_vault_name = aws_backup_vault.main.name
+    target_vault_name = aws_backup_vault.main.name
     schedule          = "cron(0 3 1 * ? *)"  # 3 AM UTC on the 1st of each month
     start_window      = 60
     completion_window = 120
@@ -231,18 +231,10 @@ resource "aws_backup_selection" "rds" {
   name           = "${var.project_name}-${var.environment}-rds-selection"
   plan_id        = aws_backup_plan.main.id
   iam_role_arn   = aws_iam_role.backup_service.arn
-  type           = "RDS"
 
   resources = [
     var.rds_arn
   ]
-
-  tags = merge(
-    local.common_tags,
-    {
-      Resource = "rds"
-    }
-  )
 }
 
 # ──────────────────────────────────────────────────────────────────────
@@ -253,18 +245,10 @@ resource "aws_backup_selection" "redis" {
   name           = "${var.project_name}-${var.environment}-redis-selection"
   plan_id        = aws_backup_plan.main.id
   iam_role_arn   = aws_iam_role.backup_service.arn
-  type           = "EBS"  # ElastiCache uses EBS snapshots
 
   resources = [
     var.redis_arn
   ]
-
-  tags = merge(
-    local.common_tags,
-    {
-      Resource = "redis"
-    }
-  )
 }
 
 # ──────────────────────────────────────────────────────────────────────

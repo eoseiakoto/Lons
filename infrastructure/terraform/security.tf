@@ -144,41 +144,29 @@ resource "aws_iam_role_policy" "config_s3_policy" {
 
 # AWS Config Recorder
 resource "aws_config_configuration_recorder" "main" {
-  name              = "${local.namespace}-config-recorder"
-  role_arn          = aws_iam_role.config_role.arn
-  recording_group_id = "default"
-  tags              = local.common_tags
+  name     = "${local.namespace}-config-recorder"
+  role_arn = aws_iam_role.config_role.arn
 
   depends_on = [aws_iam_role_policy_attachment.config_policy]
 
-  recording_mode {
-    recording_frequency = "CONTINUOUS"
-
-    recording_scope {
-      compliance_resource_types = []
-    }
+  recording_group {
+    all_supported                 = true
+    include_global_resource_types = var.environment == "prod"
   }
 }
 
 resource "aws_config_configuration_recorder_status" "main" {
-  name              = aws_config_configuration_recorder.main.name
-  is_enabled        = true
-  depends_on        = [aws_s3_bucket_policy.config_logs, aws_iam_role_policy.config_s3_policy]
-  start_recording   = true
+  name       = aws_config_configuration_recorder.main.name
+  is_enabled = true
+  depends_on = [aws_s3_bucket_policy.config_logs, aws_iam_role_policy.config_s3_policy]
 }
 
 # AWS Config Delivery Channel
 resource "aws_config_delivery_channel" "main" {
   name                           = "${local.namespace}-config-delivery"
-  s3_bucket_name                 = aws_s3_bucket.config_logs.id
-  depends_on                     = [aws_config_configuration_recorder_status.main]
-  include_global_resources       = var.environment == "prod"
-  include_global_resources_region = var.region
-  sns_topic_arn                  = aws_sns_topic.config_notifications.arn
-
-  recording_mode {
-    recording_frequency = "CONTINUOUS"
-  }
+  s3_bucket_name = aws_s3_bucket.config_logs.id
+  sns_topic_arn  = aws_sns_topic.config_notifications.arn
+  depends_on     = [aws_config_configuration_recorder_status.main]
 }
 
 # SNS topic for Config notifications
@@ -216,38 +204,50 @@ resource "aws_sns_topic_policy" "config_notifications" {
 
 # Rule: Encrypted EBS volumes
 resource "aws_config_config_rule" "encrypted_volumes" {
-  name            = "${local.namespace}-encrypted-volumes"
-  depends_on      = [aws_config_configuration_recorder_status.main]
-  description     = "Checks whether EBS volumes are encrypted"
-  source_identifier = "ENCRYPTED_VOLUMES"
-  tags            = local.common_tags
+  name       = "${local.namespace}-encrypted-volumes"
+  depends_on = [aws_config_configuration_recorder_status.main]
+  tags       = local.common_tags
+
+  source {
+    owner             = "AWS"
+    source_identifier = "ENCRYPTED_VOLUMES"
+  }
 }
 
 # Rule: RDS storage encryption enabled
 resource "aws_config_config_rule" "rds_storage_encrypted" {
-  name            = "${local.namespace}-rds-storage-encrypted"
-  depends_on      = [aws_config_configuration_recorder_status.main]
-  description     = "Checks whether RDS instances have encryption at rest enabled"
-  source_identifier = "RDS_STORAGE_ENCRYPTED"
-  tags            = local.common_tags
+  name       = "${local.namespace}-rds-storage-encrypted"
+  depends_on = [aws_config_configuration_recorder_status.main]
+  tags       = local.common_tags
+
+  source {
+    owner             = "AWS"
+    source_identifier = "RDS_STORAGE_ENCRYPTED"
+  }
 }
 
 # Rule: S3 bucket server-side encryption enabled
 resource "aws_config_config_rule" "s3_bucket_server_side_encryption" {
-  name            = "${local.namespace}-s3-bucket-server-side-encryption"
-  depends_on      = [aws_config_configuration_recorder_status.main]
-  description     = "Checks that S3 bucket policies explicitly deny put-object requests without server-side encryption"
-  source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
-  tags            = local.common_tags
+  name       = "${local.namespace}-s3-bucket-server-side-encryption"
+  depends_on = [aws_config_configuration_recorder_status.main]
+  tags       = local.common_tags
+
+  source {
+    owner             = "AWS"
+    source_identifier = "S3_BUCKET_SERVER_SIDE_ENCRYPTION_ENABLED"
+  }
 }
 
 # Rule: Required tags on resources
 resource "aws_config_config_rule" "required_tags" {
-  name            = "${local.namespace}-required-tags"
-  depends_on      = [aws_config_configuration_recorder_status.main]
-  description     = "Checks whether resources contain all required tags"
-  source_identifier = "REQUIRED_TAGS"
-  tags            = local.common_tags
+  name       = "${local.namespace}-required-tags"
+  depends_on = [aws_config_configuration_recorder_status.main]
+  tags       = local.common_tags
+
+  source {
+    owner             = "AWS"
+    source_identifier = "REQUIRED_TAGS"
+  }
 
   input_parameters = jsonencode({
     tag1Key = "Project"
@@ -275,7 +275,9 @@ resource "aws_guardduty_detector" "main" {
     }
     malware_protection {
       scan_ec2_instance_with_findings {
-        ebs_volumes = var.environment == "prod" ? true : false
+        ebs_volumes {
+          enable = var.environment == "prod" ? true : false
+        }
       }
     }
   }
