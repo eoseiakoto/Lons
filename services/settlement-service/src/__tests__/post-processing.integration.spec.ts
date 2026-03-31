@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import {
+  Prisma,
   PrismaService,
   ContractStatus,
   LedgerEntryType,
@@ -7,7 +8,7 @@ import {
   RepaymentMethodType,
   SettlementStatus,
 } from '@lons/database';
-import { EventBusService, add, subtract, bankersRound } from '@lons/common';
+import { EventBusService, add, subtract, multiply, divide, bankersRound } from '@lons/common';
 import { LedgerService } from '../ledger.service';
 import { SettlementService } from '../settlement.service';
 
