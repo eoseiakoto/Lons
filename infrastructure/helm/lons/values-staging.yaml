@@ -65,7 +65,7 @@ ingress:
   className: nginx
   host: api.staging.lons.io
   annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-staging
+    cert-manager.io/cluster-issuer: letsencrypt-prod
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
     nginx.ingress.kubernetes.io/rate-limit: "250"
@@ -116,7 +116,7 @@ redis:
 
 certManager:
   enabled: true
-  issuer: letsencrypt-staging
+  issuer: letsencrypt-prod
 
 adminPortal:
   enabled: true

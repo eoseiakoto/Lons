@@ -6,7 +6,7 @@ metadata:
   labels:
     {{- include "lons.labels" . | nindent 4 }}
   annotations:
-    cert-manager.io/cluster-issuer: {{ .Values.certManager.issuer | default "letsencrypt-staging" }}
+    cert-manager.io/cluster-issuer: {{ .Values.certManager.issuer | default "letsencrypt-prod" }}
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     {{- if .Values.monitoring.grafana.ingress.annotations }}
