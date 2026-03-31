@@ -100,7 +100,7 @@ module "alb" {
   vpc_id            = module.vpc.vpc_id
   public_subnet_ids = module.vpc.public_subnet_ids
   enable_waf        = local.env_config.enable_alb_waf
-  certificate_arn   = var.acm_certificate_arn
+  certificate_arn   = var.acm_certificate_arn != "" ? var.acm_certificate_arn : module.dns.certificate_arn
   domain_name       = local.subdomain
   route53_zone_id   = local.route53_zone_id
   tags              = local.common_tags
