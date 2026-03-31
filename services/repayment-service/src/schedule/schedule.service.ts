@@ -48,7 +48,7 @@ export class ScheduleService {
         entries = generateEMISchedule(params);
     }
 
-    const created = await this.prisma.repaymentScheduleEntry.createMany({
+    await this.prisma.repaymentScheduleEntry.createMany({
       data: entries.map((e) => ({
         tenantId,
         contractId,

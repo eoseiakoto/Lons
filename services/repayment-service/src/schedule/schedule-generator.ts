@@ -125,7 +125,7 @@ export function generateBalloonSchedule(params: ScheduleParams): ScheduleEntry[]
   const monthlyRate = divide(interestRate, '1200');
 
   const entries: ScheduleEntry[] = [];
-  let remainingPrincipal = principalAmount;
+  const remainingPrincipal = principalAmount;
 
   for (let i = 1; i <= months; i++) {
     const dueDate = addDays(startDate, gracePeriodDays + i * 30);

@@ -14,6 +14,7 @@ from app.config import settings
 def use_temp_storage(tmp_path):
     """Use a temporary directory for model storage during tests."""
     original = settings.model_storage_path
+    # Update the settings object's internal _values dict for Pydantic compatibility
     settings.model_storage_path = str(tmp_path / "models")
     yield
     settings.model_storage_path = original

@@ -11,6 +11,10 @@ import uuid
 
 import numpy as np
 import pytest
+
+# Skip all tests in this module if xgboost is not available
+xgb = pytest.importorskip("xgboost")
+
 from httpx import ASGITransport, Client
 
 from app.main import app

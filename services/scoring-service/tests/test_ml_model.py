@@ -7,6 +7,9 @@ from decimal import Decimal
 import numpy as np
 import pytest
 
+# Skip all tests in this module if xgboost is not available
+xgb = pytest.importorskip("xgboost")
+
 from app.models.ml_model import MLModel
 from app.models.feature_engineering import get_feature_names, transform_batch
 
