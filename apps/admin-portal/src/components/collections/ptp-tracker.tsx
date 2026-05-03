@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { formatMoney, formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { CalendarCheck } from 'lucide-react';
+import { useI18n } from '@/lib/i18n';
 
 const PTP_QUERY = gql`
   query PTPTracker($pagination: PaginationInput) {
@@ -25,6 +26,7 @@ const PTP_QUERY = gql`
 `;
 
 export function PTPTracker() {
+  const { t } = useI18n();
   const { data, loading } = useQuery(PTP_QUERY, {
     variables: { pagination: { first: 50 } },
     fetchPolicy: 'cache-and-network',
@@ -34,10 +36,10 @@ export function PTPTracker() {
 
   if (loading && ptps.length === 0) {
     return (
-      <div className="glass p-6">
+      <div className="card p-6">
         <div className="animate-pulse space-y-3">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-10 bg-white/5 rounded" />
+            <div key={i} className="h-10 bg-[color:var(--bg-muted)] rounded" />
           ))}
         </div>
       </div>
@@ -46,11 +48,11 @@ export function PTPTracker() {
 
   if (ptps.length === 0) {
     return (
-      <div className="glass">
+      <div className="card">
         <EmptyState
           icon={CalendarCheck}
-          title="No Promises to Pay"
-          description="No promise-to-pay commitments have been recorded yet."
+          title={t('collections.ptp.emptyTitle')}
+          description={t('collections.ptp.emptyDescription')}
         />
       </div>
     );
@@ -61,46 +63,46 @@ export function PTPTracker() {
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="glass p-4">
-          <p className="text-xs font-medium text-white/40 uppercase">Upcoming</p>
-          <p className="text-xl font-bold text-amber-400 mt-1">
+        <div className="card p-4">
+          <p className="text-xs font-medium text-[color:var(--text-tertiary)] uppercase">{t('collections.ptp.upcoming')}</p>
+          <p className="text-xl font-bold text-[color:var(--status-warning-text)] mt-1">
             {ptps.filter((p: any) => !p.fulfilled && p.status !== 'fulfilled' && new Date(p.ptpDate) >= now).length}
           </p>
         </div>
-        <div className="glass p-4">
-          <p className="text-xs font-medium text-white/40 uppercase">Overdue PTPs</p>
-          <p className="text-xl font-bold text-red-400 mt-1">
+        <div className="card p-4">
+          <p className="text-xs font-medium text-[color:var(--text-tertiary)] uppercase">{t('collections.ptp.overduePtps')}</p>
+          <p className="text-xl font-bold text-[color:var(--status-error-text)] mt-1">
             {ptps.filter((p: any) => !p.fulfilled && p.status !== 'fulfilled' && new Date(p.ptpDate) < now).length}
           </p>
         </div>
-        <div className="glass p-4">
-          <p className="text-xs font-medium text-white/40 uppercase">Fulfilled</p>
-          <p className="text-xl font-bold text-emerald-400 mt-1">
+        <div className="card p-4">
+          <p className="text-xs font-medium text-[color:var(--text-tertiary)] uppercase">{t('collections.ptp.fulfilled')}</p>
+          <p className="text-xl font-bold text-[color:var(--status-success-text)] mt-1">
             {ptps.filter((p: any) => p.fulfilled || p.status === 'fulfilled').length}
           </p>
         </div>
       </div>
 
-      <div className="glass overflow-hidden">
+      <div className="card-flush overflow-hidden">
         <DataTable
           columns={[
-            { header: 'Contract #', accessor: (r: any) => r.contractNumber || r.contractId?.slice(0, 8) },
-            { header: 'Customer', accessor: (r: any) => r.customerName || '-' },
+            { header: t('collections.ptp.column.contractNumber'), accessor: (r: any) => r.contractNumber || r.contractId?.slice(0, 8) },
+            { header: t('collections.ptp.column.customer'), accessor: (r: any) => r.customerName || '-' },
             {
-              header: 'PTP Date',
+              header: t('collections.ptp.column.ptpDate'),
               accessor: (r: any) => {
                 const ptpDate = new Date(r.ptpDate);
                 const isOverdue = !r.fulfilled && r.status !== 'fulfilled' && ptpDate < now;
                 return (
-                  <span className={cn(isOverdue ? 'text-red-400 font-medium' : '')}>
+                  <span className={cn(isOverdue ? 'text-[color:var(--status-error-text)] font-medium' : '')}>
                     {formatDate(r.ptpDate)}
                   </span>
                 );
               },
             },
-            { header: 'Amount', accessor: (r: any) => formatMoney(String(r.ptpAmount), r.currency || 'GHS') },
+            { header: t('collections.ptp.column.amount'), accessor: (r: any) => <span className="tabular-nums">{formatMoney(String(r.ptpAmount), r.currency || 'GHS')}</span> },
             {
-              header: 'Status',
+              header: t('collections.ptp.column.status'),
               accessor: (r: any) => {
                 if (r.fulfilled || r.status === 'fulfilled') {
                   return <StatusBadge status="fulfilled" />;
@@ -112,7 +114,7 @@ export function PTPTracker() {
                 return <StatusBadge status="pending" />;
               },
             },
-            { header: 'Created', accessor: (r: any) => formatDate(r.createdAt) },
+            { header: t('collections.ptp.column.created'), accessor: (r: any) => formatDate(r.createdAt) },
           ]}
           data={ptps}
         />

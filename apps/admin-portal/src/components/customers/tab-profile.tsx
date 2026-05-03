@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
+import { useI18n } from '@/lib/i18n';
 import { maskPII, formatDate } from '@/lib/utils';
 
 interface TabProfileProps {
@@ -10,6 +11,7 @@ interface TabProfileProps {
 }
 
 export function TabProfile({ customer }: TabProfileProps) {
+  const { t } = useI18n();
   const { hasPermission } = useAuth();
   const [revealed, setRevealed] = useState<Record<string, boolean>>({});
   const canViewPII = hasPermission('pii:view');
@@ -32,8 +34,8 @@ export function TabProfile({ customer }: TabProfileProps) {
           {canViewPII && (
             <button
               onClick={() => toggleReveal(type)}
-              className="text-white/30 hover:text-white/60 transition-colors"
-              title={isRevealed ? 'Mask' : 'Reveal'}
+              className="text-[color:var(--text-tertiary)] hover:text-[color:var(--text-secondary)] transition-colors"
+              title={isRevealed ? t('customers.profile.mask') : t('customers.profile.reveal')}
             >
               {isRevealed ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
             </button>
@@ -44,36 +46,36 @@ export function TabProfile({ customer }: TabProfileProps) {
   };
 
   const fields = [
-    { label: 'External ID', value: customer.externalId },
-    { label: 'External Source', value: customer.externalSource },
-    { label: 'Gender', value: customer.gender || '-' },
-    renderPIIField('Phone', customer.phonePrimary, 'phone'),
-    renderPIIField('Email', customer.email, 'email'),
-    renderPIIField('National ID', customer.nationalId, 'nationalId'),
-    { label: 'KYC Level', value: customer.kycLevel?.replace(/_/g, ' ') || '-' },
-    { label: 'Country', value: customer.country || '-' },
-    { label: 'Region', value: customer.region || '-' },
-    { label: 'City', value: customer.city || '-' },
-    { label: 'Watchlist', value: customer.watchlist ? 'Yes' : 'No' },
-    { label: 'Created', value: formatDate(customer.createdAt) },
-    { label: 'Updated', value: formatDate(customer.updatedAt) },
+    { label: t('customers.profile.externalId'), value: customer.externalId },
+    { label: t('customers.profile.externalSource'), value: customer.externalSource },
+    { label: t('customers.profile.gender'), value: customer.gender || '-' },
+    renderPIIField(t('customers.profile.phone'), customer.phonePrimary, 'phone'),
+    renderPIIField(t('customers.profile.email'), customer.email, 'email'),
+    renderPIIField(t('customers.profile.nationalId'), customer.nationalId, 'nationalId'),
+    { label: t('customers.profile.kycLevel'), value: customer.kycLevel?.replace(/_/g, ' ') || '-' },
+    { label: t('customers.profile.country'), value: customer.country || '-' },
+    { label: t('customers.profile.region'), value: customer.region || '-' },
+    { label: t('customers.profile.city'), value: customer.city || '-' },
+    { label: t('customers.profile.watchlist'), value: customer.watchlist ? t('common.yes') : t('common.no') },
+    { label: t('common.created'), value: formatDate(customer.createdAt) },
+    { label: t('common.updated'), value: formatDate(customer.updatedAt) },
   ];
 
   return (
-    <div className="glass p-6">
-      <h3 className="text-sm font-semibold text-white/60 uppercase tracking-wider mb-4">Personal Information</h3>
+    <div className="card p-6">
+      <h3 className="section-label mb-4">{t('customers.profile.personalInformation')}</h3>
       <dl className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {fields.map(({ label, value }) => (
           <div key={label}>
-            <dt className="text-xs font-medium text-white/40 uppercase">{label}</dt>
-            <dd className="text-sm text-white mt-1">{typeof value === 'string' ? value : value}</dd>
+            <dt className="text-xs font-medium text-[color:var(--text-tertiary)] uppercase">{label}</dt>
+            <dd className="text-sm text-[color:var(--text-primary)] mt-1">{typeof value === 'string' ? value : value}</dd>
           </div>
         ))}
       </dl>
       {customer.blacklistReason && (
-        <div className="mt-6 p-4 rounded-lg bg-red-500/10 border border-red-500/20">
-          <dt className="text-xs font-medium text-red-400 uppercase">Blacklist Reason</dt>
-          <dd className="text-sm text-red-400 mt-1">{customer.blacklistReason}</dd>
+        <div className="mt-6 p-4 rounded-lg bg-[color:var(--status-error-soft)] border border-[color:var(--status-error)]">
+          <dt className="text-xs font-medium text-[color:var(--status-error-text)] uppercase">{t('customers.profile.blacklistReason')}</dt>
+          <dd className="text-sm text-[color:var(--status-error-text)] mt-1">{customer.blacklistReason}</dd>
         </div>
       )}
     </div>

@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
+import { PageHeader } from '@/components/ui/page-header';
+import { useI18n } from '@/lib/i18n/i18n-context';
 
 interface WalletProviderConfig {
   id: string;
@@ -25,6 +27,7 @@ const PROVIDER_TYPES = ['MOCK', 'MTN_MOMO', 'MPESA', 'AIRTEL_MONEY', 'GENERIC'];
 const ENVIRONMENT_MODES = ['SANDBOX', 'PRODUCTION'];
 
 export default function IntegrationSettingsPage() {
+  const { t } = useI18n();
   const [configs, setConfigs] = useState<WalletProviderConfig[]>([]);
   const [loading, setLoading] = useState(true);
   const [testingId, setTestingId] = useState<string | null>(null);
@@ -82,7 +85,7 @@ export default function IntegrationSettingsPage() {
       const { data } = await res.json();
       setTestResult(data?.testWalletConnection);
     } catch {
-      setTestResult({ success: false, latencyMs: 0, errorMessage: 'Request failed' });
+      setTestResult({ success: false, latencyMs: 0, errorMessage: t('settings.integrations.error.requestFailed') });
     } finally {
       setTestingId(null);
     }
@@ -150,10 +153,10 @@ export default function IntegrationSettingsPage() {
   if (loading) {
     return (
       <div className="p-6">
-        <h1 className="mb-6 text-2xl font-bold">Integration Settings</h1>
+        <h1 className="mb-6 text-[28px] font-semibold tracking-[-0.02em] text-[color:var(--text-primary)]">{t('settings.integrations.title')}</h1>
         <div className="animate-pulse space-y-4">
           {[1, 2].map((i) => (
-            <div key={i} className="h-24 rounded-lg bg-gray-100" />
+            <div key={i} className="shimmer h-24 rounded-lg" />
           ))}
         </div>
       </div>
@@ -161,22 +164,24 @@ export default function IntegrationSettingsPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Integration Settings</h1>
-        <button
-          onClick={() => setShowCreateForm(true)}
-          className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-        >
-          Add Provider
-        </button>
-      </div>
+    <div className="relative space-y-8 animate-enter">
+      <PageHeader
+        eyebrow={t('eyebrow.integrationWallets')}
+        title={t('settings.integrations.title')}
+        subtitle={t('settings.integrations.subtitle')}
+        actions={
+          <button onClick={() => setShowCreateForm(true)} className="btn-primary">
+            {t('settings.integrations.addProvider')}
+          </button>
+        }
+      />
 
-      {/* Wallet Providers */}
-      <h2 className="mb-4 text-lg font-semibold">Wallet Providers</h2>
+      <h2 className="relative z-10 text-[16px] font-semibold tracking-tight text-[color:var(--text-primary)]">
+        {t('settings.integrations.walletProviders')}
+      </h2>
 
       {configs.length === 0 ? (
-        <p className="text-sm text-gray-500">No wallet provider configurations found.</p>
+        <p className="text-sm text-gray-500">{t('settings.integrations.noProviders')}</p>
       ) : (
         <div className="space-y-4">
           {configs.map((config) => (
@@ -192,7 +197,7 @@ export default function IntegrationSettingsPage() {
                     <h3 className="font-medium">{config.displayName}</h3>
                     {config.isDefault && (
                       <span className="rounded bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-800">
-                        Default
+                        {t('settings.integrations.defaultBadge')}
                       </span>
                     )}
                     <span
@@ -202,7 +207,7 @@ export default function IntegrationSettingsPage() {
                           : 'bg-red-100 text-red-800'
                       }`}
                     >
-                      {config.isActive ? 'Active' : 'Inactive'}
+                      {config.isActive ? t('common.active') : t('common.inactive')}
                     </span>
                   </div>
                   <p className="mt-1 text-sm text-gray-500">
@@ -216,14 +221,14 @@ export default function IntegrationSettingsPage() {
                     disabled={testingId === config.id}
                     className="rounded border border-gray-300 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                   >
-                    {testingId === config.id ? 'Testing...' : 'Test Connection'}
+                    {testingId === config.id ? t('settings.integrations.testing') : t('settings.integrations.testConnection')}
                   </button>
                   {!config.isDefault && config.isActive && (
                     <button
                       onClick={() => handleSetDefault(config.id)}
                       className="rounded border border-blue-300 px-3 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
                     >
-                      Set Default
+                      {t('settings.integrations.setDefault')}
                     </button>
                   )}
                   {config.isActive && (
@@ -231,7 +236,7 @@ export default function IntegrationSettingsPage() {
                       onClick={() => handleToggleActive(config.id)}
                       className="rounded border border-red-300 px-3 py-1 text-xs font-medium text-red-700 hover:bg-red-50"
                     >
-                      Deactivate
+                      {t('settings.integrations.deactivate')}
                     </button>
                   )}
                 </div>
@@ -244,8 +249,8 @@ export default function IntegrationSettingsPage() {
                   }`}
                 >
                   {testResult.success
-                    ? `Connection successful (${testResult.latencyMs}ms)`
-                    : `Connection failed: ${testResult.errorMessage}`}
+                    ? t('settings.integrations.connectionSuccess', { ms: testResult.latencyMs })
+                    : t('settings.integrations.connectionFailed', { error: testResult.errorMessage ?? 'Unknown error' })}
                 </div>
               )}
             </div>
@@ -257,10 +262,10 @@ export default function IntegrationSettingsPage() {
       {showCreateForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="w-full max-w-md rounded-lg bg-white p-6">
-            <h3 className="mb-4 text-lg font-semibold">Add Wallet Provider</h3>
+            <h3 className="mb-4 text-[18px] font-semibold text-[color:var(--text-primary)]">{t('settings.integrations.addProviderTitle')}</h3>
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-sm font-medium">Display Name</label>
+                <label className="mb-1 block text-sm font-medium">{t('settings.integrations.displayName')}</label>
                 <input
                   type="text"
                   value={newConfig.displayName}
@@ -269,7 +274,7 @@ export default function IntegrationSettingsPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Provider Type</label>
+                <label className="mb-1 block text-sm font-medium">{t('settings.integrations.providerType')}</label>
                 <select
                   value={newConfig.providerType}
                   onChange={(e) => setNewConfig({ ...newConfig, providerType: e.target.value })}
@@ -281,7 +286,7 @@ export default function IntegrationSettingsPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Environment</label>
+                <label className="mb-1 block text-sm font-medium">{t('settings.integrations.environment')}</label>
                 <select
                   value={newConfig.environmentMode}
                   onChange={(e) => setNewConfig({ ...newConfig, environmentMode: e.target.value })}
@@ -293,7 +298,7 @@ export default function IntegrationSettingsPage() {
                 </select>
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">API Base URL (optional)</label>
+                <label className="mb-1 block text-sm font-medium">{t('settings.integrations.apiBaseUrl')}</label>
                 <input
                   type="text"
                   value={newConfig.apiBaseUrl}
@@ -302,7 +307,7 @@ export default function IntegrationSettingsPage() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium">Config JSON</label>
+                <label className="mb-1 block text-sm font-medium">{t('settings.integrations.configJson')}</label>
                 <textarea
                   value={newConfig.configJson}
                   onChange={(e) => setNewConfig({ ...newConfig, configJson: e.target.value })}
@@ -316,14 +321,14 @@ export default function IntegrationSettingsPage() {
                 onClick={() => setShowCreateForm(false)}
                 className="rounded border border-gray-300 px-4 py-2 text-sm"
               >
-                Cancel
+                {t('common.cancel')}
               </button>
               <button
                 onClick={handleCreateConfig}
                 disabled={!newConfig.displayName}
                 className="rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
               >
-                Create
+                {t('common.create')}
               </button>
             </div>
           </div>

@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 
 interface DrawerProps {
@@ -12,7 +14,11 @@ interface DrawerProps {
 }
 
 export function Drawer({ open, onClose, title, children, width = 'w-[480px]' }: DrawerProps) {
-  const overlayRef = useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!open) return;
@@ -27,30 +33,55 @@ export function Drawer({ open, onClose, title, children, width = 'w-[480px]' }: 
     };
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!mounted) return null;
 
-  return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 z-50 flex justify-end"
-      onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
-    >
-      <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" />
-      <div className={`relative ${width} max-w-full h-full bg-slate-900/95 backdrop-blur-2xl border-l border-white/10 shadow-2xl flex flex-col animate-slide-in-right`}>
-        <div className="flex items-center justify-between p-5 border-b border-white/10">
-          <h2 className="text-lg font-semibold text-white">{title}</h2>
-          <button
+  const drawer = (
+    <AnimatePresence>
+      {open && (
+        <div className="fixed inset-0 z-[60] flex justify-end">
+          {/* Scrim — fade in/out */}
+          <motion.div
+            className="fixed inset-0 bg-black/50 backdrop-blur-[2px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
             onClick={onClose}
-            className="text-white/40 hover:text-white transition-colors"
-            aria-label="Close drawer"
+          />
+
+          {/* Panel — spring slide from right */}
+          <motion.div
+            className={`relative ${width} max-w-full h-full flex flex-col shadow-floating`}
+            style={{
+              backgroundColor: 'var(--bg-elevated)',
+              borderLeft: '1px solid var(--border-subtle)',
+            }}
+            initial={{ x: '100%' }}
+            animate={{ x: 0 }}
+            exit={{ x: '100%' }}
+            transition={{ type: 'spring', stiffness: 320, damping: 34, mass: 0.9 }}
           >
-            <X className="w-5 h-5" />
-          </button>
+            <div
+              className="flex items-center justify-between px-6 py-4"
+              style={{ borderBottom: '1px solid var(--border-subtle)' }}
+            >
+              <h2 className="text-[15px] font-semibold tracking-tight text-[color:var(--text-primary)]">
+                {title}
+              </h2>
+              <button
+                onClick={onClose}
+                className="p-1.5 rounded-md text-[color:var(--text-tertiary)] hover:text-[color:var(--text-primary)] hover:bg-[color:var(--bg-hover)] transition-colors active:scale-95"
+                aria-label="Close drawer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">{children}</div>
+          </motion.div>
         </div>
-        <div className="flex-1 overflow-y-auto p-5">
-          {children}
-        </div>
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   );
+
+  return createPortal(drawer, document.body);
 }

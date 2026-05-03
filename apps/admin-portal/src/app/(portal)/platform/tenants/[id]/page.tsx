@@ -3,6 +3,7 @@
 import { use } from 'react';
 import { gql, useQuery, useMutation } from '@apollo/client';
 import { useToast } from '@/components/ui/toast';
+import { useI18n } from '@/lib/i18n/i18n-context';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 import { TenantDetailTabs, type TenantDetail } from '@/components/platform/tenant-detail-tabs';
@@ -79,7 +80,7 @@ const UPDATE_SP = gql`
 
 export default function TenantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
-  
+  const { t } = useI18n();
   const { toast } = useToast();
 
   const { data, loading, error, refetch } = useQuery(GET_TENANT, {
@@ -163,40 +164,68 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
   if (loading && !tenant) {
     return (
       <div className="flex items-center justify-center min-h-[40vh]">
-        <div className="text-white/40">Loading tenant...</div>
+        <div className="text-[color:var(--text-secondary)]">Loading tenant...</div>
       </div>
     );
   }
 
   if (error || !tenant) {
     return (
-      <div className="space-y-4">
-        <Link href="/platform/tenants" className="flex items-center gap-2 text-white/50 hover:text-white text-sm">
-          <ArrowLeft className="w-4 h-4" />
-          Back to Tenants
+      <div className="space-y-4 animate-enter">
+        <Link href="/platform/tenants" className="inline-flex items-center gap-1.5 text-[12px] text-[color:var(--text-tertiary)] hover:text-[color:var(--text-primary)] transition-colors">
+          <ArrowLeft className="w-3.5 h-3.5" />
+          {t('common.back')}
         </Link>
-        <div className="glass p-8 text-center">
-          <p className="text-red-400 text-sm">{error?.message || 'Tenant not found.'}</p>
+        <div className="card-glow p-12 text-center">
+          <p className="text-[color:var(--status-error-text)] text-sm">{error?.message || 'Tenant not found.'}</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link href="/platform/tenants" className="text-white/40 hover:text-white transition-colors">
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-white">{tenant.name}</h1>
-          <p className="text-sm text-white/40">{tenant.slug}</p>
-        </div>
-      </div>
+    <div className="relative space-y-8 animate-enter">
+      <Link
+        href="/platform/tenants"
+        className="relative z-10 inline-flex items-center gap-1.5 text-[12px] text-[color:var(--text-tertiary)] hover:text-[color:var(--text-primary)] transition-colors"
+      >
+        <ArrowLeft className="w-3.5 h-3.5" />
+        {t('common.back')}
+      </Link>
 
-      {/* Tenant detail tabs */}
-      <div className="glass p-6">
+      <section className="relative z-10 card-glow-hero card-glow-sweep p-7 lg:p-8">
+        <div className="flex items-start gap-5">
+          <div
+            className="w-14 h-14 rounded-xl flex items-center justify-center text-[18px] font-semibold flex-shrink-0"
+            style={{
+              backgroundColor: 'var(--accent-primary-soft)',
+              color: 'var(--accent-primary-deep)',
+              border: '1px solid var(--border-default)',
+            }}
+          >
+            {tenant.name.slice(0, 2).toUpperCase()}
+          </div>
+          <div>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="live-dot" aria-hidden />
+              <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-[color:var(--accent-primary-deep)]">
+                Platform tenant
+              </span>
+            </div>
+            <h1
+              className="font-semibold tracking-[-0.035em] text-[color:var(--text-primary)]"
+              style={{ fontSize: 32, lineHeight: 1.05 }}
+            >
+              {tenant.name}
+            </h1>
+            <p className="text-[12px] font-mono text-[color:var(--text-tertiary)] mt-1">
+              {tenant.slug}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <div className="relative z-10 card-glow p-6">
         <TenantDetailTabs
           tenant={tenant}
           onSave={handleSave}
@@ -205,8 +234,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ id: str
         />
       </div>
 
-      {/* SP management */}
-      <div className="glass p-6">
+      <div className="relative z-10 card-glow p-6">
         <SpManagement
           tenantId={id}
           serviceProviders={serviceProviders}

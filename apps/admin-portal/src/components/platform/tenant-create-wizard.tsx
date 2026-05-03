@@ -1,18 +1,19 @@
 'use client';
 
 import { useState } from 'react';
-import { cn } from '@/lib/utils';
+import { ALL_COUNTRIES, countryLabel, COUNTRY_MAP } from '@/lib/constants';
+import { useI18n } from '@/lib/i18n';
 
 interface WizardStep {
-  title: string;
-  description: string;
+  titleKey: string;
+  descriptionKey: string;
 }
 
 const STEPS: WizardStep[] = [
-  { title: 'Basic Info', description: 'Organization details' },
-  { title: 'Admin User', description: 'Initial admin account' },
-  { title: 'Configuration', description: 'Platform settings' },
-  { title: 'Review & Create', description: 'Confirm and create' },
+  { titleKey: 'platform.wizard.step1Title', descriptionKey: 'platform.wizard.step1Desc' },
+  { titleKey: 'platform.wizard.step2Title', descriptionKey: 'platform.wizard.step2Desc' },
+  { titleKey: 'platform.wizard.step3Title', descriptionKey: 'platform.wizard.step3Desc' },
+  { titleKey: 'platform.wizard.step4Title', descriptionKey: 'platform.wizard.step4Desc' },
 ];
 
 export interface TenantCreateForm {
@@ -50,6 +51,7 @@ interface TenantCreateWizardProps {
 }
 
 export function TenantCreateWizard({ onSubmit, submitting }: TenantCreateWizardProps) {
+  const { t } = useI18n();
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<TenantCreateForm>(DEFAULT_FORM);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -74,13 +76,17 @@ export function TenantCreateWizard({ onSubmit, submitting }: TenantCreateWizardP
   const validateStep = (s: number): boolean => {
     const errs: Record<string, string> = {};
     if (s === 0) {
-      if (!form.name.trim()) errs.name = 'Name is required';
-      if (!form.slug.trim()) errs.slug = 'Slug is required';
-      if (!form.country.trim()) errs.country = 'Country is required';
+      if (!form.name.trim()) errs.name = t('platform.wizard.validation.nameRequired');
+      if (!form.slug.trim()) errs.slug = t('platform.wizard.validation.slugRequired');
+      if (!form.country.trim()) errs.country = t('platform.wizard.validation.countryRequired');
     } else if (s === 1) {
-      if (!form.adminEmail.trim()) errs.adminEmail = 'Email is required';
-      if (!form.adminName.trim()) errs.adminName = 'Name is required';
-      if (form.adminPassword.length < 8) errs.adminPassword = 'Password must be at least 8 characters';
+      if (!form.adminEmail.trim()) errs.adminEmail = t('platform.wizard.validation.emailRequired');
+      if (!form.adminName.trim()) errs.adminName = t('platform.wizard.validation.nameRequired');
+      if (form.adminPassword.length < 12) errs.adminPassword = t('platform.wizard.validation.passwordMin');
+      else if (!/[A-Z]/.test(form.adminPassword)) errs.adminPassword = t('platform.wizard.validation.passwordUppercase');
+      else if (!/[a-z]/.test(form.adminPassword)) errs.adminPassword = t('platform.wizard.validation.passwordLowercase');
+      else if (!/[0-9]/.test(form.adminPassword)) errs.adminPassword = t('platform.wizard.validation.passwordDigit');
+      else if (!/[^A-Za-z0-9]/.test(form.adminPassword)) errs.adminPassword = t('platform.wizard.validation.passwordSpecial');
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -100,51 +106,75 @@ export function TenantCreateWizard({ onSubmit, submitting }: TenantCreateWizardP
     }
   };
 
-  const labelCls = 'block text-sm font-medium text-white/60 mb-1';
-  const errCls = 'text-xs text-red-400 mt-1';
+  const labelCls = 'block text-[11px] uppercase tracking-wider text-[color:var(--text-tertiary)] mb-1.5';
+  const errCls = 'text-[11px] text-[color:var(--status-error-text)] mt-1.5';
 
   return (
     <div>
       {/* Progress indicators */}
-      <div className="flex items-center gap-2 mb-8">
-        {STEPS.map((s, i) => (
-          <div key={i} className="flex items-center">
-            <button
-              onClick={() => i < step && setStep(i)}
-              className={cn(
-                'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all',
-                i === step
-                  ? 'bg-blue-500/80 text-white border border-blue-400/50'
-                  : i < step
-                    ? 'bg-emerald-500/30 text-emerald-400 border border-emerald-500/30 cursor-pointer'
-                    : 'bg-white/5 text-white/30 border border-white/10',
+      <div className="flex items-center gap-2 mb-6">
+        {STEPS.map((s, i) => {
+          const isActive = i === step;
+          const isComplete = i < step;
+          return (
+            <div key={i} className="flex items-center">
+              <button
+                onClick={() => isComplete && setStep(i)}
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-[12px] font-semibold transition-all"
+                style={
+                  isActive
+                    ? {
+                        backgroundColor: 'var(--accent-primary)',
+                        color: 'var(--text-on-accent)',
+                        boxShadow: '0 0 16px -2px rgba(var(--accent-primary-rgb), 0.45)',
+                      }
+                    : isComplete
+                      ? {
+                          backgroundColor: 'var(--accent-primary-soft)',
+                          color: 'var(--accent-primary-deep)',
+                          border: '1px solid var(--border-subtle)',
+                          cursor: 'pointer',
+                        }
+                      : {
+                          backgroundColor: 'var(--bg-muted)',
+                          color: 'var(--text-tertiary)',
+                          border: '1px solid var(--border-subtle)',
+                        }
+                }
+              >
+                {i + 1}
+              </button>
+              {i < STEPS.length - 1 && (
+                <div
+                  className="w-12 h-px mx-1"
+                  style={{
+                    backgroundColor: isComplete ? 'var(--accent-primary)' : 'var(--border-subtle)',
+                  }}
+                />
               )}
-            >
-              {i + 1}
-            </button>
-            {i < STEPS.length - 1 && (
-              <div
-                className={cn(
-                  'w-12 h-px mx-1',
-                  i < step ? 'bg-emerald-500/40' : 'bg-white/10',
-                )}
-              />
-            )}
-          </div>
-        ))}
+            </div>
+          );
+        })}
       </div>
 
-      <div className="glass p-6">
-        <h3 className="text-lg font-semibold text-white/80 mb-1">{STEPS[step].title}</h3>
-        <p className="text-sm text-white/40 mb-6">{STEPS[step].description}</p>
+      <div className="card-glow card-glow-sweep p-6">
+        <p className="text-[11px] font-medium uppercase tracking-[0.12em] text-[color:var(--accent-primary-deep)] mb-1">
+          0{step + 1} · {t('platform.wizard.stepLabel')}
+        </p>
+        <h3 className="text-[20px] font-semibold tracking-tight text-[color:var(--text-primary)]">
+          {t(STEPS[step].titleKey)}
+        </h3>
+        <p className="text-[13px] text-[color:var(--text-tertiary)] mb-6 mt-1">
+          {t(STEPS[step].descriptionKey)}
+        </p>
 
         {/* Step 1: Basic Info */}
         {step === 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className={labelCls}>Organization Name *</label>
+              <label className={labelCls}>{t('platform.wizard.orgName')}</label>
               <input
-                className="w-full glass-input"
+                className="input-field"
                 value={form.name}
                 onChange={(e) => {
                   set('name', e.target.value);
@@ -152,47 +182,49 @@ export function TenantCreateWizard({ onSubmit, submitting }: TenantCreateWizardP
                     set('slug', autoSlug(e.target.value));
                   }
                 }}
-                placeholder="Acme Financial Services"
+                placeholder={t('platform.wizard.placeholder.orgName')}
               />
               {errors.name && <p className={errCls}>{errors.name}</p>}
             </div>
             <div>
-              <label className={labelCls}>Slug *</label>
+              <label className={labelCls}>{t('platform.wizard.slug')}</label>
               <input
-                className="w-full glass-input"
+                className="input-field"
                 value={form.slug}
                 onChange={(e) => set('slug', e.target.value)}
-                placeholder="acme-financial"
+                placeholder={t('platform.wizard.placeholder.slug')}
               />
               {errors.slug && <p className={errCls}>{errors.slug}</p>}
             </div>
             <div>
-              <label className={labelCls}>Legal Name</label>
+              <label className={labelCls}>{t('platform.wizard.legalName')}</label>
               <input
-                className="w-full glass-input"
+                className="input-field"
                 value={form.legalName}
                 onChange={(e) => set('legalName', e.target.value)}
-                placeholder="Acme Financial Services Ltd."
+                placeholder={t('platform.wizard.placeholder.legalName')}
               />
             </div>
             <div>
-              <label className={labelCls}>Registration Number</label>
+              <label className={labelCls}>{t('platform.wizard.registrationNumber')}</label>
               <input
-                className="w-full glass-input"
+                className="input-field"
                 value={form.registrationNumber}
                 onChange={(e) => set('registrationNumber', e.target.value)}
-                placeholder="REG-12345"
+                placeholder={t('platform.wizard.placeholder.registrationNumber')}
               />
             </div>
             <div>
-              <label className={labelCls}>Country Code *</label>
-              <input
-                className="w-full glass-input"
+              <label className={labelCls}>{t('platform.wizard.country')}</label>
+              <select
+                className="input-field"
                 value={form.country}
-                onChange={(e) => set('country', e.target.value.toUpperCase())}
-                maxLength={3}
-                placeholder="GH"
-              />
+                onChange={(e) => set('country', e.target.value)}
+              >
+                {ALL_COUNTRIES.map((c) => (
+                  <option key={c.code} value={c.code}>{countryLabel(c.code)}</option>
+                ))}
+              </select>
               {errors.country && <p className={errCls}>{errors.country}</p>}
             </div>
           </div>
@@ -202,34 +234,34 @@ export function TenantCreateWizard({ onSubmit, submitting }: TenantCreateWizardP
         {step === 1 && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className={labelCls}>Admin Name *</label>
+              <label className={labelCls}>{t('platform.wizard.adminName')}</label>
               <input
-                className="w-full glass-input"
+                className="input-field"
                 value={form.adminName}
                 onChange={(e) => set('adminName', e.target.value)}
-                placeholder="John Doe"
+                placeholder={t('platform.wizard.placeholder.adminName')}
               />
               {errors.adminName && <p className={errCls}>{errors.adminName}</p>}
             </div>
             <div>
-              <label className={labelCls}>Admin Email *</label>
+              <label className={labelCls}>{t('platform.wizard.adminEmail')}</label>
               <input
-                className="w-full glass-input"
+                className="input-field"
                 type="email"
                 value={form.adminEmail}
                 onChange={(e) => set('adminEmail', e.target.value)}
-                placeholder="admin@acme.com"
+                placeholder={t('platform.wizard.placeholder.adminEmail')}
               />
               {errors.adminEmail && <p className={errCls}>{errors.adminEmail}</p>}
             </div>
             <div className="md:col-span-2">
-              <label className={labelCls}>Initial Password *</label>
+              <label className={labelCls}>{t('platform.wizard.initialPassword')}</label>
               <input
-                className="w-full glass-input"
+                className="input-field"
                 type="password"
                 value={form.adminPassword}
                 onChange={(e) => set('adminPassword', e.target.value)}
-                placeholder="Minimum 8 characters"
+                placeholder={t('platform.wizard.placeholder.password')}
               />
               {errors.adminPassword && <p className={errCls}>{errors.adminPassword}</p>}
             </div>
@@ -240,19 +272,19 @@ export function TenantCreateWizard({ onSubmit, submitting }: TenantCreateWizardP
         {step === 2 && (
           <div className="space-y-5">
             <div>
-              <label className={labelCls}>Plan Tier</label>
+              <label className={labelCls}>{t('platform.wizard.planTier')}</label>
               <select
-                className="w-full glass-input"
+                className="input-field"
                 value={form.planTier}
                 onChange={(e) => set('planTier', e.target.value)}
               >
-                <option value="starter">Starter</option>
-                <option value="professional">Professional</option>
-                <option value="enterprise">Enterprise</option>
+                <option value="starter">{t('platform.wizard.plan.starter')}</option>
+                <option value="professional">{t('platform.wizard.plan.professional')}</option>
+                <option value="enterprise">{t('platform.wizard.plan.enterprise')}</option>
               </select>
             </div>
             <div>
-              <label className={labelCls}>Initial Settings (JSON)</label>
+              <label className={labelCls}>{t('platform.wizard.initialSettings')}</label>
               <textarea
                 className="w-full glass-input text-sm font-mono"
                 rows={6}
@@ -265,54 +297,25 @@ export function TenantCreateWizard({ onSubmit, submitting }: TenantCreateWizardP
 
         {/* Step 4: Review & Create */}
         {step === 3 && (
-          <div className="space-y-5">
-            <div className="glass p-4 space-y-3">
-              <h4 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Organization</h4>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <span className="text-white/40">Name:</span>{' '}
-                  <span className="text-white">{form.name}</span>
-                </div>
-                <div>
-                  <span className="text-white/40">Slug:</span>{' '}
-                  <span className="text-white">{form.slug}</span>
-                </div>
-                <div>
-                  <span className="text-white/40">Country:</span>{' '}
-                  <span className="text-white">{form.country}</span>
-                </div>
-                <div>
-                  <span className="text-white/40">Plan:</span>{' '}
-                  <span className="text-white capitalize">{form.planTier}</span>
-                </div>
-                {form.legalName && (
-                  <div>
-                    <span className="text-white/40">Legal Name:</span>{' '}
-                    <span className="text-white">{form.legalName}</span>
-                  </div>
-                )}
-                {form.registrationNumber && (
-                  <div>
-                    <span className="text-white/40">Reg #:</span>{' '}
-                    <span className="text-white">{form.registrationNumber}</span>
-                  </div>
-                )}
-              </div>
-            </div>
+          <div className="space-y-4">
+            <ReviewBlock title={t('platform.wizard.review.organization')}>
+              <ReviewRow label={t('platform.wizard.review.name')} value={form.name} />
+              <ReviewRow label={t('platform.wizard.review.slug')} value={form.slug} mono />
+              <ReviewRow
+                label={t('platform.wizard.review.country')}
+                value={COUNTRY_MAP[form.country]?.name ?? form.country}
+              />
+              <ReviewRow label={t('platform.wizard.review.plan')} value={form.planTier} capitalize />
+              {form.legalName && <ReviewRow label={t('platform.wizard.review.legalName')} value={form.legalName} />}
+              {form.registrationNumber && (
+                <ReviewRow label={t('platform.wizard.review.regNumber')} value={form.registrationNumber} />
+              )}
+            </ReviewBlock>
 
-            <div className="glass p-4 space-y-3">
-              <h4 className="text-sm font-semibold text-white/60 uppercase tracking-wider">Admin User</h4>
-              <div className="grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <span className="text-white/40">Name:</span>{' '}
-                  <span className="text-white">{form.adminName}</span>
-                </div>
-                <div>
-                  <span className="text-white/40">Email:</span>{' '}
-                  <span className="text-white">{form.adminEmail}</span>
-                </div>
-              </div>
-            </div>
+            <ReviewBlock title={t('platform.wizard.review.adminUser')}>
+              <ReviewRow label={t('platform.wizard.review.name')} value={form.adminName} />
+              <ReviewRow label={t('platform.wizard.review.adminEmail')} value={form.adminEmail} />
+            </ReviewBlock>
           </div>
         )}
       </div>
@@ -321,27 +324,69 @@ export function TenantCreateWizard({ onSubmit, submitting }: TenantCreateWizardP
       <div className="flex items-center justify-between mt-6">
         <div>
           {step > 0 && (
-            <button onClick={goBack} className="glass-button text-sm">
-              Back
+            <button onClick={goBack} className="btn-ghost">
+              {t('common.back')}
             </button>
           )}
         </div>
         <div>
           {step < STEPS.length - 1 ? (
-            <button onClick={goNext} className="glass-button-primary text-sm">
-              Next
+            <button onClick={goNext} className="btn-primary">
+              {t('common.next')}
             </button>
           ) : (
-            <button
-              onClick={handleSubmit}
-              disabled={submitting}
-              className="glass-button-primary text-sm disabled:opacity-50"
-            >
-              {submitting ? 'Creating...' : 'Create Tenant'}
+            <button onClick={handleSubmit} disabled={submitting} className="btn-primary disabled:opacity-50">
+              {submitting ? t('platform.wizard.creating') : t('platform.wizard.createTenant')}
             </button>
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function ReviewBlock({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div
+      className="rounded-lg p-5 space-y-3"
+      style={{
+        backgroundColor: 'var(--bg-muted)',
+        border: '1px solid var(--border-subtle)',
+      }}
+    >
+      <h4 className="text-[11px] font-semibold uppercase tracking-wider text-[color:var(--text-tertiary)]">
+        {title}
+      </h4>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-[13px]">{children}</dl>
+    </div>
+  );
+}
+
+function ReviewRow({
+  label,
+  value,
+  mono,
+  capitalize,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  capitalize?: boolean;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-[10px] uppercase tracking-wider text-[color:var(--text-tertiary)]">
+        {label}
+      </dt>
+      <dd
+        className="text-[color:var(--text-primary)] truncate"
+        style={{
+          fontFamily: mono ? 'var(--font-geist-mono)' : undefined,
+          textTransform: capitalize ? 'capitalize' : undefined,
+        }}
+      >
+        {value || '—'}
+      </dd>
     </div>
   );
 }

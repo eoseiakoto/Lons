@@ -5,6 +5,8 @@ import { gql, useQuery, useMutation } from '@apollo/client';
 import { Modal } from '@/components/ui/modal';
 import { useToast } from '@/components/ui/toast';
 import { formatDateTime } from '@/lib/utils';
+import { PageHeader } from '@/components/ui/page-header';
+import { useI18n } from '@/lib/i18n/i18n-context';
 
 const GET_FEEDBACKS = gql`
   query GetFeedbacks(
@@ -103,18 +105,18 @@ const STATUSES = [
 const STATUS_OPTIONS = STATUSES.filter((s) => s.value !== '');
 
 const severityColors: Record<string, string> = {
-  CRITICAL: 'bg-red-500/20 text-red-400 border-red-500/30',
-  MAJOR: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-  MINOR: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  SUGGESTION: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
+  CRITICAL: 'bg-[color:var(--status-error-soft)] text-[color:var(--status-error-text)] border-[color:var(--status-error)]',
+  MAJOR: 'bg-[color:var(--status-warning-soft)] text-[color:var(--status-warning-text)] border-[color:var(--status-warning)]',
+  MINOR: 'bg-[color:var(--status-warning-soft)] text-[color:var(--status-warning-text)] border-[color:var(--status-warning)]',
+  SUGGESTION: 'bg-[color:var(--accent-primary-soft)] text-[color:var(--accent-primary-deep)] border-[color:var(--accent-primary-soft)]',
 };
 
 const statusColors: Record<string, string> = {
-  NEW: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30',
-  ACKNOWLEDGED: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30',
-  IN_PROGRESS: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-  RESOLVED: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-  CLOSED: 'bg-white/10 text-white/40 border-white/10',
+  NEW: 'bg-[color:var(--status-info-soft)] text-[color:var(--status-info-text)] border-[color:var(--status-info)]',
+  ACKNOWLEDGED: 'bg-[color:var(--accent-primary-soft)] text-[color:var(--accent-primary-deep)] border-[color:var(--accent-primary-soft)]',
+  IN_PROGRESS: 'bg-[color:var(--status-warning-soft)] text-[color:var(--status-warning-text)] border-[color:var(--status-warning)]',
+  RESOLVED: 'bg-[color:var(--status-success-soft)] text-[color:var(--status-success-text)] border-[color:var(--status-success)]',
+  CLOSED: 'bg-[color:var(--bg-muted)] text-[color:var(--text-tertiary)] border-[color:var(--border-subtle)]',
 };
 
 const categoryLabels: Record<string, string> = {
@@ -143,6 +145,7 @@ interface FeedbackNode {
 const PAGE_SIZE = 20;
 
 export default function FeedbackPage() {
+  const { t } = useI18n();
   const [categoryFilter, setCategoryFilter] = useState('');
   const [severityFilter, setSeverityFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
@@ -173,7 +176,7 @@ export default function FeedbackPage() {
   const handleStatusUpdate = async (id: string, newStatus: string) => {
     try {
       await updateStatus({ variables: { id, status: newStatus } });
-      toast('success', `Feedback status updated to ${newStatus.replace('_', ' ')}`);
+      toast('success', `Feedback status updated to ${newStatus.replace(/_/g, ' ')}`);
       if (selectedFeedback?.id === id) {
         setSelectedFeedback((prev) => (prev ? { ...prev, status: newStatus } : null));
       }
@@ -187,52 +190,54 @@ export default function FeedbackPage() {
     text.length > max ? text.slice(0, max) + '...' : text;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">Feedback Management</h1>
-        <p className="text-sm text-white/40 mt-1">
-          View and manage user feedback submissions across all tenants
-        </p>
-      </div>
+    <div className="relative space-y-8 animate-enter">
+      <PageHeader
+        eyebrow={t('eyebrow.platformVoice')}
+        title="Feedback management"
+        subtitle="Feedback submitted by users across every tenant."
+      />
+
 
       {/* NPS Summary */}
       {nps && nps.totalResponses > 0 && (
-        <div className="glass p-6">
-          <h2 className="text-lg font-semibold text-white mb-4">NPS Summary</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-            <div>
-              <span className="text-white/40 text-sm block mb-1">Total Responses</span>
-              <span className="text-2xl font-bold text-white">{nps.totalResponses}</span>
+        <section>
+          <h2 className="text-[22px] font-semibold tracking-[-0.02em] text-[color:var(--text-primary)] mb-4">NPS Summary</h2>
+          <div
+            className="stagger-children grid grid-cols-1 md:grid-cols-3 gap-px mb-4"
+            style={{ backgroundColor: 'var(--border-subtle)', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}
+          >
+            <div className="p-6" style={{ backgroundColor: 'var(--bg-card)' }}>
+              <span className="section-label" style={{ marginBottom: '6px' }}>Total Responses</span>
+              <span className="kpi-value">{nps.totalResponses}</span>
             </div>
-            <div>
-              <span className="text-white/40 text-sm block mb-1">Average Score</span>
-              <span className="text-2xl font-bold text-white">
+            <div className="p-6" style={{ backgroundColor: 'var(--bg-card)' }}>
+              <span className="section-label" style={{ marginBottom: '6px' }}>Average Score</span>
+              <span className="kpi-value">
                 {nps.totalResponses > 0
                   ? ((nps.promoters * 9.5 + nps.passives * 7.5 + nps.detractors * 3) / nps.totalResponses).toFixed(1)
                   : '0.0'}
               </span>
-              <span className="text-white/40 text-sm"> / 10</span>
+              <span className="text-[color:var(--text-tertiary)] text-sm tabular-nums"> / 10</span>
             </div>
-            <div>
-              <span className="text-white/40 text-sm block mb-1">NPS Score</span>
-              <span className={`text-2xl font-bold ${nps.npsScore >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            <div className="p-6" style={{ backgroundColor: 'var(--bg-card)' }}>
+              <span className="section-label" style={{ marginBottom: '6px' }}>NPS Score</span>
+              <span className={`text-[30px] leading-none font-semibold tracking-[-0.02em] tabular-nums ${nps.npsScore >= 0 ? 'text-[color:var(--status-success-text)]' : 'text-[color:var(--status-error-text)]'}`}>
                 {nps.npsScore > 0 ? '+' : ''}{nps.npsScore}
               </span>
             </div>
           </div>
           {/* Distribution bar */}
-          <div className="flex h-3 rounded-full overflow-hidden">
-            <div className="bg-red-500" style={{ width: `${nps.detractorPercentage}%` }} />
-            <div className="bg-yellow-500" style={{ width: `${nps.passivePercentage}%` }} />
-            <div className="bg-emerald-500" style={{ width: `${nps.promoterPercentage}%` }} />
+          <div className="flex h-3 rounded-full overflow-hidden mt-4">
+            <div style={{ width: `${nps.detractorPercentage}%`, backgroundColor: 'var(--status-error)' }} />
+            <div style={{ width: `${nps.passivePercentage}%`, backgroundColor: 'var(--status-warning)' }} />
+            <div style={{ width: `${nps.promoterPercentage}%`, backgroundColor: 'var(--status-success)' }} />
           </div>
-          <div className="flex justify-between text-xs text-white/40 mt-1">
+          <div className="flex justify-between text-xs text-[color:var(--text-tertiary)] mt-2 tabular-nums">
             <span>Detractors ({nps.detractorPercentage.toFixed(0)}%)</span>
             <span>Passives ({nps.passivePercentage.toFixed(0)}%)</span>
             <span>Promoters ({nps.promoterPercentage.toFixed(0)}%)</span>
           </div>
-        </div>
+        </section>
       )}
 
       {/* Filters */}
@@ -283,16 +288,16 @@ export default function FeedbackPage() {
 
       {/* Error */}
       {error && (
-        <div className="glass p-4 border-red-500/30">
-          <p className="text-sm text-red-400">Failed to load feedback: {error.message}</p>
+        <div className="card p-4 border-[color:var(--status-error)]">
+          <p className="text-sm text-[color:var(--status-error-text)]">Failed to load feedback: {error.message}</p>
         </div>
       )}
 
       {/* Table */}
-      <div className="glass overflow-x-auto">
+      <div className="card-flush overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-white/10 text-white/50 text-left">
+            <tr className="border-b border-[color:var(--border-subtle)] text-[color:var(--text-secondary)] text-left">
               <th className="px-4 py-3 font-medium">Tenant</th>
               <th className="px-4 py-3 font-medium">User</th>
               <th className="px-4 py-3 font-medium">Category</th>
@@ -305,13 +310,13 @@ export default function FeedbackPage() {
           <tbody>
             {loading && feedbacks.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-white/30">
+                <td colSpan={7} className="px-4 py-12 text-center text-[color:var(--text-tertiary)]">
                   Loading...
                 </td>
               </tr>
             ) : feedbacks.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-4 py-12 text-center text-white/30">
+                <td colSpan={7} className="px-4 py-12 text-center text-[color:var(--text-tertiary)]">
                   No feedback found
                 </td>
               </tr>
@@ -320,16 +325,16 @@ export default function FeedbackPage() {
                 <tr
                   key={fb.id}
                   onClick={() => setSelectedFeedback(fb)}
-                  className="border-b border-white/5 hover:bg-white/5 cursor-pointer transition-colors"
+                  className="border-b border-[color:var(--border-subtle)] hover:bg-[color:var(--bg-muted)] cursor-pointer transition-colors"
                 >
-                  <td className="px-4 py-3 text-white/70 font-mono text-xs">
+                  <td className="px-4 py-3 text-[color:var(--text-primary)] font-mono text-xs">
                     {fb.tenantId.slice(0, 8)}...
                   </td>
-                  <td className="px-4 py-3 text-white/70 font-mono text-xs">
+                  <td className="px-4 py-3 text-[color:var(--text-primary)] font-mono text-xs">
                     {fb.userId.slice(0, 8)}...
                   </td>
                   <td className="px-4 py-3">
-                    <span className="text-white/80">
+                    <span className="text-[color:var(--text-primary)]">
                       {categoryLabels[fb.category] ?? fb.category}
                     </span>
                   </td>
@@ -340,17 +345,17 @@ export default function FeedbackPage() {
                       {fb.severity}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-white/60 max-w-xs">
+                  <td className="px-4 py-3 text-[color:var(--text-secondary)] max-w-xs">
                     {truncate(fb.description, 100)}
                   </td>
                   <td className="px-4 py-3">
                     <span
                       className={`inline-block px-2 py-0.5 text-xs rounded-full border ${statusColors[fb.status] ?? ''}`}
                     >
-                      {fb.status.replace('_', ' ')}
+                      {fb.status.replace(/_/g, ' ')}
                     </span>
                   </td>
-                  <td className="px-4 py-3 text-white/50 text-xs whitespace-nowrap">
+                  <td className="px-4 py-3 text-[color:var(--text-secondary)] text-xs whitespace-nowrap">
                     {formatDateTime(fb.createdAt)}
                   </td>
                 </tr>
@@ -363,7 +368,7 @@ export default function FeedbackPage() {
       {/* Pagination */}
       {pageInfo && (
         <div className="flex items-center justify-between text-sm">
-          <span className="text-white/40">
+          <span className="text-[color:var(--text-tertiary)]">
             {connection?.totalCount != null
               ? `${connection.totalCount} feedback item${connection.totalCount === 1 ? '' : 's'}`
               : ''}
@@ -399,13 +404,13 @@ export default function FeedbackPage() {
             {/* Meta info row */}
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
-                <span className="text-white/40 block mb-1">Category</span>
-                <span className="text-white">
+                <span className="text-[color:var(--text-tertiary)] block mb-1">Category</span>
+                <span className="text-[color:var(--text-primary)]">
                   {categoryLabels[selectedFeedback.category] ?? selectedFeedback.category}
                 </span>
               </div>
               <div>
-                <span className="text-white/40 block mb-1">Severity</span>
+                <span className="text-[color:var(--text-tertiary)] block mb-1">Severity</span>
                 <span
                   className={`inline-block px-2 py-0.5 text-xs rounded-full border ${severityColors[selectedFeedback.severity] ?? ''}`}
                 >
@@ -413,26 +418,26 @@ export default function FeedbackPage() {
                 </span>
               </div>
               <div>
-                <span className="text-white/40 block mb-1">Tenant ID</span>
-                <span className="text-white/70 font-mono text-xs">
+                <span className="text-[color:var(--text-tertiary)] block mb-1">Tenant ID</span>
+                <span className="text-[color:var(--text-primary)] font-mono text-xs">
                   {selectedFeedback.tenantId}
                 </span>
               </div>
               <div>
-                <span className="text-white/40 block mb-1">User ID</span>
-                <span className="text-white/70 font-mono text-xs">
+                <span className="text-[color:var(--text-tertiary)] block mb-1">User ID</span>
+                <span className="text-[color:var(--text-primary)] font-mono text-xs">
                   {selectedFeedback.userId}
                 </span>
               </div>
               <div>
-                <span className="text-white/40 block mb-1">Submitted</span>
-                <span className="text-white/70 text-xs">
+                <span className="text-[color:var(--text-tertiary)] block mb-1">Submitted</span>
+                <span className="text-[color:var(--text-primary)] text-xs">
                   {formatDateTime(selectedFeedback.createdAt)}
                 </span>
               </div>
               <div>
-                <span className="text-white/40 block mb-1">Last Updated</span>
-                <span className="text-white/70 text-xs">
+                <span className="text-[color:var(--text-tertiary)] block mb-1">Last Updated</span>
+                <span className="text-[color:var(--text-primary)] text-xs">
                   {formatDateTime(selectedFeedback.updatedAt)}
                 </span>
               </div>
@@ -440,8 +445,8 @@ export default function FeedbackPage() {
 
             {/* Description */}
             <div>
-              <span className="text-white/40 block mb-1 text-sm">Description</span>
-              <p className="text-white/80 text-sm whitespace-pre-wrap glass p-3">
+              <span className="text-[color:var(--text-tertiary)] block mb-1 text-sm">Description</span>
+              <p className="text-[color:var(--text-primary)] text-sm whitespace-pre-wrap card p-3">
                 {selectedFeedback.description}
               </p>
             </div>
@@ -449,12 +454,12 @@ export default function FeedbackPage() {
             {/* Screenshot URL */}
             {selectedFeedback.screenshotUrl && (
               <div>
-                <span className="text-white/40 block mb-1 text-sm">Screenshot URL</span>
+                <span className="text-[color:var(--text-tertiary)] block mb-1 text-sm">Screenshot URL</span>
                 <a
                   href={selectedFeedback.screenshotUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-indigo-400 hover:text-indigo-300 text-sm underline break-all"
+                  className="text-[color:var(--status-info-text)] hover:opacity-80 text-sm underline break-all"
                 >
                   {selectedFeedback.screenshotUrl}
                 </a>
@@ -464,8 +469,8 @@ export default function FeedbackPage() {
             {/* Page URL */}
             {selectedFeedback.pageUrl && (
               <div>
-                <span className="text-white/40 block mb-1 text-sm">Page URL</span>
-                <span className="text-white/60 text-sm font-mono break-all">
+                <span className="text-[color:var(--text-tertiary)] block mb-1 text-sm">Page URL</span>
+                <span className="text-[color:var(--text-secondary)] text-sm font-mono break-all">
                   {selectedFeedback.pageUrl}
                 </span>
               </div>
@@ -474,16 +479,16 @@ export default function FeedbackPage() {
             {/* Debug Context */}
             {selectedFeedback.debugContext && (
               <div>
-                <span className="text-white/40 block mb-1 text-sm">Debug Context</span>
-                <pre className="glass p-3 text-xs text-white/60 overflow-x-auto">
+                <span className="text-[color:var(--text-tertiary)] block mb-1 text-sm">Debug Context</span>
+                <pre className="card p-3 text-xs text-[color:var(--text-secondary)] overflow-x-auto">
                   {JSON.stringify(selectedFeedback.debugContext, null, 2)}
                 </pre>
               </div>
             )}
 
             {/* Status Update */}
-            <div className="flex items-center gap-3 pt-2 border-t border-white/10">
-              <span className="text-white/40 text-sm">Update Status:</span>
+            <div className="flex items-center gap-3 pt-2 border-t border-[color:var(--border-subtle)]">
+              <span className="text-[color:var(--text-tertiary)] text-sm">Update Status:</span>
               <select
                 className="glass-input text-sm"
                 value={selectedFeedback.status}
@@ -496,7 +501,7 @@ export default function FeedbackPage() {
                   </option>
                 ))}
               </select>
-              {updating && <span className="text-white/30 text-xs">Updating...</span>}
+              {updating && <span className="text-[color:var(--text-tertiary)] text-xs">Updating...</span>}
             </div>
           </div>
         )}

@@ -7,6 +7,7 @@ import { Tabs } from '@/components/ui/tabs';
 import { DataTable } from '@/components/ui/data-table';
 import { SkeletonTable } from '@/components/ui/skeleton';
 import { formatDateTime } from '@/lib/utils';
+import { useI18n } from '@/lib/i18n/i18n-context';
 
 // Environment guard — only available in staging debug mode
 if (process.env.NEXT_PUBLIC_STAGING_DEBUG_MODE !== 'true') {
@@ -149,13 +150,16 @@ interface ScoringBreakdown {
   executedAt: string;
 }
 
-const TABS = [
-  { key: 'api', label: 'API Call Log' },
-  { key: 'adapter', label: 'Adapter Operations' },
-  { key: 'events', label: 'Event Bus' },
-  { key: 'transitions', label: 'State Transitions' },
-  { key: 'scoring', label: 'Scoring Breakdowns' },
-];
+function useDebugTabs() {
+  const { t } = useI18n();
+  return [
+    { key: 'api', label: t('debug.tab.apiCallLog') },
+    { key: 'adapter', label: t('debug.tab.adapterOps') },
+    { key: 'events', label: t('debug.tab.eventBus') },
+    { key: 'transitions', label: t('debug.tab.stateTransitions') },
+    { key: 'scoring', label: t('debug.tab.scoringBreakdowns') },
+  ];
+}
 
 function MethodBadge({ method }: { method: string }) {
   const colors: Record<string, string> = {
@@ -186,6 +190,7 @@ function SuccessBadge({ success }: { success: boolean }) {
 }
 
 function ExpandableJson({ data }: { data: any }) {
+  const { t } = useI18n();
   const [expanded, setExpanded] = useState(false);
   if (!data) return <span className="text-white/20">--</span>;
   return (
@@ -194,7 +199,7 @@ function ExpandableJson({ data }: { data: any }) {
         onClick={() => setExpanded(!expanded)}
         className="text-xs text-blue-400 hover:text-blue-300 font-mono"
       >
-        {expanded ? 'collapse' : 'expand'}
+        {expanded ? t('debug.collapse') : t('debug.expand')}
       </button>
       {expanded && (
         <pre className="mt-1 text-xs text-white/60 bg-white/5 rounded p-2 max-w-md overflow-auto max-h-40">
@@ -206,6 +211,7 @@ function ExpandableJson({ data }: { data: any }) {
 }
 
 function ApiLogTab() {
+  const { t } = useI18n();
   const { data, loading } = useQuery(DEBUG_API_LOGS, {
     variables: { limit: 50 },
     pollInterval: 5000,
@@ -216,17 +222,18 @@ function ApiLogTab() {
   const logs: ApiLog[] = data?.debugApiLogs ?? [];
 
   const columns = [
-    { header: 'Method', accessor: (row: ApiLog) => <MethodBadge method={row.method} /> },
-    { header: 'URL', accessor: 'url' as const, className: 'font-mono text-xs max-w-xs truncate' },
-    { header: 'Status', accessor: (row: ApiLog) => <StatusBadge code={row.statusCode} /> },
-    { header: 'Time (ms)', accessor: (row: ApiLog) => <span className="font-mono">{row.responseTimeMs}</span> },
-    { header: 'Timestamp', accessor: (row: ApiLog) => formatDateTime(row.timestamp) },
+    { header: t('debug.apiLog.column.method'), accessor: (row: ApiLog) => <MethodBadge method={row.method} /> },
+    { header: t('debug.apiLog.column.url'), accessor: 'url' as const, className: 'font-mono text-xs max-w-xs truncate' },
+    { header: t('debug.apiLog.column.status'), accessor: (row: ApiLog) => <StatusBadge code={row.statusCode} /> },
+    { header: t('debug.apiLog.column.timeMs'), accessor: (row: ApiLog) => <span className="font-mono">{row.responseTimeMs}</span> },
+    { header: t('debug.apiLog.column.timestamp'), accessor: (row: ApiLog) => formatDateTime(row.timestamp) },
   ];
 
-  return <DataTable columns={columns} data={logs} emptyMessage="No API logs captured yet" />;
+  return <DataTable columns={columns} data={logs} emptyMessage={t('debug.apiLog.emptyMessage')} />;
 }
 
 function AdapterLogTab() {
+  const { t } = useI18n();
   const { data, loading } = useQuery(DEBUG_ADAPTER_LOGS, {
     variables: { limit: 50 },
     pollInterval: 5000,
@@ -237,17 +244,18 @@ function AdapterLogTab() {
   const logs: AdapterLog[] = data?.debugAdapterLogs ?? [];
 
   const columns = [
-    { header: 'Adapter', accessor: 'adapterType' as const, className: 'font-mono text-xs' },
-    { header: 'Operation', accessor: 'operation' as const },
-    { header: 'Latency (ms)', accessor: (row: AdapterLog) => <span className="font-mono">{row.latencyMs}</span> },
-    { header: 'Result', accessor: (row: AdapterLog) => <SuccessBadge success={row.success} /> },
-    { header: 'Timestamp', accessor: (row: AdapterLog) => formatDateTime(row.timestamp) },
+    { header: t('debug.adapter.column.adapter'), accessor: 'adapterType' as const, className: 'font-mono text-xs' },
+    { header: t('debug.adapter.column.operation'), accessor: 'operation' as const },
+    { header: t('debug.adapter.column.latencyMs'), accessor: (row: AdapterLog) => <span className="font-mono">{row.latencyMs}</span> },
+    { header: t('debug.adapter.column.result'), accessor: (row: AdapterLog) => <SuccessBadge success={row.success} /> },
+    { header: t('debug.adapter.column.timestamp'), accessor: (row: AdapterLog) => formatDateTime(row.timestamp) },
   ];
 
-  return <DataTable columns={columns} data={logs} emptyMessage="No adapter logs captured yet" />;
+  return <DataTable columns={columns} data={logs} emptyMessage={t('debug.adapter.emptyMessage')} />;
 }
 
 function EventBusTab() {
+  const { t } = useI18n();
   const { data, loading } = useQuery(DEBUG_EVENTS, {
     variables: { limit: 50 },
     pollInterval: 5000,
@@ -262,15 +270,15 @@ function EventBusTab() {
       <table className="min-w-full">
         <thead>
           <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium text-white/40 uppercase tracking-wider">Event Name</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-white/40 uppercase tracking-wider">Timestamp</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-white/40 uppercase tracking-wider">Payload</th>
+            <th className="px-4 py-3 text-left text-[13px] font-medium text-[color:var(--text-secondary)]">{t('debug.eventBus.column.eventName')}</th>
+            <th className="px-4 py-3 text-left text-[13px] font-medium text-[color:var(--text-secondary)]">{t('debug.eventBus.column.timestamp')}</th>
+            <th className="px-4 py-3 text-left text-[13px] font-medium text-[color:var(--text-secondary)]">{t('debug.eventBus.column.payload')}</th>
           </tr>
         </thead>
         <tbody>
           {events.length === 0 ? (
             <tr>
-              <td colSpan={3} className="text-center py-8 text-white/40">No events captured yet</td>
+              <td colSpan={3} className="text-center py-8 text-white/40">{t('debug.eventBus.emptyMessage')}</td>
             </tr>
           ) : (
             events.map((evt) => (
@@ -290,6 +298,7 @@ function EventBusTab() {
 }
 
 function StateTransitionsTab() {
+  const { t } = useI18n();
   const [entityId, setEntityId] = useState('');
   const [searchId, setSearchId] = useState('');
 
@@ -315,26 +324,26 @@ function StateTransitionsTab() {
           value={entityId}
           onChange={(e) => setEntityId(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-          placeholder="Enter entity ID to search..."
+          placeholder={t('debug.stateTransitions.placeholder')}
           className="flex-1 px-4 py-2 rounded bg-white/5 border border-white/10 text-white text-sm placeholder-white/30 focus:outline-none focus:border-blue-400"
         />
         <button
           onClick={handleSearch}
           className="px-4 py-2 bg-blue-500/20 text-blue-400 rounded text-sm font-medium hover:bg-blue-500/30 transition-colors"
         >
-          Search
+          {t('common.search')}
         </button>
       </div>
 
       {!searchId ? (
         <div className="text-center py-12 text-white/40">
-          Enter an entity ID to view its state transitions
+          {t('debug.stateTransitions.emptyPrompt')}
         </div>
       ) : loading ? (
         <SkeletonTable rows={5} columns={4} />
       ) : transitions.length === 0 ? (
         <div className="text-center py-12 text-white/40">
-          No state transitions found for this entity
+          {t('debug.stateTransitions.emptyMessage')}
         </div>
       ) : (
         <div className="space-y-3">
@@ -349,7 +358,7 @@ function StateTransitionsTab() {
                 <div className="w-2 h-2 rounded-full bg-blue-400" />
               </div>
               {/* Content */}
-              <div className="glass p-4 flex-1">
+              <div className="card p-4 flex-1">
                 <div className="flex items-center gap-3 mb-1">
                   <span className="text-xs text-white/40 font-mono">{t.entityType}</span>
                   <span className="text-xs text-white/20">|</span>
@@ -405,6 +414,7 @@ function ScoreBar({ score, max = 1000 }: { score: number; max?: number }) {
 }
 
 function ScoringBreakdownsTab() {
+  const { t } = useI18n();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const { data, loading } = useQuery(DEBUG_SCORING_BREAKDOWNS, {
     variables: { limit: 50 },
@@ -420,18 +430,18 @@ function ScoringBreakdownsTab() {
       <table className="min-w-full">
         <thead>
           <tr>
-            <th className="px-4 py-3 text-left text-xs font-medium text-white/40 uppercase tracking-wider">Customer</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-white/40 uppercase tracking-wider">Loan Request</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-white/40 uppercase tracking-wider">Model</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-white/40 uppercase tracking-wider">Final Score</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-white/40 uppercase tracking-wider">Decision</th>
-            <th className="px-4 py-3 text-left text-xs font-medium text-white/40 uppercase tracking-wider">Executed At</th>
+            <th className="px-4 py-3 text-left text-[13px] font-medium text-[color:var(--text-secondary)]">{t('debug.scoring.column.customer')}</th>
+            <th className="px-4 py-3 text-left text-[13px] font-medium text-[color:var(--text-secondary)]">{t('debug.scoring.column.loanRequest')}</th>
+            <th className="px-4 py-3 text-left text-[13px] font-medium text-[color:var(--text-secondary)]">{t('debug.scoring.column.model')}</th>
+            <th className="px-4 py-3 text-left text-[13px] font-medium text-[color:var(--text-secondary)]">{t('debug.scoring.column.finalScore')}</th>
+            <th className="px-4 py-3 text-left text-[13px] font-medium text-[color:var(--text-secondary)]">{t('debug.scoring.column.decision')}</th>
+            <th className="px-4 py-3 text-left text-[13px] font-medium text-[color:var(--text-secondary)]">{t('debug.scoring.column.executedAt')}</th>
           </tr>
         </thead>
         <tbody>
           {breakdowns.length === 0 ? (
             <tr>
-              <td colSpan={6} className="text-center py-8 text-white/40">No scoring breakdowns captured yet</td>
+              <td colSpan={6} className="text-center py-8 text-white/40">{t('debug.scoring.emptyMessage')}</td>
             </tr>
           ) : (
             breakdowns.map((b) => (
@@ -453,12 +463,12 @@ function ScoringBreakdownsTab() {
                       <table className="min-w-full text-xs">
                         <thead>
                           <tr className="text-white/30">
-                            <th className="px-3 py-2 text-left">Rule Name</th>
-                            <th className="px-3 py-2 text-left">Passed</th>
-                            <th className="px-3 py-2 text-left">Raw Score</th>
-                            <th className="px-3 py-2 text-left">Weight</th>
-                            <th className="px-3 py-2 text-left">Weighted</th>
-                            <th className="px-3 py-2 text-left">Reason</th>
+                            <th className="px-3 py-2 text-left">{t('debug.scoring.rule.ruleName')}</th>
+                            <th className="px-3 py-2 text-left">{t('debug.scoring.rule.passed')}</th>
+                            <th className="px-3 py-2 text-left">{t('debug.scoring.rule.rawScore')}</th>
+                            <th className="px-3 py-2 text-left">{t('debug.scoring.rule.weight')}</th>
+                            <th className="px-3 py-2 text-left">{t('debug.scoring.rule.weighted')}</th>
+                            <th className="px-3 py-2 text-left">{t('debug.scoring.rule.reason')}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -498,23 +508,55 @@ export default function DebugPage() {
     notFound();
   }
 
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState('api');
+  const tabs = useDebugTabs();
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div className="relative space-y-8 animate-enter">
+      <header className="relative z-10 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-lg font-semibold text-white/80">Debug Panel</h1>
-          <p className="text-sm text-amber-400/80 mt-1">Staging only -- not available in production</p>
+          <div className="flex items-center gap-3 mb-3">
+            <span
+              className="w-2 h-2 rounded-full"
+              style={{
+                backgroundColor: 'var(--status-warning)',
+                boxShadow: '0 0 8px var(--status-warning)',
+                animation: 'liveDot 1800ms ease-in-out infinite',
+              }}
+              aria-hidden
+            />
+            <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-[color:var(--status-warning-text)]">
+              {t('debug.eyebrow')}
+            </span>
+          </div>
+          <h1
+            className="font-semibold tracking-[-0.035em] text-[color:var(--text-primary)]"
+            style={{ fontSize: 44, lineHeight: 1.05 }}
+          >
+            {t('debug.title')}
+          </h1>
+          <p className="text-[15px] text-[color:var(--text-secondary)] mt-2 max-w-[60ch]">
+            {t('debug.subtitle')}
+          </p>
         </div>
-        <span className="px-3 py-1 rounded-full text-xs bg-amber-500/20 text-amber-400 border border-amber-500/30">
-          DEBUG MODE
+        <span
+          className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-semibold uppercase tracking-wider"
+          style={{
+            backgroundColor: 'var(--status-warning-soft)',
+            color: 'var(--status-warning-text)',
+            border: '1px solid var(--status-warning)',
+          }}
+        >
+          {t('debug.modeBadge')}
         </span>
+      </header>
+
+      <div className="relative z-10">
+        <Tabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
       </div>
 
-      <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
-
-      <div className="glass p-4">
+      <div className="relative z-10 card-glow overflow-hidden">
         {activeTab === 'api' && <ApiLogTab />}
         {activeTab === 'adapter' && <AdapterLogTab />}
         {activeTab === 'events' && <EventBusTab />}

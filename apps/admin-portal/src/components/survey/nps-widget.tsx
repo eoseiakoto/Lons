@@ -1,62 +1,61 @@
 'use client';
 
 import { useState } from 'react';
+import { gql, useMutation } from '@apollo/client';
+import { useI18n } from '@/lib/i18n/i18n-context';
+
+const SUBMIT_SURVEY = gql`
+  mutation SubmitSurvey($tenantId: String!, $userId: String!, $score: Int!, $comment: String) {
+    submitSurveyResponse(tenantId: $tenantId, userId: $userId, score: $score, comment: $comment) {
+      id
+    }
+  }
+`;
 
 interface NpsWidgetProps {
   tenantId: string;
   userId: string;
-  graphqlUrl?: string;
 }
 
-export function NpsWidget({ tenantId, userId, graphqlUrl = '/api/graphql' }: NpsWidgetProps) {
+export function NpsWidget({ tenantId, userId }: NpsWidgetProps) {
+  const { t } = useI18n();
   const [dismissed, setDismissed] = useState(false);
   const [submitted, setSubmitted] = useState(false);
   const [selectedScore, setSelectedScore] = useState<number | null>(null);
   const [comment, setComment] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+
+  const [submitSurvey, { loading: submitting }] = useMutation(SUBMIT_SURVEY);
 
   if (dismissed || submitted) return null;
 
   const handleSubmit = async () => {
     if (selectedScore === null) return;
-    setSubmitting(true);
 
     try {
-      await fetch(graphqlUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: `mutation SubmitSurvey($tenantId: String!, $userId: String!, $score: Int!, $comment: String) {
-            submitSurveyResponse(tenantId: $tenantId, userId: $userId, score: $score, comment: $comment) {
-              id
-            }
-          }`,
-          variables: { tenantId, userId, score: selectedScore, comment: comment || null },
-        }),
+      await submitSurvey({
+        variables: { tenantId, userId, score: selectedScore, comment: comment || null },
       });
       setSubmitted(true);
     } catch {
       // Silently fail — survey is non-critical
-    } finally {
-      setSubmitting(false);
     }
   };
 
   return (
-    <div className="fixed bottom-20 right-6 z-40 w-80 rounded-lg border border-gray-200 bg-white p-4 shadow-lg">
+    <div className="mt-8 max-w-sm ml-auto glass rounded-lg border border-[color:var(--border-subtle)] p-4 shadow-lg">
       <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-900">Quick Feedback</h3>
+        <h3 className="text-sm font-semibold text-[color:var(--text-primary)]">{t('feedback.quickFeedback')}</h3>
         <button
           onClick={() => setDismissed(true)}
-          className="text-gray-400 hover:text-gray-600"
+          className="text-[color:var(--text-tertiary)] hover:text-[color:var(--text-primary)]"
           aria-label="Dismiss"
         >
           &times;
         </button>
       </div>
 
-      <p className="mb-3 text-xs text-gray-600">
-        How likely are you to recommend Lons to another institution?
+      <p className="mb-3 text-xs text-[color:var(--text-secondary)]">
+        {t('feedback.npsQuestion')}
       </p>
 
       <div className="mb-3 flex gap-1">
@@ -71,7 +70,7 @@ export function NpsWidget({ tenantId, userId, graphqlUrl = '/api/graphql' }: Nps
                   : i <= 8
                     ? 'bg-yellow-500 text-white'
                     : 'bg-green-500 text-white'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                : 'bg-[color:var(--bg-muted)] text-[color:var(--text-primary)] hover:bg-[color:var(--bg-hover)]'
             }`}
           >
             {i}
@@ -79,9 +78,9 @@ export function NpsWidget({ tenantId, userId, graphqlUrl = '/api/graphql' }: Nps
         ))}
       </div>
 
-      <div className="mb-2 flex justify-between text-[10px] text-gray-400">
-        <span>Not likely</span>
-        <span>Very likely</span>
+      <div className="mb-2 flex justify-between text-[10px] text-[color:var(--text-tertiary)]">
+        <span>{t('feedback.notLikely')}</span>
+        <span>{t('feedback.veryLikely')}</span>
       </div>
 
       {selectedScore !== null && (
@@ -90,15 +89,15 @@ export function NpsWidget({ tenantId, userId, graphqlUrl = '/api/graphql' }: Nps
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             placeholder="Any additional feedback? (optional)"
-            className="mb-2 w-full rounded border border-gray-200 p-2 text-xs focus:border-blue-300 focus:outline-none"
+            className="glass-input mb-2 w-full text-xs"
             rows={2}
           />
           <button
             onClick={handleSubmit}
             disabled={submitting}
-            className="w-full rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+            className="glass-button-primary w-full text-xs disabled:opacity-50"
           >
-            {submitting ? 'Submitting...' : 'Submit'}
+            {submitting ? t('feedback.submitting') : t('common.submit')}
           </button>
         </>
       )}

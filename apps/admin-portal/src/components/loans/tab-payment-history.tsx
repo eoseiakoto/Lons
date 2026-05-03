@@ -5,6 +5,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { formatMoney, formatDate } from '@/lib/utils';
+import { useI18n } from '@/lib/i18n';
 import { Receipt } from 'lucide-react';
 
 const CONTRACT_REPAYMENTS_QUERY = gql`
@@ -28,6 +29,7 @@ interface TabPaymentHistoryProps {
 }
 
 export function TabPaymentHistory({ contractId, currency }: TabPaymentHistoryProps) {
+  const { t } = useI18n();
   const { data, loading } = useQuery(CONTRACT_REPAYMENTS_QUERY, {
     variables: { contractId, pagination: { first: 50 } },
   });
@@ -38,7 +40,7 @@ export function TabPaymentHistory({ contractId, currency }: TabPaymentHistoryPro
     return (
       <div className="animate-pulse space-y-3">
         {[...Array(3)].map((_, i) => (
-          <div key={i} className="h-10 bg-white/5 rounded" />
+          <div key={i} className="h-10 bg-[color:var(--bg-muted)] rounded" />
         ))}
       </div>
     );
@@ -48,8 +50,8 @@ export function TabPaymentHistory({ contractId, currency }: TabPaymentHistoryPro
     return (
       <EmptyState
         icon={Receipt}
-        title="No Payments"
-        description="No payments have been recorded for this contract."
+        title={t('loans.paymentHistory.emptyTitle')}
+        description={t('loans.paymentHistory.emptyDescription')}
       />
     );
   }
@@ -58,26 +60,26 @@ export function TabPaymentHistory({ contractId, currency }: TabPaymentHistoryPro
     <div className="overflow-hidden">
       <DataTable
         columns={[
-          { header: 'Date', accessor: (r: any) => formatDate(r.paidAt || r.createdAt) },
-          { header: 'Amount', accessor: (r: any) => formatMoney(r.amount, r.currency || currency) },
+          { header: t('loans.paymentHistory.column.date'), accessor: (r: any) => formatDate(r.paidAt || r.createdAt) },
+          { header: t('loans.paymentHistory.column.amount'), accessor: (r: any) => <span className="tabular-nums">{formatMoney(r.amount, r.currency || currency)}</span> },
           {
-            header: 'Allocation',
+            header: t('loans.paymentHistory.column.allocation'),
             accessor: (r: any) => {
               const a = r.allocation;
               if (!a) return '-';
               return (
-                <div className="text-xs space-y-0.5">
-                  {a.principal && <span className="block">P: {formatMoney(a.principal, currency)}</span>}
-                  {a.interest && <span className="block">I: {formatMoney(a.interest, currency)}</span>}
-                  {a.fees && <span className="block">F: {formatMoney(a.fees, currency)}</span>}
-                  {a.penalties && <span className="block">Pen: {formatMoney(a.penalties, currency)}</span>}
+                <div className="text-xs space-y-0.5 tabular-nums">
+                  {a.principal && <span className="block">{t('loans.paymentHistory.allocation.principal')} {formatMoney(a.principal, currency)}</span>}
+                  {a.interest && <span className="block">{t('loans.paymentHistory.allocation.interest')} {formatMoney(a.interest, currency)}</span>}
+                  {a.fees && <span className="block">{t('loans.paymentHistory.allocation.fees')} {formatMoney(a.fees, currency)}</span>}
+                  {a.penalties && <span className="block">{t('loans.paymentHistory.allocation.penalties')} {formatMoney(a.penalties, currency)}</span>}
                 </div>
               );
             },
           },
-          { header: 'Method', accessor: (r: any) => (r.paymentMethod || '-').replace(/_/g, ' ') },
-          { header: 'Reference', accessor: (r: any) => r.referenceNumber || '-' },
-          { header: 'Status', accessor: (r: any) => <StatusBadge status={r.status} /> },
+          { header: t('loans.paymentHistory.column.method'), accessor: (r: any) => (r.paymentMethod || '-').replace(/_/g, ' ') },
+          { header: t('loans.paymentHistory.column.reference'), accessor: (r: any) => r.referenceNumber || '-' },
+          { header: t('loans.paymentHistory.column.status'), accessor: (r: any) => <StatusBadge status={r.status} /> },
         ]}
         data={repayments}
       />

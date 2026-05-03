@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { AlertTriangle, AlertCircle, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useI18n } from '@/lib/i18n';
 
 export interface AlertItem {
   id: string;
@@ -19,36 +20,38 @@ interface AlertsPanelProps {
 const severityConfig = {
   critical: {
     icon: AlertTriangle,
-    badge: 'bg-red-500/20 text-red-400 border-red-500/30',
-    label: 'Critical',
+    badge: 'bg-[color:var(--status-error-soft)] text-[color:var(--status-error-text)] border-[color:var(--status-error)]',
+    labelKey: 'alerts.critical',
   },
   warning: {
     icon: AlertCircle,
-    badge: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-    label: 'Warning',
+    badge: 'bg-[color:var(--status-warning-soft)] text-[color:var(--status-warning-text)] border-[color:var(--status-warning)]',
+    labelKey: 'alerts.warning',
   },
   info: {
     icon: Info,
-    badge: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-    label: 'Info',
+    badge: 'bg-[color:var(--accent-primary-soft)] text-[color:var(--accent-primary-deep)] border-[color:var(--accent-primary-soft)]',
+    labelKey: 'alerts.info',
   },
-};
+} as const;
 
 export function AlertsPanel({ alerts }: AlertsPanelProps) {
+  const { t } = useI18n();
+
   if (alerts.length === 0) {
     return (
-      <div className="glass p-6">
-        <h3 className="text-sm font-medium text-white/60 mb-3">Alerts</h3>
-        <p className="text-sm text-white/30">No active alerts</p>
+      <div className="card p-6">
+        <h3 className="section-label mb-3">{t('alerts.title')}</h3>
+        <p className="text-sm text-[color:var(--text-tertiary)]">{t('alerts.noAlerts')}</p>
       </div>
     );
   }
 
   return (
-    <div className="glass p-5">
-      <h3 className="text-sm font-medium text-white/60 mb-3">
-        Alerts{' '}
-        <span className="text-xs text-white/30">({alerts.length})</span>
+    <div className="card p-5">
+      <h3 className="section-label mb-3">
+        {t('alerts.title')}{' '}
+        <span className="text-xs text-[color:var(--text-tertiary)]">({alerts.length})</span>
       </h3>
       <div className="space-y-2">
         {alerts.map((alert) => {
@@ -57,7 +60,7 @@ export function AlertsPanel({ alerts }: AlertsPanelProps) {
           const content = (
             <div
               className={cn(
-                'flex items-start gap-3 p-3 rounded-lg border border-white/5 hover:bg-white/5 transition-colors',
+                'flex items-start gap-3 p-3 rounded-lg border border-[color:var(--border-subtle)] hover:bg-[color:var(--bg-muted)] transition-colors',
                 alert.href && 'cursor-pointer',
               )}
             >
@@ -70,13 +73,13 @@ export function AlertsPanel({ alerts }: AlertsPanelProps) {
                       config.badge,
                     )}
                   >
-                    {config.label}
+                    {t(config.labelKey)}
                   </span>
                   {alert.timestamp && (
-                    <span className="text-[10px] text-white/30">{alert.timestamp}</span>
+                    <span className="text-[10px] text-[color:var(--text-tertiary)]">{alert.timestamp}</span>
                   )}
                 </div>
-                <p className="text-sm text-white/80 truncate">{alert.message}</p>
+                <p className="text-sm text-[color:var(--text-primary)] truncate">{alert.message}</p>
               </div>
             </div>
           );

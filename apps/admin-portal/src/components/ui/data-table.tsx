@@ -11,32 +11,40 @@ interface DataTableProps<T> {
   emptyMessage?: string;
 }
 
-export function DataTable<T extends { id: string }>({ columns, data, onRowClick, emptyMessage = 'No data found' }: DataTableProps<T>) {
+export function DataTable<T extends Record<string, any>>({
+  columns,
+  data,
+  onRowClick,
+  emptyMessage = 'No data found',
+}: DataTableProps<T>) {
   if (data.length === 0) {
-    return <div className="text-center py-8 text-white/40">{emptyMessage}</div>;
+    return (
+      <div className="text-center py-12 text-[color:var(--text-tertiary)] text-sm">
+        {emptyMessage}
+      </div>
+    );
   }
 
   return (
     <div className="overflow-x-auto">
-      <table className="min-w-full">
+      <table className="table-clean min-w-full">
         <thead>
           <tr>
             {columns.map((col, i) => (
-              <th key={i} className="px-4 py-3 text-left text-xs font-medium text-white/40 uppercase tracking-wider">
-                {col.header}
-              </th>
+              <th key={i}>{col.header}</th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {data.map((row) => (
+          {data.map((row, idx) => (
             <tr
-              key={row.id}
+              key={row.id ?? idx}
               onClick={() => onRowClick?.(row)}
-              className={`border-b border-white/5 ${onRowClick ? 'cursor-pointer hover:bg-white/5' : ''} transition-colors duration-150`}
+              className={onRowClick ? 'cursor-pointer table-row-enter' : 'table-row-enter'}
+              style={idx < 10 ? { animationDelay: `${idx * 35}ms` } : undefined}
             >
               {columns.map((col, i) => (
-                <td key={i} className={`px-4 py-3 text-sm text-white ${col.className || ''}`}>
+                <td key={i} className={col.className || ''}>
                   {typeof col.accessor === 'function' ? col.accessor(row) : String(row[col.accessor] ?? '')}
                 </td>
               ))}

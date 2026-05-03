@@ -7,6 +7,7 @@ import { Modal } from '@/components/ui/modal';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { useToast } from '@/components/ui/toast';
 import { formatMoney, formatDate } from '@/lib/utils';
+import { useI18n } from '@/lib/i18n';
 
 const LOAN_REQUEST_DETAIL_QUERY = gql`
   query LoanRequestDetail($id: ID!) {
@@ -37,6 +38,7 @@ interface ApplicationReviewDrawerProps {
 }
 
 export function ApplicationReviewDrawer({ open, onClose, requestId, onActionComplete }: ApplicationReviewDrawerProps) {
+  const { t } = useI18n();
   const { toast } = useToast();
   const [rejectModalOpen, setRejectModalOpen] = useState(false);
   const [approveModalOpen, setApproveModalOpen] = useState(false);
@@ -62,11 +64,11 @@ export function ApplicationReviewDrawer({ open, onClose, requestId, onActionComp
       await processRequest({
         variables: { id: requestId, action, reason, modifiedTerms },
       });
-      toast('success', `Application ${action === 'approve' ? 'approved' : action === 'reject' ? 'rejected' : 'escalated'} successfully`);
+      toast('success', t(`loans.review.success.${action}`));
       onActionComplete?.();
       onClose();
     } catch (err: any) {
-      toast('error', err.message || `Failed to ${action} application`);
+      toast('error', err.message || t('loans.review.error.actionFailed', { action: t(`loans.review.actions.${action}`) }));
     }
   };
 
@@ -80,7 +82,7 @@ export function ApplicationReviewDrawer({ open, onClose, requestId, onActionComp
 
   const handleReject = () => {
     if (!rejectReason.trim()) {
-      toast('error', 'Rejection reason is required');
+      toast('error', t('loans.review.error.rejectionReasonRequired'));
       return;
     }
     handleAction('reject', rejectReason);
@@ -90,66 +92,66 @@ export function ApplicationReviewDrawer({ open, onClose, requestId, onActionComp
 
   return (
     <>
-      <Drawer open={open} onClose={onClose} title="Application Review" width="w-[560px]">
+      <Drawer open={open} onClose={onClose} title={t('loans.review.drawerTitle')} width="w-[560px]">
         {loading ? (
           <div className="animate-pulse space-y-4">
             {[...Array(5)].map((_, i) => (
-              <div key={i} className="h-12 bg-white/5 rounded" />
+              <div key={i} className="h-12 bg-[color:var(--bg-muted)] rounded" />
             ))}
           </div>
         ) : !request ? (
-          <div className="text-white/40 text-center py-8">Application not found</div>
+          <div className="text-[color:var(--text-tertiary)] text-center py-8">{t('loans.review.notFound')}</div>
         ) : (
           <div className="space-y-6">
             {/* Customer Summary */}
-            <div className="glass p-4">
-              <h3 className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-3">Customer</h3>
+            <div className="card p-4">
+              <h3 className="section-label mb-3">{t('loans.review.section.customer')}</h3>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <p className="text-white/40 text-xs">Name</p>
-                  <p className="text-white font-medium">{customer?.fullName || customer?.externalId || '-'}</p>
+                  <p className="text-[color:var(--text-tertiary)] text-xs">{t('common.name')}</p>
+                  <p className="text-[color:var(--text-primary)] font-medium">{customer?.fullName || customer?.externalId || '-'}</p>
                 </div>
                 <div>
-                  <p className="text-white/40 text-xs">KYC Level</p>
-                  <p className="text-white">{customer?.kycLevel?.replace(/_/g, ' ') || '-'}</p>
+                  <p className="text-[color:var(--text-tertiary)] text-xs">{t('loans.review.label.kycLevel')}</p>
+                  <p className="text-[color:var(--text-primary)]">{customer?.kycLevel?.replace(/_/g, ' ') || '-'}</p>
                 </div>
                 <div>
-                  <p className="text-white/40 text-xs">Status</p>
+                  <p className="text-[color:var(--text-tertiary)] text-xs">{t('common.status')}</p>
                   <StatusBadge status={customer?.status || 'unknown'} />
                 </div>
                 <div>
-                  <p className="text-white/40 text-xs">Phone</p>
-                  <p className="text-white">{customer?.phonePrimary || '-'}</p>
+                  <p className="text-[color:var(--text-tertiary)] text-xs">{t('common.phone')}</p>
+                  <p className="text-[color:var(--text-primary)]">{customer?.phonePrimary || '-'}</p>
                 </div>
               </div>
             </div>
 
             {/* Request Details */}
-            <div className="glass p-4">
-              <h3 className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-3">Request Details</h3>
+            <div className="card p-4">
+              <h3 className="section-label mb-3">{t('loans.review.section.requestDetails')}</h3>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div>
-                  <p className="text-white/40 text-xs">Amount</p>
-                  <p className="text-white font-medium">{formatMoney(request.requestedAmount, request.currency)}</p>
+                  <p className="text-[color:var(--text-tertiary)] text-xs">{t('common.amount')}</p>
+                  <p className="text-[color:var(--text-primary)] font-medium tabular-nums">{formatMoney(request.requestedAmount, request.currency)}</p>
                 </div>
                 <div>
-                  <p className="text-white/40 text-xs">Tenor</p>
-                  <p className="text-white">{request.requestedTenorDays ? `${request.requestedTenorDays} days` : '-'}</p>
+                  <p className="text-[color:var(--text-tertiary)] text-xs">{t('loans.review.label.tenor')}</p>
+                  <p className="text-[color:var(--text-primary)]">{request.requestedTenorDays ? `${request.requestedTenorDays} ${t('common.days')}` : '-'}</p>
                 </div>
                 <div>
-                  <p className="text-white/40 text-xs">Product</p>
-                  <p className="text-white">{product?.name || request.productId}</p>
+                  <p className="text-[color:var(--text-tertiary)] text-xs">{t('loans.review.label.product')}</p>
+                  <p className="text-[color:var(--text-primary)]">{product?.name || request.productId}</p>
                 </div>
                 <div>
-                  <p className="text-white/40 text-xs">Channel</p>
-                  <p className="text-white">{request.channel || '-'}</p>
+                  <p className="text-[color:var(--text-tertiary)] text-xs">{t('loans.review.label.channel')}</p>
+                  <p className="text-[color:var(--text-primary)]">{request.channel || '-'}</p>
                 </div>
                 <div>
-                  <p className="text-white/40 text-xs">Submitted</p>
-                  <p className="text-white">{formatDate(request.createdAt)}</p>
+                  <p className="text-[color:var(--text-tertiary)] text-xs">{t('loans.review.label.submitted')}</p>
+                  <p className="text-[color:var(--text-primary)]">{formatDate(request.createdAt)}</p>
                 </div>
                 <div>
-                  <p className="text-white/40 text-xs">Status</p>
+                  <p className="text-[color:var(--text-tertiary)] text-xs">{t('common.status')}</p>
                   <StatusBadge status={request.status} />
                 </div>
               </div>
@@ -157,36 +159,36 @@ export function ApplicationReviewDrawer({ open, onClose, requestId, onActionComp
 
             {/* Scoring Breakdown */}
             {scoring && (
-              <div className="glass p-4">
-                <h3 className="text-xs font-semibold text-white/40 uppercase tracking-wider mb-3">Scoring Breakdown</h3>
+              <div className="card p-4">
+                <h3 className="section-label mb-3">{t('loans.review.section.scoringBreakdown')}</h3>
                 <div className="grid grid-cols-3 gap-3 text-sm mb-4">
                   <div className="text-center">
-                    <p className="text-white/40 text-xs">Score</p>
-                    <p className="text-2xl font-bold text-white">{scoring.score}</p>
+                    <p className="text-[color:var(--text-tertiary)] text-xs">{t('loans.review.label.score')}</p>
+                    <p className="kpi-value">{scoring.score}</p>
                   </div>
                   <div className="text-center">
-                    <p className="text-white/40 text-xs">Risk Tier</p>
+                    <p className="text-[color:var(--text-tertiary)] text-xs">{t('loans.review.label.riskTier')}</p>
                     <StatusBadge status={scoring.riskTier} />
                   </div>
                   <div className="text-center">
-                    <p className="text-white/40 text-xs">Recommendation</p>
+                    <p className="text-[color:var(--text-tertiary)] text-xs">{t('loans.review.label.recommendation')}</p>
                     <StatusBadge status={scoring.recommendation} />
                   </div>
                 </div>
                 {scoring.factors && scoring.factors.length > 0 && (
                   <div className="space-y-2">
-                    <p className="text-xs text-white/40 uppercase">Factors</p>
+                    <p className="text-xs text-[color:var(--text-tertiary)] uppercase">{t('loans.review.label.factors')}</p>
                     {scoring.factors.map((f: any, i: number) => (
                       <div key={i} className="flex items-center justify-between text-sm">
-                        <span className="text-white/60">{f.name}</span>
+                        <span className="text-[color:var(--text-secondary)]">{f.name}</span>
                         <div className="flex items-center gap-2">
-                          <div className="w-24 bg-white/10 rounded-full h-1.5">
+                          <div className="w-24 bg-[color:var(--bg-muted)] rounded-full h-1.5">
                             <div
-                              className="h-1.5 rounded-full bg-blue-400"
+                              className="h-1.5 rounded-full bg-[color:var(--accent-primary)]"
                               style={{ width: `${Math.min((f.score / 100) * 100, 100)}%` }}
                             />
                           </div>
-                          <span className="text-white text-xs w-8 text-right">{f.score}</span>
+                          <span className="text-[color:var(--text-primary)] text-xs w-8 text-right">{f.score}</span>
                         </div>
                       </div>
                     ))}
@@ -203,21 +205,21 @@ export function ApplicationReviewDrawer({ open, onClose, requestId, onActionComp
                   disabled={processing}
                   className="flex-1 glass-button-primary text-sm py-2.5 disabled:opacity-50"
                 >
-                  Approve
+                  {t('loans.review.button.approve')}
                 </button>
                 <button
                   onClick={() => setRejectModalOpen(true)}
                   disabled={processing}
-                  className="flex-1 px-4 py-2.5 bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-sm hover:bg-red-500/30 transition-all disabled:opacity-50"
+                  className="flex-1 px-4 py-2.5 bg-[color:var(--status-error-soft)] border border-[color:var(--status-error)] text-[color:var(--status-error-text)] rounded-lg text-sm hover:opacity-80 transition-all disabled:opacity-50"
                 >
-                  Reject
+                  {t('loans.review.button.reject')}
                 </button>
                 <button
                   onClick={() => handleAction('escalate')}
                   disabled={processing}
                   className="flex-1 glass-button text-sm py-2.5 disabled:opacity-50"
                 >
-                  Escalate
+                  {t('loans.review.button.escalate')}
                 </button>
               </div>
             )}
@@ -226,11 +228,11 @@ export function ApplicationReviewDrawer({ open, onClose, requestId, onActionComp
       </Drawer>
 
       {/* Approve Modal with term modification */}
-      <Modal open={approveModalOpen} onClose={() => setApproveModalOpen(false)} title="Approve Application" size="sm">
+      <Modal open={approveModalOpen} onClose={() => setApproveModalOpen(false)} title={t('loans.review.modal.approveTitle')} size="sm">
         <div className="space-y-4">
-          <p className="text-sm text-white/60">Optionally modify the terms before approving.</p>
+          <p className="text-sm text-[color:var(--text-secondary)]">{t('loans.review.modal.approveDescription')}</p>
           <div>
-            <label className="block text-xs text-white/40 uppercase mb-1">Modified Amount (optional)</label>
+            <label className="block text-xs text-[color:var(--text-tertiary)] uppercase mb-1">{t('loans.review.modal.modifiedAmount')}</label>
             <input
               type="text"
               value={modifiedAmount}
@@ -240,7 +242,7 @@ export function ApplicationReviewDrawer({ open, onClose, requestId, onActionComp
             />
           </div>
           <div>
-            <label className="block text-xs text-white/40 uppercase mb-1">Modified Tenor Days (optional)</label>
+            <label className="block text-xs text-[color:var(--text-tertiary)] uppercase mb-1">{t('loans.review.modal.modifiedTenor')}</label>
             <input
               type="number"
               value={modifiedTenor}
@@ -251,38 +253,38 @@ export function ApplicationReviewDrawer({ open, onClose, requestId, onActionComp
           </div>
           <div className="flex gap-3 pt-2">
             <button onClick={() => setApproveModalOpen(false)} className="flex-1 glass-button text-sm">
-              Cancel
+              {t('common.cancel')}
             </button>
             <button onClick={handleApprove} disabled={processing} className="flex-1 glass-button-primary text-sm disabled:opacity-50">
-              {processing ? 'Processing...' : 'Confirm Approval'}
+              {processing ? t('common.processing') : t('loans.review.modal.confirmApproval')}
             </button>
           </div>
         </div>
       </Modal>
 
       {/* Reject Modal */}
-      <Modal open={rejectModalOpen} onClose={() => setRejectModalOpen(false)} title="Reject Application" size="sm">
+      <Modal open={rejectModalOpen} onClose={() => setRejectModalOpen(false)} title={t('loans.review.modal.rejectTitle')} size="sm">
         <div className="space-y-4">
           <div>
-            <label className="block text-xs text-white/40 uppercase mb-1">Reason (required)</label>
+            <label className="block text-xs text-[color:var(--text-tertiary)] uppercase mb-1">{t('loans.review.modal.reasonRequired')}</label>
             <textarea
               value={rejectReason}
               onChange={(e) => setRejectReason(e.target.value)}
               rows={3}
               className="glass-input text-sm w-full resize-none"
-              placeholder="Enter the reason for rejection..."
+              placeholder={t('loans.review.modal.rejectionPlaceholder')}
             />
           </div>
           <div className="flex gap-3 pt-2">
             <button onClick={() => { setRejectModalOpen(false); setRejectReason(''); }} className="flex-1 glass-button text-sm">
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               onClick={handleReject}
               disabled={processing || !rejectReason.trim()}
-              className="flex-1 px-4 py-2 bg-red-500/20 border border-red-500/30 text-red-400 rounded-lg text-sm hover:bg-red-500/30 transition-all disabled:opacity-50"
+              className="flex-1 px-4 py-2 bg-[color:var(--status-error-soft)] border border-[color:var(--status-error)] text-[color:var(--status-error-text)] rounded-lg text-sm hover:opacity-80 transition-all disabled:opacity-50"
             >
-              {processing ? 'Processing...' : 'Confirm Rejection'}
+              {processing ? t('common.processing') : t('loans.review.modal.confirmRejection')}
             </button>
           </div>
         </div>

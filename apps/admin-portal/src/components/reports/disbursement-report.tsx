@@ -1,26 +1,39 @@
 'use client';
 
+import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
+import { gql, useQuery } from '@apollo/client';
 import { DataTable } from '@/components/ui/data-table';
 import { ReportLayout } from './report-layout';
+import { useReportDateRange, DateRange } from './report-filter-bar';
 import { formatMoney, formatDate, downloadCSV, downloadPDF } from '@/lib/utils';
+import { useI18n } from '@/lib/i18n';
 
 const TrendChart = dynamic(
   () => import('@/components/dashboard/trend-chart').then((m) => ({ default: m.TrendChart })),
   { ssr: false },
 );
 
-const mockData = [
-  { id: '1', date: '2026-03-20', product: 'Micro Loan', count: 45, amount: '125000.00', avgTicket: '2777.78' },
-  { id: '2', date: '2026-03-21', product: 'Overdraft', count: 32, amount: '89600.00', avgTicket: '2800.00' },
-  { id: '3', date: '2026-03-22', product: 'BNPL', count: 28, amount: '67200.00', avgTicket: '2400.00' },
-  { id: '4', date: '2026-03-23', product: 'Micro Loan', count: 51, amount: '142800.00', avgTicket: '2800.00' },
-  { id: '5', date: '2026-03-24', product: 'Overdraft', count: 38, amount: '106400.00', avgTicket: '2800.00' },
-  { id: '6', date: '2026-03-25', product: 'Invoice Factoring', count: 12, amount: '240000.00', avgTicket: '20000.00' },
-  { id: '7', date: '2026-03-26', product: 'Micro Loan', count: 55, amount: '154000.00', avgTicket: '2800.00' },
-];
+const DISBURSEMENT_REPORT = gql`
+  query DisbursementReport($startDate: String, $endDate: String) {
+    disbursementReport(startDate: $startDate, endDate: $endDate) {
+      entries {
+        date
+        product
+        count
+        amount
+        avgTicket
+      }
+      totals {
+        totalCount
+        totalAmount
+        avgTicket
+      }
+    }
+  }
+`;
 
-const chartData = [
+const chartDataFallback = [
   { name: 'Mar 20', value: 125000 },
   { name: 'Mar 21', value: 89600 },
   { name: 'Mar 22', value: 67200 },
@@ -32,34 +45,85 @@ const chartData = [
 
 const columns = ['date', 'product', 'count', 'amount', 'avgTicket'];
 
-export function DisbursementReport() {
-  const handleCSV = () => downloadCSV(mockData, 'disbursement-report');
-  const handlePDF = () => downloadPDF('Disbursement Report', mockData, columns);
+function DisbursementReportInner() {
+  const { t } = useI18n();
+  const dateRange = useReportDateRange();
+  const { data, loading } = useQuery(DISBURSEMENT_REPORT, {
+    variables: { startDate: dateRange.startDate, endDate: dateRange.endDate },
+  });
+
+  const entries = data?.disbursementReport?.entries || [];
+
+  const chartData = entries.length > 0
+    ? deriveChartData(entries)
+    : chartDataFallback;
+
+  const handleCSV = () => downloadCSV(entries, 'disbursement-report');
+  const handlePDF = () => downloadPDF(t('reports.disbursement.pdfTitle'), entries, columns);
+
+  const handleDateRangeChange = (_range: DateRange) => {
+    // Will trigger re-render via URL params; useReportDateRange will provide updated values
+  };
+
+  if (loading) return <div className="card-glow p-12 text-center text-sm text-[color:var(--text-tertiary)]">{t('common.loading')}</div>;
 
   return (
-    <ReportLayout title="Disbursement Report" onExportCSV={handleCSV} onExportPDF={handlePDF}>
-      <div className="mb-6">
+    <ReportLayout
+      title={t('reports.disbursement.title')}
+      eyebrow={t('reports.disbursement.eyebrow')}
+      subtitle={t('reports.disbursement.subtitle')}
+      onExportCSV={handleCSV}
+      onExportPDF={handlePDF}
+      onDateRangeChange={handleDateRangeChange}
+    >
+      <div className="card-glow p-6">
         <TrendChart
-          title="Daily Disbursement Volume (GHS)"
+          title={t('reports.disbursement.dailyChart')}
           data={chartData}
           dataKey="value"
           type="bar"
-          color="#60a5fa"
+          color="var(--accent-primary)"
         />
       </div>
 
-      <div className="glass p-4">
+      <div className="card-glow overflow-hidden">
         <DataTable
           columns={[
-            { header: 'Date', accessor: (r) => formatDate(r.date) },
-            { header: 'Product', accessor: 'product' },
-            { header: 'Count', accessor: 'count' },
-            { header: 'Amount', accessor: (r) => formatMoney(r.amount, 'GHS') },
-            { header: 'Avg Ticket', accessor: (r) => formatMoney(r.avgTicket, 'GHS') },
+            { header: t('reports.disbursement.column.date'), accessor: (r) => formatDate(r.date) },
+            { header: t('reports.disbursement.column.product'), accessor: 'product' },
+            { header: t('reports.disbursement.column.count'), accessor: 'count' },
+            { header: t('reports.disbursement.column.amount'), accessor: (r) => <span className="tabular-nums">{formatMoney(r.amount, 'GHS')}</span> },
+            { header: t('reports.disbursement.column.avgTicket'), accessor: (r) => <span className="tabular-nums">{formatMoney(r.avgTicket, 'GHS')}</span> },
           ]}
-          data={mockData}
+          data={entries}
         />
       </div>
     </ReportLayout>
+  );
+}
+
+function deriveChartData(entries: Array<{ date: string; amount: string }>) {
+  const byDate = new Map<string, number>();
+  for (const e of entries) {
+    const existing = byDate.get(e.date) || 0;
+    byDate.set(e.date, existing + Number(e.amount));
+  }
+  return Array.from(byDate.entries()).map(([date, value]) => ({
+    name: formatShortDate(date),
+    value,
+  }));
+}
+
+function formatShortDate(dateStr: string): string {
+  const d = new Date(dateStr + 'T00:00:00');
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[d.getMonth()]} ${d.getDate()}`;
+}
+
+export function DisbursementReport() {
+  return (
+    <Suspense fallback={<div className="card-glow p-12 text-center text-sm text-[color:var(--text-tertiary)]">Loading…</div>}>
+      <DisbursementReportInner />
+    </Suspense>
   );
 }

@@ -1,10 +1,13 @@
 'use client';
 
+import { Suspense } from 'react';
 import dynamic from 'next/dynamic';
 import { gql, useQuery } from '@apollo/client';
 import { DataTable } from '@/components/ui/data-table';
 import { ReportLayout } from './report-layout';
+import { useReportDateRange, DateRange } from './report-filter-bar';
 import { formatMoney, formatPercent, downloadCSV, downloadPDF } from '@/lib/utils';
+import { useI18n } from '@/lib/i18n';
 
 const TrendChart = dynamic(
   () => import('@/components/dashboard/trend-chart').then((m) => ({ default: m.TrendChart })),
@@ -12,8 +15,8 @@ const TrendChart = dynamic(
 );
 
 const COLLECTIONS_QUERY = gql`
-  query CollectionsReport {
-    collectionsMetrics {
+  query CollectionsReport($startDate: String, $endDate: String) {
+    collectionsMetrics(startDate: $startDate, endDate: $endDate) {
       overdueCount
       delinquentCount
       defaultCount
@@ -48,8 +51,12 @@ const recoveryTrend = [
   { name: 'Jul', value: 54 },
 ];
 
-export function CollectionsReport() {
-  const { data, loading } = useQuery(COLLECTIONS_QUERY);
+function CollectionsReportInner() {
+  const { t } = useI18n();
+  const dateRange = useReportDateRange();
+  const { data, loading } = useQuery(COLLECTIONS_QUERY, {
+    variables: { startDate: dateRange.startDate, endDate: dateRange.endDate },
+  });
   const metrics = data?.collectionsMetrics;
 
   const csvRows = recoveryData.map((r) => ({
@@ -61,67 +68,95 @@ export function CollectionsReport() {
   }));
 
   const handleCSV = () => downloadCSV(csvRows, 'collections-report');
-  const handlePDF = () => downloadPDF('Collections Report', csvRows, ['action', 'sent', 'responded', 'recovered', 'rate']);
+  const handlePDF = () => downloadPDF(t('reports.collections.pdfTitle'), csvRows, ['action', 'sent', 'responded', 'recovered', 'rate']);
 
-  if (loading) return <div className="text-white/40">Loading...</div>;
+  const handleDateRangeChange = (_range: DateRange) => {
+    // Will trigger re-render via URL params; useReportDateRange will provide updated values
+  };
+
+  if (loading) return <div className="card-glow p-12 text-center text-sm text-[color:var(--text-tertiary)]">{t('common.loading')}</div>;
 
   return (
-    <ReportLayout title="Collections Report" onExportCSV={handleCSV} onExportPDF={handlePDF}>
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-        <div className="glass p-4 text-center">
-          <p className="text-sm text-white/60">Overdue</p>
-          <p className="text-2xl font-bold text-amber-400">{metrics?.overdueCount ?? 156}</p>
-        </div>
-        <div className="glass p-4 text-center">
-          <p className="text-sm text-white/60">Delinquent</p>
-          <p className="text-2xl font-bold text-orange-400">{metrics?.delinquentCount ?? 109}</p>
-        </div>
-        <div className="glass p-4 text-center">
-          <p className="text-sm text-white/60">Default</p>
-          <p className="text-2xl font-bold text-red-400">{metrics?.defaultCount ?? 28}</p>
-        </div>
-        <div className="glass p-4 text-center">
-          <p className="text-sm text-white/60">Total in Collections</p>
-          <p className="text-2xl font-bold text-white">{metrics?.totalInCollections ?? 293}</p>
-        </div>
+    <ReportLayout
+      title={t('reports.collections.title')}
+      eyebrow={t('reports.collections.eyebrow')}
+      subtitle={t('reports.collections.subtitle')}
+      onExportCSV={handleCSV}
+      onExportPDF={handlePDF}
+      onDateRangeChange={handleDateRangeChange}
+    >
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <ColKpi label={t('reports.collections.metric.overdue')} value={String(metrics?.overdueCount ?? 156)} tone="warning" />
+        <ColKpi label={t('reports.collections.metric.delinquent')} value={String(metrics?.delinquentCount ?? 109)} tone="warning" />
+        <ColKpi label={t('reports.collections.metric.default')} value={String(metrics?.defaultCount ?? 28)} tone="error" />
+        <ColKpi label={t('reports.collections.metric.totalInCollections')} value={String(metrics?.totalInCollections ?? 293)} />
       </div>
 
-      <div className="mb-6">
+      <div className="card-glow p-6">
         <TrendChart
-          title="Monthly Recovery Rate (%)"
+          title={t('reports.collections.monthlyRecoveryRate')}
           data={recoveryTrend}
           dataKey="value"
           type="bar"
-          color="#f97316"
+          color="var(--status-warning)"
         />
       </div>
 
-      <div className="glass p-4 mb-6">
-        <h3 className="text-sm font-medium text-white/60 mb-3">Recovery Action Effectiveness</h3>
+      <div className="card-glow overflow-hidden">
+        <div className="px-6 py-4 border-b border-[color:var(--border-subtle)]">
+          <h3 className="text-[14px] font-semibold tracking-tight text-[color:var(--text-primary)]">
+            {t('reports.collections.recoveryEffectiveness')}
+          </h3>
+        </div>
         <DataTable
           columns={[
-            { header: 'Action', accessor: 'action' },
-            { header: 'Sent', accessor: 'sent' },
-            { header: 'Responded', accessor: 'responded' },
-            { header: 'Recovered', accessor: (r) => formatMoney(r.recovered, 'GHS') },
-            { header: 'Success Rate', accessor: (r) => formatPercent(r.rate) },
+            { header: t('reports.collections.column.action'), accessor: 'action' },
+            { header: t('reports.collections.column.sent'), accessor: 'sent' },
+            { header: t('reports.collections.column.responded'), accessor: 'responded' },
+            { header: t('reports.collections.column.recovered'), accessor: (r) => <span className="tabular-nums">{formatMoney(r.recovered, 'GHS')}</span> },
+            { header: t('reports.collections.column.successRate'), accessor: (r) => formatPercent(r.rate) },
           ]}
           data={recoveryData}
         />
       </div>
 
-      <div className="glass p-4">
-        <h3 className="text-sm font-medium text-white/60 mb-3">Aging Analysis</h3>
+      <div className="card-glow overflow-hidden">
+        <div className="px-6 py-4 border-b border-[color:var(--border-subtle)]">
+          <h3 className="text-[14px] font-semibold tracking-tight text-[color:var(--text-primary)]">
+            {t('reports.collections.agingAnalysis')}
+          </h3>
+        </div>
         <DataTable
           columns={[
-            { header: 'Bucket', accessor: 'bucket' },
-            { header: 'Contracts', accessor: 'count' },
-            { header: 'Amount', accessor: (r) => formatMoney(r.amount, 'GHS') },
-            { header: '% of Total', accessor: (r) => formatPercent(r.pctOfTotal) },
+            { header: t('reports.collections.column.bucket'), accessor: 'bucket' },
+            { header: t('reports.collections.column.contracts'), accessor: 'count' },
+            { header: t('reports.collections.column.amount'), accessor: (r) => <span className="tabular-nums">{formatMoney(r.amount, 'GHS')}</span> },
+            { header: t('reports.collections.column.percentOfTotal'), accessor: (r) => formatPercent(r.pctOfTotal) },
           ]}
           data={agingData}
         />
       </div>
     </ReportLayout>
+  );
+}
+
+function ColKpi({ label, value, tone }: { label: string; value: string; tone?: 'warning' | 'error' }) {
+  const color = tone === 'error' ? 'var(--status-error-text)' : tone === 'warning' ? 'var(--status-warning-text)' : 'var(--text-primary)';
+  return (
+    <div className="card-glow p-5">
+      <p className="text-[11px] uppercase tracking-wider text-[color:var(--text-tertiary)] mb-2">{label}</p>
+      <p className="text-[28px] font-semibold tabular-nums leading-none" style={{ color, letterSpacing: '-0.025em' }}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
+export function CollectionsReport() {
+  const { t } = useI18n();
+  return (
+    <Suspense fallback={<div className="card-glow p-12 text-center text-sm text-[color:var(--text-tertiary)]">{t('common.loading')}</div>}>
+      <CollectionsReportInner />
+    </Suspense>
   );
 }

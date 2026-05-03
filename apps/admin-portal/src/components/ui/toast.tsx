@@ -2,7 +2,6 @@
 
 import { createContext, useContext, useState, useCallback, type ReactNode } from 'react';
 import { X, CheckCircle, AlertCircle, Info } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 type ToastType = 'success' | 'error' | 'info';
 
@@ -24,16 +23,22 @@ export function useToast() {
   return ctx;
 }
 
-const icons: Record<ToastType, typeof CheckCircle> = {
+const iconByType: Record<ToastType, typeof CheckCircle> = {
   success: CheckCircle,
   error: AlertCircle,
   info: Info,
 };
 
-const colors: Record<ToastType, string> = {
-  success: 'border-emerald-500/30 text-emerald-400',
-  error: 'border-red-500/30 text-red-400',
-  info: 'border-blue-500/30 text-blue-400',
+const accentByType: Record<ToastType, string> = {
+  success: 'var(--status-success)',
+  error: 'var(--status-error)',
+  info: 'var(--status-info)',
+};
+
+const textByType: Record<ToastType, string> = {
+  success: 'var(--status-success-text)',
+  error: 'var(--status-error-text)',
+  info: 'var(--status-info-text)',
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -54,26 +59,40 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 max-w-sm">
+      <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-2 max-w-sm">
         {toasts.map((t) => {
-          const Icon = icons[t.type];
+          const Icon = iconByType[t.type];
           return (
             <div
               key={t.id}
-              className={cn(
-                'glass flex items-start gap-3 p-4 animate-slide-in-right',
-                colors[t.type],
-              )}
+              className="card-elevated flex items-start gap-3 px-4 py-3 min-w-[280px] animate-[slideInRight_0.24s_cubic-bezier(0.2,0,0,1)]"
+              style={{ borderLeft: `3px solid ${accentByType[t.type]}` }}
             >
-              <Icon className="w-5 h-5 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-white flex-1">{t.message}</p>
-              <button onClick={() => dismiss(t.id)} className="text-white/30 hover:text-white">
-                <X className="w-4 h-4" />
+              <Icon
+                className="w-4 h-4 flex-shrink-0 mt-0.5"
+                style={{ color: textByType[t.type] }}
+              />
+              <p className="text-sm text-[color:var(--text-primary)] flex-1 leading-relaxed">
+                {t.message}
+              </p>
+              <button
+                onClick={() => dismiss(t.id)}
+                className="text-[color:var(--text-tertiary)] hover:text-[color:var(--text-primary)] transition-colors p-0.5 rounded"
+                aria-label="Dismiss"
+              >
+                <X className="w-3.5 h-3.5" />
               </button>
             </div>
           );
         })}
       </div>
+
+      <style jsx>{`
+        @keyframes slideInRight {
+          from { transform: translateX(16px); opacity: 0; }
+          to   { transform: translateX(0);    opacity: 1; }
+        }
+      `}</style>
     </ToastContext.Provider>
   );
 }

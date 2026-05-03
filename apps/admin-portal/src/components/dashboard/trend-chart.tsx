@@ -119,8 +119,8 @@ export function TrendChart({
   };
 
   return (
-    <div className="glass p-5">
-      <h3 className="text-sm font-medium text-white/60 mb-3">{title}</h3>
+    <div className="card p-5">
+      <h3 className="section-label mb-3">{title}</h3>
       <div className="h-48">
         <ResponsiveContainer width="100%" height="100%">
           {renderChart()}

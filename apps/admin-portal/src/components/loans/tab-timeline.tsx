@@ -3,6 +3,7 @@
 import { gql, useQuery } from '@apollo/client';
 import { formatDateTime } from '@/lib/utils';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useI18n } from '@/lib/i18n';
 import { GitBranch } from 'lucide-react';
 
 const CONTRACT_TIMELINE_QUERY = gql`
@@ -18,20 +19,21 @@ interface TabTimelineProps {
 }
 
 const stateColors: Record<string, string> = {
-  created: 'border-blue-400 bg-blue-400',
-  active: 'border-emerald-400 bg-emerald-400',
-  performing: 'border-emerald-400 bg-emerald-400',
-  disbursed: 'border-emerald-400 bg-emerald-400',
-  due: 'border-amber-400 bg-amber-400',
-  overdue: 'border-orange-400 bg-orange-400',
-  delinquent: 'border-red-400 bg-red-400',
-  default_status: 'border-red-500 bg-red-500',
-  settled: 'border-blue-400 bg-blue-400',
-  cancelled: 'border-white/30 bg-white/30',
-  written_off: 'border-red-500 bg-red-500',
+  created: 'border-[color:var(--accent-primary)] bg-[color:var(--accent-primary)]',
+  active: 'border-[color:var(--status-success-text)] bg-[color:var(--status-success-text)]',
+  performing: 'border-[color:var(--status-success-text)] bg-[color:var(--status-success-text)]',
+  disbursed: 'border-[color:var(--status-success-text)] bg-[color:var(--status-success-text)]',
+  due: 'border-[color:var(--status-warning-text)] bg-[color:var(--status-warning-text)]',
+  overdue: 'border-[color:var(--status-warning-text)] bg-[color:var(--status-warning-text)]',
+  delinquent: 'border-[color:var(--status-error-text)] bg-[color:var(--status-error-text)]',
+  default_status: 'border-[color:var(--status-error-text)] bg-[color:var(--status-error-text)]',
+  settled: 'border-[color:var(--accent-primary)] bg-[color:var(--accent-primary)]',
+  cancelled: 'border-[color:var(--text-tertiary)] bg-[color:var(--text-tertiary)]',
+  written_off: 'border-[color:var(--status-error-text)] bg-[color:var(--status-error-text)]',
 };
 
 export function TabTimeline({ contractId }: TabTimelineProps) {
+  const { t } = useI18n();
   const { data, loading } = useQuery(CONTRACT_TIMELINE_QUERY, {
     variables: { contractId },
     fetchPolicy: 'cache-and-network',
@@ -44,10 +46,10 @@ export function TabTimeline({ contractId }: TabTimelineProps) {
       <div className="animate-pulse space-y-4">
         {[...Array(4)].map((_, i) => (
           <div key={i} className="flex gap-4">
-            <div className="w-3 h-3 rounded-full bg-white/10 mt-1" />
+            <div className="w-3 h-3 rounded-full bg-[color:var(--bg-muted)] mt-1" />
             <div className="flex-1 space-y-2">
-              <div className="h-4 bg-white/5 rounded w-48" />
-              <div className="h-3 bg-white/5 rounded w-32" />
+              <div className="h-4 bg-[color:var(--bg-muted)] rounded w-48" />
+              <div className="h-3 bg-[color:var(--bg-muted)] rounded w-32" />
             </div>
           </div>
         ))}
@@ -59,18 +61,18 @@ export function TabTimeline({ contractId }: TabTimelineProps) {
     return (
       <EmptyState
         icon={GitBranch}
-        title="No Timeline Events"
-        description="No state transitions have been recorded for this contract."
+        title={t('loans.timeline.emptyTitle')}
+        description={t('loans.timeline.emptyDescription')}
       />
     );
   }
 
   return (
     <div className="relative">
-      <div className="absolute left-[5px] top-2 bottom-2 w-px bg-white/10" />
+      <div className="absolute left-[5px] top-2 bottom-2 w-px bg-[color:var(--bg-muted)]" />
       <div className="space-y-6">
         {events.map((event: any) => {
-          const dotColor = stateColors[event.toState] || 'border-white/40 bg-white/40';
+          const dotColor = stateColors[event.toState] || 'border-[color:var(--text-tertiary)] bg-[color:var(--text-tertiary)]';
           return (
             <div key={event.id} className="relative pl-8">
               <div className={`absolute left-0 top-1.5 w-[11px] h-[11px] rounded-full border-2 ${dotColor}`} />
@@ -78,18 +80,18 @@ export function TabTimeline({ contractId }: TabTimelineProps) {
                 <div className="flex items-center gap-2 flex-wrap">
                   {event.fromState && (
                     <>
-                      <span className="text-xs text-white/40 uppercase">{event.fromState.replace(/_/g, ' ')}</span>
-                      <span className="text-white/20">→</span>
+                      <span className="text-xs text-[color:var(--text-tertiary)] uppercase">{event.fromState.replace(/_/g, ' ')}</span>
+                      <span className="text-[color:var(--text-tertiary)]">→</span>
                     </>
                   )}
-                  <span className="text-sm font-medium text-white uppercase">{event.toState.replace(/_/g, ' ')}</span>
+                  <span className="text-sm font-medium text-[color:var(--text-primary)] uppercase">{event.toState.replace(/_/g, ' ')}</span>
                 </div>
                 {event.description && (
-                  <p className="text-sm text-white/60 mt-0.5">{event.description}</p>
+                  <p className="text-sm text-[color:var(--text-secondary)] mt-0.5">{event.description}</p>
                 )}
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs text-white/30">{formatDateTime(event.createdAt)}</span>
-                  {event.actor && <span className="text-xs text-white/20">by {event.actor}</span>}
+                  <span className="text-xs text-[color:var(--text-tertiary)]">{formatDateTime(event.createdAt)}</span>
+                  {event.actor && <span className="text-xs text-[color:var(--text-tertiary)]">{t('loans.timeline.byActor', { actor: event.actor })}</span>}
                 </div>
               </div>
             </div>

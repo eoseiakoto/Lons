@@ -19,23 +19,41 @@ export function formatDateTime(date: string | Date): string {
 }
 
 export function statusColor(status: string): string {
-  const colors: Record<string, string> = {
-    active: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-    performing: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-    approved: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-    draft: 'bg-white/10 text-white/60 border-white/10',
-    suspended: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-    due: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-    overdue: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-    delinquent: 'bg-red-500/20 text-red-400 border-red-500/30',
-    default_status: 'bg-red-500/20 text-red-400 border-red-500/30',
-    rejected: 'bg-red-500/20 text-red-400 border-red-500/30',
-    blacklisted: 'bg-red-500/20 text-red-400 border-red-500/30',
-    settled: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-    discontinued: 'bg-white/10 text-white/40 border-white/10',
-    cancelled: 'bg-white/10 text-white/40 border-white/10',
+  // Returns an Apple-inspired pill class name. Pairs with `pill-*` classes
+  // defined in globals.css so colors adapt to light/dark theme automatically.
+  const map: Record<string, string> = {
+    // Success / healthy
+    active: 'pill pill-success',
+    performing: 'pill pill-success',
+    approved: 'pill pill-success',
+    completed: 'pill pill-success',
+    settled_status: 'pill pill-success',
+
+    // Warning / attention
+    draft: 'pill pill-neutral',
+    suspended: 'pill pill-warning',
+    cooling_off: 'pill pill-warning',
+    due: 'pill pill-warning',
+    pending: 'pill pill-warning',
+
+    // Error / critical
+    overdue: 'pill pill-error',
+    delinquent: 'pill pill-error',
+    default_status: 'pill pill-error',
+    rejected: 'pill pill-error',
+    blacklisted: 'pill pill-error',
+
+    // Info
+    settled: 'pill pill-info',
+    accepted: 'pill pill-info',
+
+    // Neutral
+    discontinued: 'pill pill-neutral',
+    cancelled: 'pill pill-neutral',
+    anonymized: 'pill pill-accent',
+    escalate: 'pill pill-accent',
   };
-  return colors[status] || 'bg-white/10 text-white/60 border-white/10';
+  return map[status] || 'pill pill-neutral';
 }
 
 export function formatPercent(value: number | string, decimals = 1): string {

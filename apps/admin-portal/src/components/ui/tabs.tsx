@@ -16,29 +16,46 @@ interface TabsProps {
 
 export function Tabs({ tabs, activeTab, onChange }: TabsProps) {
   return (
-    <div className="flex gap-1 border-b border-white/10 mb-6">
-      {tabs.map((tab) => (
-        <button
-          key={tab.key}
-          onClick={() => onChange(tab.key)}
-          className={cn(
-            'px-4 py-2.5 text-sm font-medium transition-all duration-200 border-b-2 -mb-px',
-            activeTab === tab.key
-              ? 'text-white border-blue-400'
-              : 'text-white/40 border-transparent hover:text-white/60 hover:border-white/20',
-          )}
-        >
-          {tab.label}
-          {tab.count !== undefined && (
-            <span className={cn(
-              'ml-2 text-xs px-1.5 py-0.5 rounded-full',
-              activeTab === tab.key ? 'bg-blue-500/20 text-blue-400' : 'bg-white/10 text-white/40',
-            )}>
-              {tab.count}
+    <div
+      className="flex gap-0.5 mb-6 overflow-x-auto"
+      style={{ borderBottom: '1px solid var(--border-subtle)' }}
+    >
+      {tabs.map((tab) => {
+        const active = activeTab === tab.key;
+        return (
+          <button
+            key={tab.key}
+            onClick={() => onChange(tab.key)}
+            className={cn(
+              'relative px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors duration-200',
+              active
+                ? 'text-[color:var(--text-primary)]'
+                : 'text-[color:var(--text-secondary)] hover:text-[color:var(--text-primary)]',
+            )}
+          >
+            <span className="inline-flex items-center gap-2">
+              {tab.label}
+              {tab.count !== undefined && (
+                <span
+                  className={cn(
+                    'text-xs px-1.5 py-0.5 rounded-full',
+                    active ? 'pill pill-accent' : 'pill pill-neutral',
+                  )}
+                >
+                  {tab.count}
+                </span>
+              )}
             </span>
-          )}
-        </button>
-      ))}
+            {active && (
+              <span
+                aria-hidden
+                className="absolute left-3 right-3 -bottom-px h-0.5 rounded-full"
+                style={{ backgroundColor: 'var(--accent-primary)' }}
+              />
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }

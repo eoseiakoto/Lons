@@ -1,6 +1,7 @@
 'use client';
 
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
+import { useI18n } from '@/lib/i18n';
 
 interface AgingChartProps {
   data: { bucket: string; count: number; amount: string }[];
@@ -9,10 +10,11 @@ interface AgingChartProps {
 const COLORS = ['#f59e0b', '#f97316', '#ef4444', '#dc2626'];
 
 export function AgingChart({ data }: AgingChartProps) {
+  const { t } = useI18n();
   if (!data || data.length === 0) {
     return (
-      <div className="flex items-center justify-center h-full text-white/30 text-sm">
-        No aging data available
+      <div className="flex items-center justify-center h-full text-[color:var(--text-tertiary)] text-sm">
+        {t('collections.aging.noData')}
       </div>
     );
   }
@@ -39,7 +41,7 @@ export function AgingChart({ data }: AgingChartProps) {
           }}
           labelStyle={{ color: 'rgba(255,255,255,0.6)' }}
         />
-        <Bar dataKey="count" name="Contracts" radius={[4, 4, 0, 0]}>
+        <Bar dataKey="count" name={t('collections.aging.contractsLabel')} radius={[4, 4, 0, 0]}>
           {data.map((_, i) => (
             <Cell key={i} fill={COLORS[i % COLORS.length]} fillOpacity={0.8} />
           ))}

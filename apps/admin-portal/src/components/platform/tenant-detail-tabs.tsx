@@ -1,8 +1,9 @@
 'use client';
 
 import { useState } from 'react';
-import { cn } from '@/lib/utils';
+import { motion } from 'framer-motion';
 import { formatDate, formatDateTime } from '@/lib/utils';
+import { useI18n } from '@/lib/i18n';
 
 export interface TenantDetail {
   id: string;
@@ -29,7 +30,16 @@ interface TenantDetailTabsProps {
 const TABS = ['General', 'Configuration', 'Billing', 'Integrations', 'Activity'] as const;
 type Tab = (typeof TABS)[number];
 
+const TAB_KEYS: Record<Tab, string> = {
+  General: 'platform.tenant.tab.general',
+  Configuration: 'platform.tenant.tab.configuration',
+  Billing: 'platform.tenant.tab.billing',
+  Integrations: 'platform.tenant.tab.integrations',
+  Activity: 'platform.tenant.tab.activity',
+};
+
 export function TenantDetailTabs({ tenant, onSave, onStatusChange, saving }: TenantDetailTabsProps) {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState<Tab>('General');
   const [editState, setEditState] = useState({
     name: tenant.name,
@@ -52,26 +62,45 @@ export function TenantDetailTabs({ tenant, onSave, onStatusChange, saving }: Ten
     });
   };
 
-  const labelCls = 'block text-sm font-medium text-white/60 mb-1';
+  const labelCls = 'block text-[11px] uppercase tracking-wider text-[color:var(--text-tertiary)] mb-1.5';
 
   return (
     <div>
-      {/* Tab bar */}
-      <div className="flex gap-1 mb-6 border-b border-white/10">
-        {TABS.map((tab) => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={cn(
-              'px-4 py-2.5 text-sm font-medium transition-all border-b-2',
-              activeTab === tab
-                ? 'text-white border-blue-400'
-                : 'text-white/40 border-transparent hover:text-white/70',
-            )}
-          >
-            {tab}
-          </button>
-        ))}
+      {/* Tab bar — motion-pill */}
+      <div
+        className="inline-flex p-1 rounded-lg gap-1 mb-6"
+        style={{
+          backgroundColor: 'var(--bg-muted)',
+          border: '1px solid var(--border-subtle)',
+          padding: 4,
+        }}
+      >
+        {TABS.map((tab) => {
+          const isActive = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className="relative px-3.5 py-1.5 rounded-md text-[12px] font-medium transition-colors"
+              style={{
+                color: isActive ? 'var(--text-on-accent)' : 'var(--text-secondary)',
+              }}
+            >
+              {isActive && (
+                <motion.span
+                  layoutId="tenant-detail-tab"
+                  className="absolute inset-0 rounded-md"
+                  style={{
+                    backgroundColor: 'var(--accent-primary)',
+                    boxShadow: '0 4px 12px -4px rgba(var(--accent-primary-rgb), 0.45)',
+                  }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                />
+              )}
+              <span className="relative">{t(TAB_KEYS[tab])}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* General tab */}
@@ -79,119 +108,152 @@ export function TenantDetailTabs({ tenant, onSave, onStatusChange, saving }: Ten
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             <div>
-              <label className={labelCls}>Tenant Name</label>
+              <label className={labelCls}>{t('platform.tenant.label.tenantName')}</label>
               <input
-                className="w-full glass-input"
+                className="input-field"
                 value={editState.name}
                 onChange={(e) => handleFieldChange('name', e.target.value)}
               />
             </div>
             <div>
-              <label className={labelCls}>Slug</label>
-              <input className="w-full glass-input opacity-60" value={tenant.slug} disabled />
+              <label className={labelCls}>{t('platform.tenant.label.slug')}</label>
+              <input className="input-field opacity-60 cursor-not-allowed" value={tenant.slug} disabled />
             </div>
             <div>
-              <label className={labelCls}>Legal Name</label>
+              <label className={labelCls}>{t('platform.tenant.label.legalName')}</label>
               <input
-                className="w-full glass-input"
+                className="input-field"
                 value={editState.legalName}
                 onChange={(e) => handleFieldChange('legalName', e.target.value)}
               />
             </div>
             <div>
-              <label className={labelCls}>Registration Number</label>
+              <label className={labelCls}>{t('platform.tenant.label.registrationNumber')}</label>
               <input
-                className="w-full glass-input"
+                className="input-field"
                 value={editState.registrationNumber}
                 onChange={(e) => handleFieldChange('registrationNumber', e.target.value)}
               />
             </div>
             <div>
-              <label className={labelCls}>Country</label>
+              <label className={labelCls}>{t('platform.tenant.label.country')}</label>
               <input
-                className="w-full glass-input"
+                className="input-field"
                 value={editState.country}
                 onChange={(e) => handleFieldChange('country', e.target.value)}
                 maxLength={3}
               />
             </div>
             <div>
-              <label className={labelCls}>Schema Name</label>
-              <input className="w-full glass-input opacity-60" value={tenant.schemaName} disabled />
+              <label className={labelCls}>{t('platform.tenant.label.schemaName')}</label>
+              <input className="input-field opacity-60 cursor-not-allowed" value={tenant.schemaName} disabled />
             </div>
           </div>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={handleSaveGeneral}
-              disabled={saving}
-              className="glass-button-primary text-sm disabled:opacity-50"
-            >
-              {saving ? 'Saving...' : 'Save Changes'}
+            <button onClick={handleSaveGeneral} disabled={saving} className="btn-primary disabled:opacity-50">
+              {saving ? t('common.saving') : t('platform.tenant.saveChanges')}
             </button>
           </div>
 
           {/* Status management */}
-          <div className="glass p-5 space-y-4">
-            <h4 className="text-sm font-semibold text-white/70">Status Management</h4>
-            <div className="flex items-center gap-3 text-sm">
-              <span className="text-white/50">Current Status:</span>
-              <span className="text-white font-medium capitalize">{tenant.status}</span>
+          <div className="card-glow p-5 space-y-4">
+            <h4 className="text-[14px] font-semibold tracking-tight text-[color:var(--text-primary)]">
+              {t('platform.tenant.statusManagement')}
+            </h4>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="text-[color:var(--text-tertiary)] text-[12px] uppercase tracking-wider">
+                {t('platform.tenant.currentStatus')}
+              </span>
+              <span
+                className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider"
+                style={{
+                  backgroundColor:
+                    tenant.status === 'active'
+                      ? 'var(--status-success-soft)'
+                      : tenant.status === 'suspended'
+                        ? 'var(--status-error-soft)'
+                        : 'var(--status-warning-soft)',
+                  color:
+                    tenant.status === 'active'
+                      ? 'var(--status-success-text)'
+                      : tenant.status === 'suspended'
+                        ? 'var(--status-error-text)'
+                        : 'var(--status-warning-text)',
+                  border: `1px solid ${
+                    tenant.status === 'active'
+                      ? 'var(--status-success)'
+                      : tenant.status === 'suspended'
+                        ? 'var(--status-error)'
+                        : 'var(--status-warning)'
+                  }33`,
+                }}
+              >
+                {tenant.status}
+              </span>
             </div>
 
             {tenant.status === 'provisioning' && (
-              <button
-                onClick={() => onStatusChange('active')}
-                className="glass-button-primary text-sm"
-              >
-                Activate Tenant
+              <button onClick={() => onStatusChange('active')} className="btn-primary">
+                {t('platform.tenant.action.activate')}
               </button>
             )}
             {tenant.status === 'active' && (
               <div className="space-y-3">
                 <input
-                  className="w-full glass-input"
-                  placeholder="Reason for suspension..."
+                  className="input-field"
+                  placeholder={t('platform.tenant.placeholder.suspendReason')}
                   value={suspendReason}
                   onChange={(e) => setSuspendReason(e.target.value)}
                 />
                 <button
                   onClick={() => onStatusChange('suspended', suspendReason)}
                   disabled={!suspendReason}
-                  className="px-4 py-2 bg-red-500/80 border border-red-400/30 text-white rounded-lg text-sm hover:bg-red-500/90 transition-all disabled:opacity-50"
+                  className="px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                  style={{
+                    backgroundColor: 'var(--status-error-soft)',
+                    color: 'var(--status-error-text)',
+                    border: '1px solid var(--status-error)',
+                  }}
                 >
-                  Suspend Tenant
+                  {t('platform.tenant.action.suspend')}
                 </button>
               </div>
             )}
             {tenant.status === 'suspended' && (
-              <button
-                onClick={() => onStatusChange('active')}
-                className="glass-button-primary text-sm"
-              >
-                Reactivate Tenant
+              <button onClick={() => onStatusChange('active')} className="btn-primary">
+                {t('platform.tenant.action.reactivate')}
               </button>
             )}
           </div>
 
-          <div className="text-xs text-white/30 space-y-1">
-            <p>Created: {formatDateTime(tenant.createdAt)}</p>
-            <p>Last Updated: {formatDateTime(tenant.updatedAt)}</p>
+          <div className="text-[11px] text-[color:var(--text-tertiary)] tabular-nums space-y-0.5">
+            <p>{t('platform.tenant.createdAt')}{formatDateTime(tenant.createdAt)}</p>
+            <p>{t('platform.tenant.updatedAt')}{formatDateTime(tenant.updatedAt)}</p>
           </div>
         </div>
       )}
 
       {/* Configuration tab */}
       {activeTab === 'Configuration' && (
-        <div className="space-y-5">
-          <h4 className="text-sm font-semibold text-white/70">Tenant Configuration</h4>
-          <div className="glass p-5">
-            <label className={labelCls}>Plan Tier</label>
-            <div className="text-white capitalize">{tenant.planTier}</div>
+        <div className="space-y-4">
+          <h4 className="text-[14px] font-semibold tracking-tight text-[color:var(--text-primary)]">
+            {t('platform.tenant.tenantConfiguration')}
+          </h4>
+          <div className="card-glow p-5">
+            <p className={labelCls}>{t('platform.tenant.planTier')}</p>
+            <p className="text-[color:var(--text-primary)] capitalize text-[14px]">{tenant.planTier}</p>
           </div>
-          <div className="glass p-5">
-            <label className={labelCls}>Settings (JSON)</label>
-            <pre className="text-xs text-white/60 bg-white/5 rounded-lg p-4 overflow-auto max-h-64">
+          <div className="card-glow p-5">
+            <p className={labelCls}>{t('platform.tenant.settingsJson')}</p>
+            <pre
+              className="text-[11px] font-mono overflow-auto max-h-64 rounded-lg p-4"
+              style={{
+                color: 'var(--text-secondary)',
+                backgroundColor: 'var(--bg-muted)',
+                border: '1px solid var(--border-subtle)',
+              }}
+            >
               {JSON.stringify(tenant.settings || {}, null, 2)}
             </pre>
           </div>
@@ -200,12 +262,14 @@ export function TenantDetailTabs({ tenant, onSave, onStatusChange, saving }: Ten
 
       {/* Billing tab */}
       {activeTab === 'Billing' && (
-        <div className="space-y-5">
-          <h4 className="text-sm font-semibold text-white/70">Billing Information</h4>
-          <div className="glass p-8 text-center">
-            <p className="text-white/40 text-sm">Billing integration coming soon.</p>
-            <p className="text-white/30 text-xs mt-1">
-              Plan: <span className="capitalize">{tenant.planTier}</span>
+        <div className="space-y-4">
+          <h4 className="text-[14px] font-semibold tracking-tight text-[color:var(--text-primary)]">
+            {t('platform.tenant.billingInformation')}
+          </h4>
+          <div className="card-glow p-12 text-center">
+            <p className="text-[color:var(--text-secondary)] text-sm">{t('platform.tenant.billingComingSoon')}</p>
+            <p className="text-[color:var(--text-tertiary)] text-[12px] mt-1.5">
+              {t('platform.tenant.planPrefix')}<span className="capitalize text-[color:var(--text-primary)]">{tenant.planTier}</span>
             </p>
           </div>
         </div>
@@ -213,11 +277,13 @@ export function TenantDetailTabs({ tenant, onSave, onStatusChange, saving }: Ten
 
       {/* Integrations tab */}
       {activeTab === 'Integrations' && (
-        <div className="space-y-5">
-          <h4 className="text-sm font-semibold text-white/70">Integrations</h4>
-          <div className="glass p-8 text-center">
-            <p className="text-white/40 text-sm">
-              Integration configuration is managed at the platform level.
+        <div className="space-y-4">
+          <h4 className="text-[14px] font-semibold tracking-tight text-[color:var(--text-primary)]">
+            {t('platform.tenant.integrations')}
+          </h4>
+          <div className="card-glow p-12 text-center">
+            <p className="text-[color:var(--text-secondary)] text-sm">
+              {t('platform.tenant.integrationsManagedPlatform')}
             </p>
           </div>
         </div>
@@ -225,12 +291,14 @@ export function TenantDetailTabs({ tenant, onSave, onStatusChange, saving }: Ten
 
       {/* Activity tab */}
       {activeTab === 'Activity' && (
-        <div className="space-y-5">
-          <h4 className="text-sm font-semibold text-white/70">Recent Activity</h4>
-          <div className="glass p-8 text-center">
-            <p className="text-white/40 text-sm">Activity log will appear here.</p>
-            <p className="text-white/30 text-xs mt-1">
-              Tenant created on {formatDate(tenant.createdAt)}.
+        <div className="space-y-4">
+          <h4 className="text-[14px] font-semibold tracking-tight text-[color:var(--text-primary)]">
+            {t('platform.tenant.recentActivity')}
+          </h4>
+          <div className="card-glow p-12 text-center">
+            <p className="text-[color:var(--text-secondary)] text-sm">{t('platform.tenant.activityComingSoon')}</p>
+            <p className="text-[color:var(--text-tertiary)] text-[12px] mt-1.5">
+              {t('platform.tenant.createdOn')}<span className="text-[color:var(--text-primary)] tabular-nums">{formatDate(tenant.createdAt)}</span>.
             </p>
           </div>
         </div>

@@ -1,8 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { cn } from '@/lib/utils';
-import { Plus, Edit2, X, Check } from 'lucide-react';
+import { Plus, Edit2, X, Check, Building2 } from 'lucide-react';
+import { useI18n } from '@/lib/i18n';
 
 export interface ServiceProviderRow {
   id: string;
@@ -20,26 +20,27 @@ interface SpManagementProps {
   loading?: boolean;
 }
 
-const statusBadge = (status: string) => {
-  const map: Record<string, string> = {
-    active: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-    suspended: 'bg-red-500/20 text-red-400 border-red-500/30',
-    inactive: 'bg-white/10 text-white/40 border-white/10',
-  };
-  return map[status] || 'bg-white/10 text-white/60 border-white/10';
-};
-
 export function SpManagement({
-  _tenantId,
+  tenantId: _tenantId,
   serviceProviders,
   onCreateSp,
   onUpdateSp,
   loading,
 }: SpManagementProps) {
+  const { t } = useI18n();
   const [showCreate, setShowCreate] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formName, setFormName] = useState('');
   const [formCode, setFormCode] = useState('');
+
+  const statusToken = (status: string): { color: string; label: string } => {
+    const map: Record<string, { color: string; label: string }> = {
+      active: { color: 'var(--status-success)', label: t('common.active') },
+      suspended: { color: 'var(--status-error)', label: t('platform.sp.suspended') },
+      inactive: { color: 'var(--text-tertiary)', label: t('common.inactive') },
+    };
+    return map[status] || { color: 'var(--text-tertiary)', label: status };
+  };
 
   const handleCreate = () => {
     if (formName.trim() && formCode.trim()) {
@@ -75,7 +76,9 @@ export function SpManagement({
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-white/70">Service Providers</h4>
+        <h4 className="text-[14px] font-semibold tracking-tight text-[color:var(--text-primary)]">
+          {t('platform.sp.title')}
+        </h4>
         <button
           onClick={() => {
             setShowCreate(true);
@@ -83,107 +86,133 @@ export function SpManagement({
             setFormName('');
             setFormCode('');
           }}
-          className="glass-button flex items-center gap-2 text-xs"
+          className="btn-secondary text-[12px]"
         >
-          <Plus className="w-3 h-3" />
-          Add SP
+          <Plus className="w-3.5 h-3.5" />
+          {t('platform.sp.addSp')}
         </button>
       </div>
 
       {loading && (
-        <div className="glass p-4 text-center">
-          <p className="text-white/40 text-sm">Loading service providers...</p>
+        <div className="card-glow p-12 text-center text-sm text-[color:var(--text-tertiary)]">
+          {t('platform.sp.loading')}
         </div>
       )}
 
       {/* Create inline form */}
       {showCreate && (
-        <div className="glass p-4 space-y-3">
+        <div className="card-glow p-5 space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <input
-              className="glass-input text-sm"
-              placeholder="SP Name"
+              className="input-field"
+              placeholder={t('platform.sp.placeholder.name')}
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
             />
             <input
-              className="glass-input text-sm"
-              placeholder="SP Code"
+              className="input-field"
+              placeholder={t('platform.sp.placeholder.code')}
               value={formCode}
               onChange={(e) => setFormCode(e.target.value)}
             />
           </div>
           <div className="flex items-center gap-2">
-            <button onClick={handleCreate} className="glass-button-primary text-xs flex items-center gap-1">
-              <Check className="w-3 h-3" /> Create
+            <button onClick={handleCreate} className="btn-primary text-[12px]">
+              <Check className="w-3.5 h-3.5" /> {t('common.create')}
             </button>
-            <button onClick={cancelEdit} className="glass-button text-xs flex items-center gap-1">
-              <X className="w-3 h-3" /> Cancel
+            <button onClick={cancelEdit} className="btn-ghost text-[12px]">
+              <X className="w-3.5 h-3.5" /> {t('common.cancel')}
             </button>
           </div>
         </div>
       )}
 
-      {/* SP list */}
+      {/* Empty state */}
       {serviceProviders.length === 0 && !loading && !showCreate && (
-        <div className="glass p-6 text-center">
-          <p className="text-white/40 text-sm">No service providers yet.</p>
+        <div className="card-glow p-12 text-center">
+          <Building2 className="w-8 h-8 mx-auto text-[color:var(--text-tertiary)] mb-3" />
+          <p className="text-sm text-[color:var(--text-secondary)]">{t('platform.sp.emptyMessage')}</p>
         </div>
       )}
 
-      {serviceProviders.map((sp) => (
-        <div key={sp.id} className="glass p-4">
-          {editingId === sp.id ? (
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  className="glass-input text-sm"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                />
-                <input
-                  className="glass-input text-sm"
-                  value={formCode}
-                  onChange={(e) => setFormCode(e.target.value)}
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <button onClick={handleUpdate} className="glass-button-primary text-xs flex items-center gap-1">
-                  <Check className="w-3 h-3" /> Save
-                </button>
-                <button onClick={cancelEdit} className="glass-button text-xs flex items-center gap-1">
-                  <X className="w-3 h-3" /> Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-sm font-medium text-white">{sp.name}</div>
-                <div className="text-xs text-white/30">
-                  Code: {sp.code} | Products: {sp.productCount}
+      {/* SP list */}
+      {serviceProviders.map((sp) => {
+        const token = statusToken(sp.status);
+        return (
+          <div key={sp.id} className="card-glow p-4">
+            {editingId === sp.id ? (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <input
+                    className="input-field"
+                    value={formName}
+                    onChange={(e) => setFormName(e.target.value)}
+                  />
+                  <input
+                    className="input-field"
+                    value={formCode}
+                    onChange={(e) => setFormCode(e.target.value)}
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={handleUpdate} className="btn-primary text-[12px]">
+                    <Check className="w-3.5 h-3.5" /> {t('common.save')}
+                  </button>
+                  <button onClick={cancelEdit} className="btn-ghost text-[12px]">
+                    <X className="w-3.5 h-3.5" /> {t('common.cancel')}
+                  </button>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
-                <span
-                  className={cn(
-                    'text-xs px-2 py-0.5 rounded-full border capitalize',
-                    statusBadge(sp.status),
-                  )}
-                >
-                  {sp.status}
-                </span>
-                <button
-                  onClick={() => startEdit(sp)}
-                  className="text-white/30 hover:text-white transition-colors"
-                >
-                  <Edit2 className="w-4 h-4" />
-                </button>
+            ) : (
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className="w-9 h-9 rounded-lg flex items-center justify-center text-[11px] font-semibold flex-shrink-0"
+                    style={{
+                      backgroundColor: 'var(--accent-primary-soft)',
+                      color: 'var(--accent-primary-deep)',
+                      border: '1px solid var(--border-subtle)',
+                    }}
+                  >
+                    {sp.code.slice(0, 2).toUpperCase()}
+                  </div>
+                  <div className="min-w-0">
+                    <div className="text-[14px] font-medium text-[color:var(--text-primary)] truncate">
+                      {sp.name}
+                    </div>
+                    <div className="text-[11px] text-[color:var(--text-tertiary)] tabular-nums">
+                      <span className="font-mono">{sp.code}</span> · {t('platform.sp.productCount', { count: sp.productCount })}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span
+                    className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wider"
+                    style={{
+                      backgroundColor: `${token.color}1A`,
+                      color: token.color,
+                      border: `1px solid ${token.color}33`,
+                    }}
+                  >
+                    <span
+                      className="w-1.5 h-1.5 rounded-full"
+                      style={{ backgroundColor: token.color, boxShadow: `0 0 6px ${token.color}` }}
+                    />
+                    {token.label}
+                  </span>
+                  <button
+                    onClick={() => startEdit(sp)}
+                    className="text-[color:var(--text-tertiary)] hover:text-[color:var(--accent-primary-deep)] transition-colors p-1.5 rounded-md hover:bg-[color:var(--bg-hover)]"
+                    title={t('common.edit')}
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-      ))}
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }

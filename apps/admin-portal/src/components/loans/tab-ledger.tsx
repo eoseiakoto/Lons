@@ -5,6 +5,7 @@ import { DataTable } from '@/components/ui/data-table';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { EmptyState } from '@/components/ui/empty-state';
 import { formatMoney, formatDate } from '@/lib/utils';
+import { useI18n } from '@/lib/i18n';
 import { BookOpen } from 'lucide-react';
 
 const CONTRACT_LEDGER_QUERY = gql`
@@ -27,6 +28,7 @@ interface TabLedgerProps {
 }
 
 export function TabLedger({ contractId, currency }: TabLedgerProps) {
+  const { t } = useI18n();
   const { data, loading } = useQuery(CONTRACT_LEDGER_QUERY, {
     variables: { contractId, pagination: { first: 100 } },
   });
@@ -37,7 +39,7 @@ export function TabLedger({ contractId, currency }: TabLedgerProps) {
     return (
       <div className="animate-pulse space-y-3">
         {[...Array(4)].map((_, i) => (
-          <div key={i} className="h-10 bg-white/5 rounded" />
+          <div key={i} className="h-10 bg-[color:var(--bg-muted)] rounded" />
         ))}
       </div>
     );
@@ -47,8 +49,8 @@ export function TabLedger({ contractId, currency }: TabLedgerProps) {
     return (
       <EmptyState
         icon={BookOpen}
-        title="No Ledger Entries"
-        description="No ledger entries have been recorded for this contract."
+        title={t('loans.ledger.emptyTitle')}
+        description={t('loans.ledger.emptyDescription')}
       />
     );
   }
@@ -57,32 +59,32 @@ export function TabLedger({ contractId, currency }: TabLedgerProps) {
     <div className="overflow-hidden">
       <DataTable
         columns={[
-          { header: 'Date', accessor: (r: any) => formatDate(r.createdAt) },
-          { header: 'Type', accessor: (r: any) => <StatusBadge status={r.entryType} /> },
-          { header: 'Description', accessor: 'description' },
+          { header: t('loans.ledger.column.date'), accessor: (r: any) => formatDate(r.createdAt) },
+          { header: t('loans.ledger.column.type'), accessor: (r: any) => <StatusBadge status={r.entryType} /> },
+          { header: t('loans.ledger.column.description'), accessor: 'description' },
           {
-            header: 'Debit',
+            header: t('loans.ledger.column.debit'),
             accessor: (r: any) =>
               r.debitAmount && parseFloat(r.debitAmount) > 0 ? (
-                <span className="text-red-400">{formatMoney(r.debitAmount, r.currency || currency)}</span>
+                <span className="text-[color:var(--status-error-text)] tabular-nums">{formatMoney(r.debitAmount, r.currency || currency)}</span>
               ) : (
                 '-'
               ),
           },
           {
-            header: 'Credit',
+            header: t('loans.ledger.column.credit'),
             accessor: (r: any) =>
               r.creditAmount && parseFloat(r.creditAmount) > 0 ? (
-                <span className="text-emerald-400">{formatMoney(r.creditAmount, r.currency || currency)}</span>
+                <span className="text-[color:var(--status-success-text)] tabular-nums">{formatMoney(r.creditAmount, r.currency || currency)}</span>
               ) : (
                 '-'
               ),
           },
           {
-            header: 'Balance',
+            header: t('loans.ledger.column.balance'),
             accessor: (r: any) =>
               r.runningBalance !== null && r.runningBalance !== undefined
-                ? formatMoney(r.runningBalance, r.currency || currency)
+                ? <span className="tabular-nums">{formatMoney(r.runningBalance, r.currency || currency)}</span>
                 : '-',
           },
         ]}

@@ -2,6 +2,7 @@
 
 import { ApolloClient, InMemoryCache, createHttpLink, ApolloProvider as BaseApolloProvider } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
+import { onError } from '@apollo/client/link/error';
 import React from 'react';
 
 const httpLink = createHttpLink({
@@ -18,8 +19,25 @@ const authLink = setContext((_, { headers }) => {
   };
 });
 
+const errorLink = onError(({ graphQLErrors, networkError }) => {
+  const isAuthError =
+    graphQLErrors?.some(
+      (e) =>
+        e.extensions?.code === 'UNAUTHENTICATED' ||
+        e.message?.toLowerCase().includes('invalid or expired token') ||
+        e.message?.toLowerCase().includes('unauthorized'),
+    ) ||
+    (networkError && 'statusCode' in networkError && networkError.statusCode === 401);
+
+  if (isAuthError && typeof window !== 'undefined') {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    window.location.href = '/login';
+  }
+});
+
 export const apolloClient = new ApolloClient({
-  link: authLink.concat(httpLink),
+  link: errorLink.concat(authLink.concat(httpLink)),
   cache: new InMemoryCache(),
   defaultOptions: {
     watchQuery: { fetchPolicy: 'cache-and-network' },

@@ -6,6 +6,7 @@ import { gql, useMutation } from '@apollo/client';
 import { Modal } from '@/components/ui/modal';
 import { useToast } from '@/components/ui/toast';
 import { useAuth } from '@/lib/auth-context';
+import { useI18n } from '@/lib/i18n/i18n-context';
 
 const SUBMIT_FEEDBACK = gql`
   mutation SubmitFeedback($input: SubmitFeedbackInput!) {
@@ -18,22 +19,8 @@ const SUBMIT_FEEDBACK = gql`
   }
 `;
 
-const CATEGORIES = [
-  { value: 'BUG', label: 'Bug' },
-  { value: 'FEATURE_REQUEST', label: 'Feature Request' },
-  { value: 'UX_ISSUE', label: 'UX Issue' },
-  { value: 'INTEGRATION_QUESTION', label: 'Integration Question' },
-  { value: 'OTHER', label: 'Other' },
-] as const;
-
-const SEVERITIES = [
-  { value: 'CRITICAL', label: 'Critical' },
-  { value: 'MAJOR', label: 'Major' },
-  { value: 'MINOR', label: 'Minor' },
-  { value: 'SUGGESTION', label: 'Suggestion' },
-] as const;
-
 export function FeedbackButton() {
+  const { t } = useI18n();
   const [open, setOpen] = useState(false);
   const [category, setCategory] = useState('BUG');
   const [severity, setSeverity] = useState('MINOR');
@@ -41,6 +28,21 @@ export function FeedbackButton() {
   const [screenshotUrl, setScreenshotUrl] = useState('');
   const { toast } = useToast();
   const { user } = useAuth();
+
+  const CATEGORIES = [
+    { value: 'BUG', label: t('feedback.categories.bug') },
+    { value: 'FEATURE_REQUEST', label: t('feedback.categories.featureRequest') },
+    { value: 'UX_ISSUE', label: t('feedback.categories.uxIssue') },
+    { value: 'INTEGRATION_QUESTION', label: t('feedback.categories.integrationQuestion') },
+    { value: 'OTHER', label: t('feedback.categories.other') },
+  ];
+
+  const SEVERITIES = [
+    { value: 'CRITICAL', label: t('feedback.severities.critical') },
+    { value: 'MAJOR', label: t('feedback.severities.major') },
+    { value: 'MINOR', label: t('feedback.severities.minor') },
+    { value: 'SUGGESTION', label: t('feedback.severities.suggestion') },
+  ];
 
   const [submitFeedback, { loading }] = useMutation(SUBMIT_FEEDBACK);
 
@@ -73,32 +75,36 @@ export function FeedbackButton() {
           },
         },
       });
-      toast('success', 'Feedback submitted successfully. Thank you!');
+      toast('success', t('feedback.submitSuccess'));
       resetForm();
       setOpen(false);
     } catch (err: any) {
-      toast('error', `Failed to submit feedback: ${err.message ?? 'Unknown error'}`);
+      toast('error', `${t('feedback.submitFailed')} ${err.message ?? 'Unknown error'}`);
     }
   };
 
   return (
     <>
-      {/* Floating Action Button */}
+      {/* Edge-anchored vertical tab — flush right, rotated label */}
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-3 shadow-lg transition-all hover:shadow-indigo-500/25 hover:scale-105"
+        className="fixed right-0 top-1/2 z-40 flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-500 text-white pl-2 pr-2.5 py-2 rounded-l-lg shadow-lg transition-all hover:shadow-indigo-500/30 origin-right"
+        style={{
+          writingMode: 'vertical-rl',
+          textOrientation: 'mixed',
+        }}
         aria-label="Submit Feedback"
       >
-        <MessageSquarePlus className="w-5 h-5" />
-        <span className="text-sm font-medium hidden sm:inline">Feedback</span>
+        <MessageSquarePlus className="w-4 h-4 rotate-90" />
+        <span className="text-xs font-medium tracking-wide">{t('feedback.title')}</span>
       </button>
 
       {/* Feedback Modal */}
-      <Modal open={open} onClose={() => setOpen(false)} title="Submit Feedback" size="md">
+      <Modal open={open} onClose={() => setOpen(false)} title={t('feedback.submitFeedback')} size="md">
         <form onSubmit={handleSubmit} className="space-y-4">
           {/* Category */}
           <div>
-            <label className="block text-sm text-white/60 mb-1">Category</label>
+            <label className="block text-sm text-[color:var(--text-secondary)] mb-1">{t('feedback.category')}</label>
             <select
               className="glass-input w-full text-sm"
               value={category}
@@ -114,7 +120,7 @@ export function FeedbackButton() {
 
           {/* Severity */}
           <div>
-            <label className="block text-sm text-white/60 mb-1">Severity</label>
+            <label className="block text-sm text-[color:var(--text-secondary)] mb-1">{t('feedback.severity')}</label>
             <select
               className="glass-input w-full text-sm"
               value={severity}
@@ -130,12 +136,12 @@ export function FeedbackButton() {
 
           {/* Description */}
           <div>
-            <label className="block text-sm text-white/60 mb-1">
-              Description <span className="text-red-400">*</span>
+            <label className="block text-sm text-[color:var(--text-secondary)] mb-1">
+              {t('common.description')} <span className="text-[color:var(--status-error-text)]">*</span>
             </label>
             <textarea
               className="glass-input w-full text-sm min-h-[120px] resize-y"
-              placeholder="Describe your feedback..."
+              placeholder={t('feedback.describeFeedback')}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               required
@@ -144,7 +150,7 @@ export function FeedbackButton() {
 
           {/* Screenshot URL */}
           <div>
-            <label className="block text-sm text-white/60 mb-1">Screenshot URL</label>
+            <label className="block text-sm text-[color:var(--text-secondary)] mb-1">{t('feedback.screenshotUrl')}</label>
             <input
               type="url"
               className="glass-input w-full text-sm"
@@ -155,8 +161,8 @@ export function FeedbackButton() {
           </div>
 
           {/* Auto-captured info */}
-          <div className="text-xs text-white/30">
-            Current page URL and browser info will be captured automatically.
+          <div className="text-xs text-[color:var(--text-tertiary)]">
+            {t('feedback.autoCaptureNote')}
           </div>
 
           {/* Submit */}
@@ -166,14 +172,14 @@ export function FeedbackButton() {
               onClick={() => setOpen(false)}
               className="glass-button text-sm"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               type="submit"
               disabled={loading || !description.trim()}
               className="glass-button-primary text-sm disabled:opacity-40"
             >
-              {loading ? 'Submitting...' : 'Submit Feedback'}
+              {loading ? t('feedback.submitting') : t('feedback.submitFeedback')}
             </button>
           </div>
         </form>

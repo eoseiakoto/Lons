@@ -16,7 +16,7 @@ export function PaginationControls({ hasNextPage, loading, onLoadMore }: Paginat
       <button
         onClick={onLoadMore}
         disabled={loading}
-        className="glass-button text-sm flex items-center gap-2 disabled:opacity-50"
+        className="btn-secondary text-sm disabled:opacity-50"
       >
         {loading && <Loader2 className="w-4 h-4 animate-spin" />}
         {loading ? 'Loading...' : 'Load More'}

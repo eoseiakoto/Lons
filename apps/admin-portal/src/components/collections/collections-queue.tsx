@@ -8,6 +8,7 @@ import { FilterBar, type FilterDef } from '@/components/ui/filter-bar';
 import { PaginationControls } from '@/components/ui/pagination-controls';
 import { formatMoney, formatDate } from '@/lib/utils';
 import { CollectionsActionDrawer } from './action-drawer';
+import { useI18n } from '@/lib/i18n';
 
 const COLLECTIONS_QUEUE_QUERY = gql`
   query CollectionsQueue($pagination: PaginationInput, $classification: String, $minDpd: Int, $maxDpd: Int) {
@@ -33,6 +34,7 @@ const COLLECTIONS_QUEUE_QUERY = gql`
 `;
 
 export function CollectionsQueue() {
+  const { t } = useI18n();
   const [classification, setClassification] = useState('');
   const [dpdRange, setDpdRange] = useState('');
   const [selectedContractId, setSelectedContractId] = useState<string | null>(null);
@@ -58,25 +60,25 @@ export function CollectionsQueue() {
   const filters: FilterDef[] = [
     {
       key: 'classification',
-      label: 'All Classifications',
+      label: t('collections.queue.filter.allClassifications'),
       type: 'select',
       options: [
-        { value: 'substandard', label: 'Substandard' },
-        { value: 'doubtful', label: 'Doubtful' },
-        { value: 'loss', label: 'Loss' },
+        { value: 'substandard', label: t('collections.queue.classification.substandard') },
+        { value: 'doubtful', label: t('collections.queue.classification.doubtful') },
+        { value: 'loss', label: t('collections.queue.classification.loss') },
       ],
       value: classification,
       onChange: setClassification,
     },
     {
       key: 'dpd',
-      label: 'All DPD Ranges',
+      label: t('collections.queue.filter.allDpdRanges'),
       type: 'select',
       options: [
-        { value: '1-30', label: '1-30 Days' },
-        { value: '31-60', label: '31-60 Days' },
-        { value: '61-90', label: '61-90 Days' },
-        { value: '90+', label: '90+ Days' },
+        { value: '1-30', label: t('collections.queue.dpd.1_30') },
+        { value: '31-60', label: t('collections.queue.dpd.31_60') },
+        { value: '61-90', label: t('collections.queue.dpd.61_90') },
+        { value: '90+', label: t('collections.queue.dpd.90Plus') },
       ],
       value: dpdRange,
       onChange: setDpdRange,
@@ -92,31 +94,31 @@ export function CollectionsQueue() {
     <div className="space-y-4">
       <FilterBar filters={filters} onReset={handleReset} />
 
-      <div className="glass overflow-hidden">
+      <div className="card-flush overflow-hidden">
         {loading && contracts.length === 0 ? (
-          <div className="p-6 text-white/40">Loading...</div>
+          <div className="p-6 text-[color:var(--text-tertiary)]">{t('common.loading')}</div>
         ) : (
           <DataTable
             columns={[
-              { header: 'Contract #', accessor: 'contractNumber' },
-              { header: 'Customer', accessor: (r: any) => r.customer?.fullName || r.customer?.externalId || r.customerId.slice(0, 8) },
-              { header: 'DPD', accessor: (r: any) => (
-                <span className={`font-mono font-bold ${r.daysPastDue > 90 ? 'text-red-400' : r.daysPastDue > 60 ? 'text-orange-400' : 'text-amber-400'}`}>
+              { header: t('collections.queue.column.contractNumber'), accessor: 'contractNumber' },
+              { header: t('collections.queue.column.customer'), accessor: (r: any) => r.customer?.fullName || r.customer?.externalId || r.customerId.slice(0, 8) },
+              { header: t('collections.queue.column.dpd'), accessor: (r: any) => (
+                <span className={`font-mono font-bold ${r.daysPastDue > 90 ? 'text-[color:var(--status-error-text)]' : r.daysPastDue > 60 ? 'text-[color:var(--status-warning-text)]' : 'text-[color:var(--status-warning-text)]'}`}>
                   {r.daysPastDue}
                 </span>
               )},
-              { header: 'Outstanding', accessor: (r: any) => formatMoney(r.totalOutstanding || '0', r.currency) },
-              { header: 'Classification', accessor: (r: any) => <StatusBadge status={r.classification} /> },
+              { header: t('collections.queue.column.outstanding'), accessor: (r: any) => <span className="tabular-nums">{formatMoney(r.totalOutstanding || '0', r.currency)}</span> },
+              { header: t('collections.queue.column.classification'), accessor: (r: any) => <StatusBadge status={r.classification} /> },
               {
-                header: 'Last Action',
+                header: t('collections.queue.column.lastAction'),
                 accessor: (r: any) => {
                   const la = r.lastCollectionAction;
-                  if (!la) return <span className="text-white/20">None</span>;
+                  if (!la) return <span className="text-[color:var(--text-tertiary)]">{t('common.none')}</span>;
                   return (
                     <div className="text-xs">
-                      <span className="text-white/60">{la.actionType?.replace(/_/g, ' ')}</span>
+                      <span className="text-[color:var(--text-secondary)]">{la.actionType?.replace(/_/g, ' ')}</span>
                       <br />
-                      <span className="text-white/30">{formatDate(la.createdAt)}</span>
+                      <span className="text-[color:var(--text-tertiary)]">{formatDate(la.createdAt)}</span>
                     </div>
                   );
                 },
@@ -124,7 +126,7 @@ export function CollectionsQueue() {
             ]}
             data={contracts}
             onRowClick={(r: any) => setSelectedContractId(r.id)}
-            emptyMessage="No contracts in collections queue"
+            emptyMessage={t('collections.queue.emptyMessage')}
           />
         )}
       </div>

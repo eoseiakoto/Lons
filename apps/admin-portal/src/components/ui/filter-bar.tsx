@@ -48,7 +48,7 @@ export function FilterBar({ filters, onReset }: FilterBarProps) {
               key={filter.key}
               value={filter.value}
               onChange={(e) => filter.onChange(e.target.value)}
-              className="glass-input text-sm py-1.5 px-2.5"
+              className="input-field text-sm py-2 px-3 w-auto min-w-[160px]"
             >
               <option value="">{filter.label}</option>
               {filter.options?.map((opt) => (
@@ -60,7 +60,11 @@ export function FilterBar({ filters, onReset }: FilterBarProps) {
         return null;
       })}
       {onReset && (
-        <button onClick={onReset} className="text-white/40 hover:text-white transition-colors p-1.5" title="Reset filters">
+        <button
+          onClick={onReset}
+          className="btn-ghost p-2"
+          title="Reset filters"
+        >
           <RotateCcw className="w-4 h-4" />
         </button>
       )}
