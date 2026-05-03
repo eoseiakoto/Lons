@@ -1,4 +1,4 @@
-import { ObjectType, Field, ID } from '@nestjs/graphql';
+import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
 import { PageInfo } from './page-info.type';
 
 @ObjectType()
@@ -42,6 +42,9 @@ export class CustomerType {
   @Field()
   watchlist!: boolean;
 
+  @Field({ nullable: true })
+  anonymizedAt?: Date;
+
   @Field()
   createdAt!: Date;
 
@@ -57,6 +60,12 @@ export class CustomerType {
 
   @Field({ nullable: true })
   email?: string;
+
+  @Field(() => Int, { nullable: true })
+  activeContractsCount?: number;
+
+  @Field({ nullable: true })
+  totalExposure?: string;
 }
 
 @ObjectType()

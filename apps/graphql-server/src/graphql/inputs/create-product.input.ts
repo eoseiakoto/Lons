@@ -1,12 +1,14 @@
-import { InputType, Field, Float, Int } from '@nestjs/graphql';
-import { IsNotEmpty, IsOptional, IsString, IsNumber, IsInt, Min } from 'class-validator';
+import { InputType, Field, Int } from '@nestjs/graphql';
+import { IsNotEmpty, IsOptional, IsString, IsInt, Min, IsDecimal } from 'class-validator';
+import { GraphQLJSON } from 'graphql-type-json';
+import type { MoneyString } from '@lons/shared-types';
 
 @InputType()
 export class CreateProductInput {
-  @Field()
-  @IsNotEmpty()
+  @Field({ nullable: true, defaultValue: '' })
+  @IsOptional()
   @IsString()
-  code!: string;
+  code?: string;
 
   @Field()
   @IsNotEmpty()
@@ -33,17 +35,18 @@ export class CreateProductInput {
   @IsString()
   currency!: string;
 
-  @Field(() => Float, { nullable: true })
+  /** Monetary amount as a string. See MoneyString docs in @lons/shared-types. */
+  @Field(() => String, { nullable: true })
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  minAmount?: number;
+  @IsString()
+  @IsDecimal({ decimal_digits: '0,4', force_decimal: false })
+  minAmount?: MoneyString;
 
-  @Field(() => Float, { nullable: true })
+  @Field(() => String, { nullable: true })
   @IsOptional()
-  @IsNumber()
-  @Min(0)
-  maxAmount?: number;
+  @IsString()
+  @IsDecimal({ decimal_digits: '0,4', force_decimal: false })
+  maxAmount?: MoneyString;
 
   @Field(() => Int, { nullable: true })
   @IsOptional()
@@ -62,10 +65,15 @@ export class CreateProductInput {
   @IsString()
   interestRateModel!: string;
 
-  @Field(() => Float, { nullable: true })
+  /**
+   * Interest rate as a decimal string (e.g. "5.5" for 5.5%). Stored as
+   * Decimal to avoid float precision loss in compounding/accrual math.
+   */
+  @Field(() => String, { nullable: true })
   @IsOptional()
-  @IsNumber()
-  interestRate?: number;
+  @IsString()
+  @IsDecimal({ decimal_digits: '0,6', force_decimal: false })
+  interestRate?: MoneyString;
 
   @Field()
   @IsNotEmpty()
@@ -77,6 +85,12 @@ export class CreateProductInput {
   @IsInt()
   gracePeriodDays?: number;
 
+  @Field(() => Int, { nullable: true, defaultValue: 0 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  coolingOffHours?: number;
+
   @Field({ nullable: true })
   @IsOptional()
   @IsString()
@@ -86,4 +100,25 @@ export class CreateProductInput {
   @IsOptional()
   @IsInt()
   maxActiveLoans?: number;
+
+  // JSON fields for structured data stored in Prisma JSON columns
+  @Field(() => GraphQLJSON, { nullable: true, description: 'Fee structure: { originationFee, serviceFee, latePenalty, insurance }' })
+  @IsOptional()
+  feeStructure?: Record<string, unknown>;
+
+  @Field(() => GraphQLJSON, { nullable: true, description: 'Penalty configuration' })
+  @IsOptional()
+  penaltyConfig?: Record<string, unknown>;
+
+  @Field(() => GraphQLJSON, { nullable: true, description: 'Eligibility rules: { minCreditScore, minKycLevel, customRules }' })
+  @IsOptional()
+  eligibilityRules?: Record<string, unknown>;
+
+  @Field(() => GraphQLJSON, { nullable: true, description: 'Approval thresholds: { autoApproveThreshold, slaHours }' })
+  @IsOptional()
+  approvalThresholds?: Record<string, unknown>;
+
+  @Field(() => GraphQLJSON, { nullable: true, description: 'Revenue sharing: { lenderSharePercent, insuranceEnabled, insuranceProvider, insuranceCoverageType }' })
+  @IsOptional()
+  revenueSharing?: Record<string, unknown>;
 }

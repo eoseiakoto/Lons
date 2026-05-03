@@ -23,6 +23,7 @@
     "@lons/process-engine": "workspace:*",
     "@lons/reconciliation-service": "workspace:*",
     "@lons/recovery-service": "workspace:*",
+    "@lons/overdraft-service": "workspace:*",
     "@lons/repayment-service": "workspace:*",
     "@lons/settlement-service": "workspace:*",
     "@lons/shared-types": "workspace:*",
@@ -45,7 +46,8 @@
     "helmet": "^7.1.0",
     "ioredis": "^5.3.0",
     "reflect-metadata": "^0.2.0",
-    "rxjs": "^7.8.0"
+    "rxjs": "^7.8.0",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@lons/eslint-config": "workspace:*",

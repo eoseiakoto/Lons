@@ -1,5 +1,26 @@
 import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
 
+@ObjectType('SurveyTenant')
+export class SurveyTenantRef {
+  @Field(() => ID)
+  id!: string;
+
+  @Field()
+  name!: string;
+}
+
+@ObjectType('SurveyUser')
+export class SurveyUserRef {
+  @Field(() => ID)
+  id!: string;
+
+  @Field({ nullable: true })
+  name?: string;
+
+  @Field()
+  email!: string;
+}
+
 @ObjectType()
 export class SurveyResponseType {
   @Field(() => ID)
@@ -19,6 +40,12 @@ export class SurveyResponseType {
 
   @Field()
   createdAt!: Date;
+
+  @Field(() => SurveyTenantRef, { nullable: true })
+  tenant?: SurveyTenantRef;
+
+  @Field(() => SurveyUserRef, { nullable: true })
+  user?: SurveyUserRef;
 }
 
 @ObjectType()

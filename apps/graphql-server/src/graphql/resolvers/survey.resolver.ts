@@ -30,7 +30,11 @@ export class SurveyResolver {
     return this.prisma.surveyResponse.findMany({
       where: tenantId ? { tenantId } : {},
       orderBy: { createdAt: 'desc' },
-      take: Math.min(first ?? 50, 100),
+      take: Math.min(first ?? 50, 200),
+      include: {
+        tenant: { select: { id: true, name: true } },
+        user: { select: { id: true, name: true, email: true } },
+      },
     }) as any;
   }
 

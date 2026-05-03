@@ -13,6 +13,9 @@ export class UserType {
   @Field({ nullable: true })
   name?: string;
 
+  @Field({ nullable: true })
+  phone?: string;
+
   @Field(() => RoleType)
   role!: RoleType;
 

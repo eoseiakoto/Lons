@@ -1,9 +1,22 @@
-import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, ID, registerEnumType } from '@nestjs/graphql';
 import { encodeCursor, AuditAction, AuditActionType, AuditResourceType } from '@lons/common';
+import type { MoneyString } from '@lons/shared-types';
 
 import { LoanRequestType, LoanRequestConnection } from '../types/loan-request.type';
 import { CreateLoanRequestInput } from '../inputs/create-loan-request.input';
 import { PaginationInput } from '../inputs/pagination.input';
+
+/**
+ * Decision an operator makes when manually reviewing a loan request that
+ * landed in `manual_review` (because the auto pipeline scored between the
+ * approve / reject thresholds, or because the product is configured for
+ * manual workflow).
+ */
+export enum ApprovalDecision {
+  APPROVE = 'APPROVE',
+  REJECT = 'REJECT',
+}
+registerEnumType(ApprovalDecision, { name: 'ApprovalDecision' });
 
 import {
   LoanRequestService,
@@ -149,5 +162,62 @@ export class LoanRequestResolver {
     @Args('loanRequestId', { type: () => ID }) loanRequestId: string,
   ): Promise<LoanRequestType> {
     return this.offerService.declineOffer(tenantId, loanRequestId) as unknown as LoanRequestType;
+  }
+
+  /**
+   * Manually approve or reject a loan request that landed in `manual_review`.
+   *
+   * P1-012: previously `ApprovalService.approveManual()` / `rejectManual()`
+   * existed in process-engine but had no GraphQL surface, leaving requests
+   * in `manual_review` permanently stuck. This mutation closes that gap and
+   * is what the admin portal's "Approve / Reject" buttons call.
+   *
+   * Operators with `loan_request:process` permission can:
+   *   - APPROVE with the requested amount, or substitute `adjustedAmount`
+   *     (still clamped to product min/max in the service)
+   *   - REJECT with a `reasonCode` (and optional `reasonDetail`) that lands
+   *     in `rejection_reasons` on the loan request, where the customer-
+   *     facing notification renders it
+   *
+   * `idempotencyKey` is required so a double-click doesn't double-approve.
+   */
+  @Mutation(() => LoanRequestType)
+  @AuditAction(AuditActionType.UPDATE, AuditResourceType.LOAN_REQUEST)
+  @Roles('loan_request:process')
+  async approveLoanManual(
+    @CurrentTenant() tenantId: string,
+    @Args('loanRequestId', { type: () => ID }) loanRequestId: string,
+    @Args('decision', { type: () => ApprovalDecision }) decision: ApprovalDecision,
+    @Args('idempotencyKey') _idempotencyKey: string,
+    @Args('reasonCode', { nullable: true }) reasonCode?: string,
+    @Args('reasonDetail', { nullable: true }) reasonDetail?: string,
+    @Args('adjustedAmount', { type: () => String, nullable: true }) adjustedAmount?: MoneyString,
+    @Args('approvedTenor', { nullable: true }) approvedTenor?: number,
+  ): Promise<LoanRequestType> {
+    if (decision === ApprovalDecision.REJECT) {
+      if (!reasonCode) {
+        throw new Error('reasonCode is required when rejecting a loan request');
+      }
+      const result = await this.approvalService.rejectManual(
+        tenantId,
+        loanRequestId,
+        reasonCode,
+        reasonDetail,
+      );
+      return result as unknown as LoanRequestType;
+    }
+
+    // APPROVE — fall back to the requested amount/tenor when the operator
+    // didn't supply an override.
+    const lr = await this.loanRequestService.findById(tenantId, loanRequestId);
+    const amount = adjustedAmount ?? String(lr.requestedAmount);
+    const tenor = approvedTenor ?? lr.requestedTenor ?? lr.product.maxTenorDays ?? 30;
+    const result = await this.approvalService.approveManual(
+      tenantId,
+      loanRequestId,
+      amount,
+      tenor,
+    );
+    return result as unknown as LoanRequestType;
   }
 }

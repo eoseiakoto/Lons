@@ -20,16 +20,28 @@ export class FeedbackResolver {
     @Args('status', { type: () => FeedbackStatus, nullable: true }) status?: FeedbackStatus,
     @Args('category', { type: () => FeedbackCategory, nullable: true }) category?: FeedbackCategory,
     @Args('severity', { type: () => FeedbackSeverity, nullable: true }) severity?: FeedbackSeverity,
+    @Args('dateFrom', { type: () => String, nullable: true }) dateFrom?: string,
+    @Args('dateTo', { type: () => String, nullable: true }) dateTo?: string,
     @Args('first', { type: () => Int, nullable: true, defaultValue: 20 }) first?: number,
     @Args('after', { type: () => String, nullable: true }) after?: string,
   ): Promise<FeedbackConnection> {
-    const take = Math.min(first ?? 20, 100);
+    const take = Math.min(first ?? 20, 5000);
 
     const where: Record<string, unknown> = {};
     if (tenantId) where.tenantId = tenantId;
     if (status) where.status = status;
     if (category) where.category = category;
     if (severity) where.severity = severity;
+    if (dateFrom || dateTo) {
+      const createdAt: Record<string, Date> = {};
+      if (dateFrom) createdAt.gte = new Date(dateFrom);
+      if (dateTo) {
+        const end = new Date(dateTo);
+        end.setHours(23, 59, 59, 999);
+        createdAt.lte = end;
+      }
+      where.createdAt = createdAt;
+    }
 
     const totalCount = await (this.prisma as any).feedback.count({ where });
 
@@ -40,7 +52,7 @@ export class FeedbackResolver {
       orderBy: { createdAt: 'desc' },
       include: {
         tenant: { select: { id: true, name: true } },
-        user: { select: { id: true, email: true, firstName: true, lastName: true } },
+        user: { select: { id: true, email: true, name: true } },
       },
     });
 

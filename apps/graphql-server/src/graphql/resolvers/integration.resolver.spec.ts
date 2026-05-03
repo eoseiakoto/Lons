@@ -14,7 +14,7 @@ describe('IntegrationResolver', () => {
     webhookSigningKeyRef: null,
     configJson: {
       credentials: { apiKey: 'secret-key-123', apiSecret: 'super-secret' },
-      tokenUrl: 'https://auth.test.com/token',
+      baseEndpoint: 'https://api.test.com/v1',
     },
     isActive: true,
     isDefault: true,
@@ -160,7 +160,7 @@ describe('IntegrationResolver', () => {
       );
 
       const configJson = result.configJson as Record<string, unknown>;
-      expect(configJson.tokenUrl).toBe('https://auth.test.com/token');
+      expect(configJson.baseEndpoint).toBe('https://api.test.com/v1');
     });
 
     it('should NOT mask configJson for users with integration:read:sensitive scope', async () => {

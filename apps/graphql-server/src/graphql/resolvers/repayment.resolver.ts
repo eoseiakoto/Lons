@@ -1,4 +1,5 @@
-import { Resolver, Query, Mutation, Args, ID, Float } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
+import type { MoneyString } from '@lons/shared-types';
 import { encodeCursor, AuditAction, AuditActionType, AuditResourceType } from '@lons/common';
 import { PaymentService } from '@lons/repayment-service';
 import { CurrentTenant, Roles } from '@lons/entity-service';
@@ -16,7 +17,7 @@ export class RepaymentResolver {
   async processRepayment(
     @CurrentTenant() tenantId: string,
     @Args('contractId', { type: () => ID }) contractId: string,
-    @Args('amount', { type: () => Float }) amount: number,
+    @Args('amount', { type: () => String }) amount: MoneyString,
     @Args('currency') currency: string,
     @Args('method') method: string,
     @Args('source', { nullable: true }) source?: string,

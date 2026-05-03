@@ -1,5 +1,6 @@
-import { InputType, Field, Float, Int } from '@nestjs/graphql';
-import { IsNotEmpty, IsOptional, IsString, IsNumber, IsInt, Min } from 'class-validator';
+import { InputType, Field, Int } from '@nestjs/graphql';
+import { IsNotEmpty, IsOptional, IsString, IsInt, Min, IsDecimal } from 'class-validator';
+import type { MoneyString } from '@lons/shared-types';
 
 @InputType()
 export class CreateLoanRequestInput {
@@ -13,10 +14,16 @@ export class CreateLoanRequestInput {
   @IsString()
   productId!: string;
 
-  @Field(() => Float)
-  @IsNumber()
-  @Min(0)
-  requestedAmount!: number;
+  /**
+   * Monetary amount as a string to preserve Decimal precision. CLAUDE.md
+   * forbids `Float`/`number` for money. Format: positive decimal with up
+   * to 4 decimal places (e.g. "1234.5678").
+   */
+  @Field(() => String)
+  @IsNotEmpty()
+  @IsString()
+  @IsDecimal({ decimal_digits: '0,4', force_decimal: false })
+  requestedAmount!: MoneyString;
 
   @Field(() => Int, { nullable: true })
   @IsOptional()

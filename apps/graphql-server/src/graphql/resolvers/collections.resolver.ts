@@ -28,6 +28,93 @@ class CollectionsActionType {
 }
 
 @ObjectType()
+class CollectionsQueueCustomer {
+  @Field(() => ID)
+  id!: string;
+
+  @Field({ nullable: true })
+  fullName?: string;
+
+  @Field({ nullable: true })
+  phonePrimary?: string;
+}
+
+@ObjectType()
+class CollectionsQueueProduct {
+  @Field(() => ID)
+  id!: string;
+
+  @Field()
+  name!: string;
+}
+
+@ObjectType()
+class CollectionsQueueAction {
+  @Field(() => ID)
+  id!: string;
+
+  @Field()
+  actionType!: string;
+
+  @Field({ nullable: true })
+  notes?: string;
+
+  @Field()
+  createdAt!: Date;
+}
+
+@ObjectType()
+class CollectionsQueueItem {
+  @Field(() => ID)
+  id!: string;
+
+  @Field()
+  contractNumber!: string;
+
+  @Field()
+  principalAmount!: string;
+
+  @Field({ nullable: true })
+  totalOutstanding?: string;
+
+  @Field()
+  currency!: string;
+
+  @Field(() => Int)
+  daysPastDue!: number;
+
+  @Field()
+  status!: string;
+
+  @Field()
+  classification!: string;
+
+  @Field()
+  startDate!: Date;
+
+  @Field()
+  maturityDate!: Date;
+
+  @Field(() => CollectionsQueueCustomer, { nullable: true })
+  customer?: CollectionsQueueCustomer;
+
+  @Field(() => CollectionsQueueProduct, { nullable: true })
+  product?: CollectionsQueueProduct;
+
+  @Field(() => [CollectionsQueueAction], { nullable: true })
+  collectionsActions?: CollectionsQueueAction[];
+}
+
+@ObjectType()
+class CollectionsQueueResult {
+  @Field(() => [CollectionsQueueItem])
+  items!: CollectionsQueueItem[];
+
+  @Field()
+  hasMore!: boolean;
+}
+
+@ObjectType()
 class CollectionsMetricsType {
   @Field(() => Int)
   overdueCount!: number;
@@ -114,6 +201,22 @@ export class CollectionsResolver {
     private collectionsService: CollectionsService,
     private analyticsService: AnalyticsService,
   ) {}
+
+  @Query(() => CollectionsQueueResult)
+  @Roles('contract:read')
+  async collectionsQueue(
+    @CurrentTenant() tenantId: string,
+    @Args('sortBy', { nullable: true, defaultValue: 'dpd' }) sortBy: string,
+    @Args('take', { type: () => Int, nullable: true, defaultValue: 20 }) take: number,
+    @Args('cursor', { nullable: true }) cursor?: string,
+  ): Promise<any> {
+    return this.collectionsService.getCollectionsQueue(
+      tenantId,
+      sortBy as 'amount' | 'dpd',
+      Math.min(take, 50),
+      cursor,
+    );
+  }
 
   @Query(() => CollectionsMetricsType)
   @Roles('contract:read')

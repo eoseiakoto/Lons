@@ -25,7 +25,31 @@ class SettlementLineType {
   shareAmount!: string;
 
   @Field()
+  deductions!: string;
+
+  @Field()
   netAmount!: string;
+}
+
+@ObjectType()
+class RevenueBreakdownType {
+  @Field()
+  interestIncome!: string;
+
+  @Field()
+  processingFees!: string;
+
+  @Field()
+  latePenalties!: string;
+
+  @Field()
+  insurancePremium!: string;
+
+  @Field()
+  otherFees!: string;
+
+  @Field()
+  total!: string;
 }
 
 @ObjectType()
@@ -134,5 +158,19 @@ export class SettlementResolver {
       },
       totalCount: items.length,
     };
+  }
+
+  @Query(() => RevenueBreakdownType)
+  @Roles('analytics:read')
+  async revenueBreakdown(
+    @CurrentTenant() tenantId: string,
+    @Args('periodStart') periodStart: string,
+    @Args('periodEnd') periodEnd: string,
+  ): Promise<any> {
+    return this.settlementService.getRevenueBreakdown(
+      tenantId,
+      new Date(periodStart),
+      new Date(periodEnd),
+    );
   }
 }

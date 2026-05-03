@@ -10,6 +10,27 @@ registerEnumType(FeedbackCategory, { name: 'FeedbackCategory' });
 registerEnumType(FeedbackSeverity, { name: 'FeedbackSeverity' });
 registerEnumType(FeedbackStatus, { name: 'FeedbackStatus' });
 
+@ObjectType('FeedbackTenant')
+export class FeedbackTenantRef {
+  @Field(() => ID)
+  id!: string;
+
+  @Field()
+  name!: string;
+}
+
+@ObjectType('FeedbackUser')
+export class FeedbackUserRef {
+  @Field(() => ID)
+  id!: string;
+
+  @Field()
+  email!: string;
+
+  @Field({ nullable: true })
+  name?: string;
+}
+
 @ObjectType()
 export class FeedbackType {
   @Field(() => ID)
@@ -20,6 +41,12 @@ export class FeedbackType {
 
   @Field()
   userId!: string;
+
+  @Field(() => FeedbackTenantRef, { nullable: true })
+  tenant?: FeedbackTenantRef;
+
+  @Field(() => FeedbackUserRef, { nullable: true })
+  user?: FeedbackUserRef;
 
   @Field(() => FeedbackCategory)
   category!: FeedbackCategory;

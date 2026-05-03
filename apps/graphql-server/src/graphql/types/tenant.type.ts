@@ -1,4 +1,5 @@
 import { ObjectType, Field, ID } from '@nestjs/graphql';
+import { GraphQLJSON } from 'graphql-type-json';
 import { PageInfo } from './page-info.type';
 
 @ObjectType()
@@ -29,6 +30,34 @@ export class TenantType {
 
   @Field()
   status!: string;
+
+  @Field({ nullable: true })
+  platformFeePercent?: string;
+
+  @Field(() => GraphQLJSON, { nullable: true })
+  settings?: Record<string, unknown>;
+
+  // Convenience fields resolved from settings JSON
+  @Field({ nullable: true })
+  logoUrl?: string;
+
+  @Field({ nullable: true })
+  primaryColor?: string;
+
+  @Field({ nullable: true })
+  timezone?: string;
+
+  @Field({ nullable: true })
+  defaultCurrency?: string;
+
+  @Field({ nullable: true })
+  supportEmail?: string;
+
+  @Field({ nullable: true })
+  supportPhone?: string;
+
+  @Field({ nullable: true })
+  address?: string;
 
   @Field()
   createdAt!: Date;

@@ -1,4 +1,5 @@
-import { ObjectType, Field, ID } from '@nestjs/graphql';
+import { ObjectType, Field, ID, Int } from '@nestjs/graphql';
+import { GraphQLJSON } from 'graphql-type-json';
 import { PageInfo } from './page-info.type';
 import { LenderType } from './lender.type';
 
@@ -55,6 +56,24 @@ export class ProductType {
   @Field()
   maxActiveLoans!: number;
 
+  @Field(() => GraphQLJSON, { nullable: true })
+  feeStructure?: Record<string, unknown>;
+
+  @Field(() => GraphQLJSON, { nullable: true })
+  penaltyConfig?: Record<string, unknown>;
+
+  @Field(() => GraphQLJSON, { nullable: true })
+  eligibilityRules?: Record<string, unknown>;
+
+  @Field(() => GraphQLJSON, { nullable: true })
+  approvalThresholds?: Record<string, unknown>;
+
+  @Field({ nullable: true })
+  coolingOffHours?: number;
+
+  @Field({ nullable: true })
+  tenantId?: string;
+
   @Field()
   version!: number;
 
@@ -69,6 +88,12 @@ export class ProductType {
 
   @Field()
   updatedAt!: Date;
+
+  @Field(() => Int, { nullable: true })
+  activeContractsCount?: number;
+
+  @Field({ nullable: true })
+  totalDisbursed?: string;
 }
 
 @ObjectType()

@@ -1,9 +1,12 @@
-import { Resolver, Query, Args, ID } from '@nestjs/graphql';
+import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
 import { LenderService, CurrentTenant, Roles } from '@lons/entity-service';
-import { encodeCursor } from '@lons/common';
+import { encodeCursor, AuditAction, AuditActionType, AuditResourceType } from '@lons/common';
+import type { Prisma } from '@lons/database';
 
 import { LenderType, LenderConnection } from '../types/lender.type';
 import { PaginationInput } from '../inputs/pagination.input';
+import { CreateLenderInput } from '../inputs/create-lender.input';
+import { UpdateLenderInput } from '../inputs/update-lender.input';
 
 @Resolver(() => LenderType)
 export class LenderResolver {
@@ -19,7 +22,6 @@ export class LenderResolver {
     const result = await this.lenderService.findAll(tenantId, take, pagination?.after);
     const items = result.items;
     return {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       edges: items.map((l: any) => ({ node: l as LenderType, cursor: encodeCursor(l.id) })),
       pageInfo: {
         hasNextPage: result.hasMore,
@@ -38,5 +40,57 @@ export class LenderResolver {
     @Args('id', { type: () => ID }) id: string,
   ): Promise<LenderType> {
     return this.lenderService.findById(tenantId, id) as unknown as LenderType;
+  }
+
+  @Mutation(() => LenderType)
+  @AuditAction(AuditActionType.CREATE, AuditResourceType.LENDER)
+  @Roles('lender:create')
+  async createLender(
+    @CurrentTenant() tenantId: string,
+    @Args('input') input: CreateLenderInput,
+  ): Promise<LenderType> {
+    return this.lenderService.create(tenantId, {
+      name: input.name,
+      licenseNumber: input.licenseNumber,
+      country: input.country,
+      fundingCapacity: input.fundingCapacity || undefined,
+      fundingCurrency: input.fundingCurrency,
+      minInterestRate: input.minInterestRate || undefined,
+      maxInterestRate: input.maxInterestRate || undefined,
+      settlementAccount: input.settlementAccount as Prisma.InputJsonValue ?? undefined,
+      riskParameters: input.riskParameters as Prisma.InputJsonValue ?? undefined,
+    }) as unknown as LenderType;
+  }
+
+  @Mutation(() => LenderType)
+  @AuditAction(AuditActionType.UPDATE, AuditResourceType.LENDER)
+  @Roles('lender:update')
+  async updateLender(
+    @CurrentTenant() tenantId: string,
+    @Args('id', { type: () => ID }) id: string,
+    @Args('input') input: UpdateLenderInput,
+  ): Promise<LenderType> {
+    return this.lenderService.update(tenantId, id, {
+      name: input.name,
+      licenseNumber: input.licenseNumber,
+      country: input.country,
+      fundingCapacity: input.fundingCapacity || undefined,
+      fundingCurrency: input.fundingCurrency,
+      minInterestRate: input.minInterestRate || undefined,
+      maxInterestRate: input.maxInterestRate || undefined,
+      settlementAccount: input.settlementAccount as Prisma.InputJsonValue ?? undefined,
+      riskParameters: input.riskParameters as Prisma.InputJsonValue ?? undefined,
+      status: input.status as 'active' | 'suspended' | undefined,
+    }) as unknown as LenderType;
+  }
+
+  @Mutation(() => LenderType)
+  @AuditAction(AuditActionType.DELETE, AuditResourceType.LENDER)
+  @Roles('lender:update')
+  async deactivateLender(
+    @CurrentTenant() tenantId: string,
+    @Args('id', { type: () => ID }) id: string,
+  ): Promise<LenderType> {
+    return this.lenderService.deactivate(tenantId, id) as unknown as LenderType;
   }
 }

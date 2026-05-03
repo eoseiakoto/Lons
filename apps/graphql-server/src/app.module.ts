@@ -5,13 +5,15 @@ import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EntityServiceModule, AuditService } from '@lons/entity-service';
-import { ProcessEngineModule } from '@lons/process-engine';
+import { ProcessEngineModule, SCREENING_GATE } from '@lons/process-engine';
+import { ScreeningService } from '@lons/integration-service';
 import { RepaymentServiceModule } from '@lons/repayment-service';
 import { NotificationServiceModule } from '@lons/notification-service';
 import { SettlementServiceModule } from '@lons/settlement-service';
 import { ReconciliationServiceModule } from '@lons/reconciliation-service';
 import { IntegrationServiceModule } from '@lons/integration-service';
 import { RecoveryServiceModule } from '@lons/recovery-service';
+import { OverdraftServiceModule } from '@lons/overdraft-service';
 import {
   ObservabilityModule,
   QueryComplexityPlugin,
@@ -37,12 +39,26 @@ import { RepaymentResolver } from './graphql/resolvers/repayment.resolver';
 import { SettlementResolver } from './graphql/resolvers/settlement.resolver';
 import { CollectionsResolver } from './graphql/resolvers/collections.resolver';
 import { AuditResolver } from './graphql/resolvers/audit.resolver';
+import { PlatformAuditResolver } from './graphql/resolvers/platform-audit.resolver';
 import { IntegrationResolver } from './graphql/resolvers/integration.resolver';
 import { WebhookResolver } from './graphql/resolvers/webhook.resolver';
 import { FeedbackResolver } from './graphql/resolvers/feedback.resolver';
 import { DebugResolver } from './graphql/resolvers/debug.resolver';
 import { NotificationMockLogResolver } from './graphql/resolvers/notification-mock-log.resolver';
+import { UserResolver } from './graphql/resolvers/user.resolver';
+import { RoleResolver } from './graphql/resolvers/role.resolver';
 import { SurveyResolver } from './graphql/resolvers/survey.resolver';
+import { MessageResolver } from './graphql/resolvers/message.resolver';
+import { ScoringResolver } from './graphql/resolvers/scoring.resolver';
+import { ScoringAnalyticsResolver } from './graphql/resolvers/scoring-analytics.resolver';
+import { PlatformUserResolver } from './graphql/resolvers/platform-user.resolver';
+import { TenantInsightsResolver } from './graphql/resolvers/tenant-insights.resolver';
+import { ScreeningResolver } from './graphql/resolvers/screening.resolver';
+import { PlatformScreeningResolver } from './graphql/resolvers/platform-screening.resolver';
+import { PlatformConfigResolver } from './graphql/resolvers/platform-config.resolver';
+import { ReportResolver } from './graphql/resolvers/report.resolver';
+import { OverdraftResolver } from './graphql/resolvers/overdraft.resolver';
+import { BnplResolver } from './graphql/resolvers/bnpl.resolver';
 import { DebugLogService } from './graphql/services/debug-log.service';
 import { GraphqlExceptionFilter } from './filters/graphql-exception.filter';
 import { SubscriptionModule } from './subscriptions/subscription.module';
@@ -61,7 +77,7 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
       sortSchema: true,
       playground: process.env.NODE_ENV !== 'production',
       introspection: process.env.NODE_ENV !== 'production',
-      context: ({ req }: { req: Request }) => ({ req }),
+      context: ({ req, res }: { req: Request; res: Response }) => ({ req, res }),
       subscriptions: {
         'graphql-ws': true,
       },
@@ -81,6 +97,7 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
     ReconciliationServiceModule,
     IntegrationServiceModule,
     RecoveryServiceModule,
+    OverdraftServiceModule,
   ],
   providers: [
     ApiKeyResolver,
@@ -96,12 +113,26 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
     SettlementResolver,
     CollectionsResolver,
     AuditResolver,
+    PlatformAuditResolver,
     IntegrationResolver,
     WebhookResolver,
     FeedbackResolver,
     DebugResolver,
     NotificationMockLogResolver,
+    UserResolver,
+    RoleResolver,
     SurveyResolver,
+    MessageResolver,
+    ScoringResolver,
+    ScoringAnalyticsResolver,
+    PlatformUserResolver,
+    TenantInsightsResolver,
+    ScreeningResolver,
+    PlatformScreeningResolver,
+    ReportResolver,
+    OverdraftResolver,
+    BnplResolver,
+    PlatformConfigResolver,
     DebugLogService,
     {
       provide: APP_FILTER,
@@ -109,6 +140,10 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
     },
     { provide: APP_GUARD, useClass: TenantThrottlerGuard },
     { provide: APP_INTERCEPTOR, useClass: RateLimitHeadersInterceptor },
+    {
+      provide: SCREENING_GATE,
+      useExisting: ScreeningService,
+    },
     {
       provide: 'AUDIT_SERVICE',
       useFactory: (prisma: PrismaService) => new AuditService(prisma),

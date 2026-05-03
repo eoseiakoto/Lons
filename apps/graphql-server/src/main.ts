@@ -36,10 +36,29 @@ async function bootstrap() {
     }),
   );
 
-  app.enableCors();
+  // CORS — explicit allowlist. `origin: true` (the default of `enableCors()`)
+  // reflects any Origin header back, which is functionally `*` for credentialed
+  // requests and is forbidden by CLAUDE.md. We accept the admin and platform
+  // portal origins, plus an optional comma-separated `CORS_ORIGINS` for staging
+  // / preview deploys.
+  const adminOrigin = process.env.ADMIN_PORTAL_URL || 'http://localhost:3100';
+  const platformOrigin = process.env.PLATFORM_PORTAL_URL || 'http://localhost:3200';
+  const extraOrigins = (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const allowedOrigins = [adminOrigin, platformOrigin, ...extraOrigins];
+
+  app.enableCors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'X-Idempotency-Key', 'X-Tenant-Context'],
+  });
 
   const port = process.env.PORT || 3000;
   await app.listen(port);
   console.log(`GraphQL server running on http://localhost:${port}/graphql`);
+  console.log(`CORS allowed origins: ${allowedOrigins.join(', ')}`);
 }
 bootstrap();
