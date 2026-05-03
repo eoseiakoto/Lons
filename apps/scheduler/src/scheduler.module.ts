@@ -16,6 +16,7 @@ import { MessageRetentionJob } from './jobs/message-retention.job';
 import { CoolingOffExpiryJob } from './jobs/cooling-off-expiry.job';
 import { BnplInstallmentJob } from './jobs/bnpl-installment.job';
 import { BnplAutoCollectJob } from './jobs/bnpl-auto-collect.job';
+import { InvoiceAgingJob } from './jobs/invoice-aging.job';
 
 @Module({
   imports: [
@@ -29,6 +30,16 @@ import { BnplAutoCollectJob } from './jobs/bnpl-auto-collect.job';
     ReconciliationServiceModule,
     OverdraftAgingModule,
   ],
-  providers: [InterestAccrualJob, AgingJob, ReconciliationJob, AuditPartitionManager, MessageRetentionJob, CoolingOffExpiryJob, BnplInstallmentJob, BnplAutoCollectJob],
+  providers: [
+    InterestAccrualJob,
+    AgingJob,
+    ReconciliationJob,
+    AuditPartitionManager,
+    MessageRetentionJob,
+    CoolingOffExpiryJob,
+    BnplInstallmentJob,
+    BnplAutoCollectJob,
+    InvoiceAgingJob,
+  ],
 })
 export class SchedulerModule {}

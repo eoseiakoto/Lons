@@ -21,6 +21,7 @@ import {
 } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
+import { ConcentrationLimitService } from './concentration-limit.service';
 import type {
   ConcentrationCheckResult,
   SubmitInvoiceInput,
@@ -68,6 +69,7 @@ export class InvoiceSubmissionService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventBus: EventBusService,
+    private readonly concentrationService: ConcentrationLimitService,
   ) {}
 
   // ─── Public API ────────────────────────────────────────────────────────
@@ -184,11 +186,17 @@ export class InvoiceSubmissionService {
       );
     }
 
-    // 8) Concentration limits — stubbed for Phase 3B. Phase 3F will swap in
-    // the real ConcentrationLimitService.
-    const concentration = await this.checkConcentration();
+    // 8) Concentration limits — Phase 3F. Delegates to ConcentrationLimitService
+    // which evaluates debtor / industry / seller-debtor caps and emits
+    // CONCENTRATION_LIMIT_WARNING / CONCENTRATION_LIMIT_BREACHED events.
+    const concentration = await this.checkConcentration(
+      tenantId,
+      input.debtorId,
+      input.sellerId,
+      input.faceValue,
+      input.productId,
+    );
     if (!concentration.passed) {
-      // Phase 3F will populate violations + emit the dedicated breach event.
       throw new ValidationError(
         `Concentration limit breached: ${concentration.violations
           .map((v) => v.message)
@@ -334,15 +342,24 @@ export class InvoiceSubmissionService {
   // ─── Internals ─────────────────────────────────────────────────────────
 
   /**
-   * Concentration-limit check — Phase 3B stub. Always passes.
-   *
-   * TODO(Sprint 12 Phase 3F): Replace with a call to ConcentrationLimitService
-   * that evaluates debtor-exposure, industry-concentration, and
-   * seller-debtor-concentration limits per SPEC §2.4. On breach, emit
-   * `INVOICE_CONCENTRATION_LIMIT_BREACHED` and reject the submission.
+   * Concentration-limit check — delegates to `ConcentrationLimitService`
+   * (Sprint 12 Phase 3F). The dedicated service evaluates debtor-exposure
+   * (% + absolute), industry-concentration, and seller-debtor concentration
+   * per SPEC §2.4 and emits CONCENTRATION_LIMIT_WARNING / BREACHED events.
    */
-  private async checkConcentration(): Promise<ConcentrationCheckResult> {
-    return { passed: true, violations: [] };
+  private async checkConcentration(
+    tenantId: string,
+    debtorId: string,
+    sellerId: string,
+    faceValue: string,
+    productId: string,
+  ): Promise<ConcentrationCheckResult> {
+    return this.concentrationService.checkLimits(tenantId, {
+      debtorId,
+      sellerId,
+      faceValue,
+      productId,
+    });
   }
 
   /**

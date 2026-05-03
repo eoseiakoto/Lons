@@ -4,18 +4,54 @@ import { EventBusModule } from '@lons/common';
 
 import { DebtorService } from './debtor.service';
 import { InvoiceSubmissionService } from './invoice-submission.service';
+import { FactoringOriginationService } from './factoring-origination.service';
+import { ReserveService } from './reserve.service';
+import { RecourseService } from './recourse.service';
+import { ConcentrationLimitService } from './concentration-limit.service';
+import { InvoiceAgingService } from './invoice-aging.service';
 
 /**
  * Sprint 12 Phase 3 — Invoice Factoring services.
  *
- * Phase 3A wires `DebtorService`. Phase 3B adds `InvoiceSubmissionService`.
- * Phase 3C adds `FactoringOriginationService`, etc. All share the same
- * imports (Prisma + EventBus); add new services additively to the
- * providers/exports arrays.
+ * All six services share the same dependencies (Prisma + EventBus). They have
+ * mutual references that we resolve via Nest DI rather than direct imports:
+ *
+ *   InvoiceSubmissionService → ConcentrationLimitService (concentration check)
+ *   FactoringOriginationService → DebtorService (exposure + risk)
+ *   ReserveService → DebtorService (risk reassessment) + FactoringOriginationService
+ *     (calls .complete() when reserve fully released)
+ *   RecourseService → DebtorService (exposure write-down on non-recourse)
+ *   InvoiceAgingService → RecourseService (calls .enforceDefault on default crossing)
+ *
+ * The two stubbed integrations from the parallel agent batch are wired here:
+ *   1. ReserveService.releaseReserve → FactoringOriginationService.complete
+ *      (see reserve.service.ts: integration block where reserveReleased >= reserveAmount)
+ *   2. InvoiceAgingService.processAging Default-bucket crossing →
+ *      RecourseService.enforceDefault (see invoice-aging.service.ts: TODO comment)
+ *
+ * The actual call-site wiring is implemented inside the consuming services
+ * via constructor injection; this module just makes the providers visible
+ * to one another.
  */
 @Module({
   imports: [PrismaModule, EventBusModule],
-  providers: [DebtorService, InvoiceSubmissionService],
-  exports: [DebtorService, InvoiceSubmissionService],
+  providers: [
+    DebtorService,
+    InvoiceSubmissionService,
+    FactoringOriginationService,
+    ReserveService,
+    RecourseService,
+    ConcentrationLimitService,
+    InvoiceAgingService,
+  ],
+  exports: [
+    DebtorService,
+    InvoiceSubmissionService,
+    FactoringOriginationService,
+    ReserveService,
+    RecourseService,
+    ConcentrationLimitService,
+    InvoiceAgingService,
+  ],
 })
 export class ProcessEngineFactoringModule {}

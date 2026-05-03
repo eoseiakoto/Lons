@@ -112,6 +112,12 @@ interface MakeMocksOpts {
   debtorInvoiceCount?: number;
   /** Used to seed `prisma.invoice.findFirst` for `resolveVerification`. */
   invoiceForResolve?: any;
+  /**
+   * Stubbed return value for the injected ConcentrationLimitService.
+   * Defaults to `{ passed: true, violations: [] }` so existing happy-path
+   * tests continue to round-trip through to the persistence step.
+   */
+  concentrationResult?: { passed: boolean; violations: any[] };
 }
 
 function makeMocks(opts: MakeMocksOpts = {}) {
@@ -193,11 +199,27 @@ function makeMocks(opts: MakeMocksOpts = {}) {
 
   const eventBus = { emitAndBuild: jest.fn() };
 
-  return { prisma, eventBus };
+  const concentrationService = {
+    checkLimits: jest
+      .fn()
+      .mockResolvedValue(
+        opts.concentrationResult ?? { passed: true, violations: [] },
+      ),
+  };
+
+  return { prisma, eventBus, concentrationService };
 }
 
-function newService(prisma: any, eventBus: any): InvoiceSubmissionService {
-  return new InvoiceSubmissionService(prisma as any, eventBus as any);
+function newService(
+  prisma: any,
+  eventBus: any,
+  concentrationService: any = { checkLimits: jest.fn().mockResolvedValue({ passed: true, violations: [] }) },
+): InvoiceSubmissionService {
+  return new InvoiceSubmissionService(
+    prisma as any,
+    eventBus as any,
+    concentrationService as any,
+  );
 }
 
 // ─── submit() — happy paths ─────────────────────────────────────────────
@@ -374,6 +396,41 @@ describe('InvoiceSubmissionService.submit — validation gates', () => {
         }),
       ),
     ).rejects.toThrow(/dueDate/);
+  });
+
+  it('rejects when ConcentrationLimitService reports a breach', async () => {
+    const { prisma, eventBus, concentrationService } = makeMocks({
+      seller: sellerActive,
+      product: productInvoiceFinancing,
+      debtor: debtorActive,
+      sellerInvoiceCount: 5,
+      debtorInvoiceCount: 5,
+      concentrationResult: {
+        passed: false,
+        violations: [
+          {
+            type: 'debtor_percent',
+            current: '20.00',
+            max: '15',
+            message: 'Debtor would represent 20.00% of portfolio (cap 15%)',
+          },
+        ],
+      },
+    });
+    const service = newService(prisma, eventBus, concentrationService);
+
+    await expect(service.submit(TENANT, baseInput())).rejects.toThrow(
+      /Concentration limit breached/,
+    );
+    expect(concentrationService.checkLimits).toHaveBeenCalledWith(
+      TENANT,
+      expect.objectContaining({
+        debtorId: DEBTOR,
+        sellerId: SELLER,
+        productId: PRODUCT,
+      }),
+    );
+    expect(prisma.invoice.create).not.toHaveBeenCalled();
   });
 
   it('idempotency: returns the existing invoice without re-creating or re-emitting events', async () => {

@@ -18,6 +18,7 @@ import { MonitoringModule } from './monitoring/monitoring.module';
 import { CoolingOffModule } from './cooling-off/cooling-off.module';
 import { ExposureModule } from './exposure/exposure.module';
 import { BnplModule } from './bnpl/bnpl.module';
+import { ProcessEngineFactoringModule } from './factoring/factoring.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { BnplModule } from './bnpl/bnpl.module';
     CoolingOffModule,
     ExposureModule,
     BnplModule,
+    ProcessEngineFactoringModule,
   ],
   exports: [
     LoanRequestModule,
@@ -58,6 +60,7 @@ import { BnplModule } from './bnpl/bnpl.module';
     CoolingOffModule,
     ExposureModule,
     BnplModule,
+    ProcessEngineFactoringModule,
   ],
 })
 export class ProcessEngineModule {}

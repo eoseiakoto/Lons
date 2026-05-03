@@ -47,3 +47,24 @@ export * from './bnpl/bnpl-eligibility.service';
 export * from './bnpl/bnpl-installment.service';
 export * from './bnpl/bnpl-refund.service';
 export * from './bnpl/wallet-collection-adapter';
+
+// Sprint 12 — Invoice Factoring (factoring/)
+export * from './factoring/factoring.module';
+export * from './factoring/debtor.service';
+export * from './factoring/invoice-submission.service';
+// Note: ConcentrationCheckResult + ConcentrationViolation are re-exported from
+// concentration-limit.types (the canonical source) — invoice-submission.types
+// only re-exports them for the legacy import path. Skip the duplicate by
+// listing only the unique exports here.
+export type { SubmitInvoiceInput } from './factoring/invoice-submission.types';
+export * from './factoring/factoring-origination.service';
+export * from './factoring/factoring-origination.types';
+export * from './factoring/reserve.service';
+export * from './factoring/reserve.types';
+export * from './factoring/recourse.service';
+export * from './factoring/recourse.types';
+export * from './factoring/concentration-limit.service';
+export * from './factoring/concentration-limit.types';
+export * from './factoring/invoice-aging.service';
+export * from './factoring/invoice-aging.types';
+export * from './factoring/risk-tables';
