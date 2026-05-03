@@ -76,6 +76,7 @@ enum CustomerStatus {
   suspended
   blacklisted
   inactive
+  anonymized
 }
 
 enum Gender {
@@ -146,6 +147,7 @@ enum ScoringContext {
 }
 
 enum ContractStatus {
+  cooling_off
   active
   performing
   due
@@ -261,6 +263,24 @@ enum WalletProviderType {
   GENERIC
 }
 
+enum ScreeningStatus {
+  CLEAR
+  MATCH
+  POTENTIAL_MATCH
+  ERROR
+
+  @@map("screening_status")
+}
+
+enum ScreeningRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+
+  @@map("screening_risk_level")
+}
+
 enum NotificationProviderType {
   CONSOLE
   RECORDING_MOCK
@@ -303,19 +323,20 @@ enum FeedbackStatus {
 // ============================================================================
 
 model Tenant {
-  id                  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name                String       @db.VarChar(255)
-  slug                String       @unique @db.VarChar(63)
-  legalName           String?      @map("legal_name") @db.VarChar(255)
-  registrationNumber  String?      @map("registration_number") @db.VarChar(100)
-  country             String       @db.VarChar(3)
-  schemaName          String       @unique @map("schema_name") @db.VarChar(63)
-  planTier            PlanTier     @default(starter) @map("plan_tier")
-  status              TenantStatus @default(provisioning)
-  settings            Json?
-  createdAt           DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt           DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt           DateTime?    @map("deleted_at") @db.Timestamptz(6)
+  id                 String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name               String       @db.VarChar(255)
+  slug               String       @unique @db.VarChar(63)
+  legalName          String?      @map("legal_name") @db.VarChar(255)
+  registrationNumber String?      @map("registration_number") @db.VarChar(100)
+  country            String       @db.VarChar(3)
+  schemaName         String       @unique @map("schema_name") @db.VarChar(63)
+  planTier           PlanTier     @default(starter) @map("plan_tier")
+  status             TenantStatus @default(provisioning)
+  platformFeePercent Decimal?     @map("platform_fee_percent") @db.Decimal(5, 2)
+  settings           Json?
+  createdAt          DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt          DateTime?    @map("deleted_at") @db.Timestamptz(6)
 
   walletProviderConfigs       WalletProviderConfig[]
   notificationProviderConfigs NotificationProviderConfig[]
@@ -355,6 +376,7 @@ model User {
   email            String     @db.VarChar(255)
   passwordHash     String     @map("password_hash") @db.VarChar(255)
   name             String?    @db.VarChar(255)
+  phone            String?    @db.VarChar(20)
   roleId           String     @map("role_id") @db.Uuid
   mfaSecret        String?    @map("mfa_secret") @db.VarChar(255)
   mfaEnabled       Boolean    @default(false) @map("mfa_enabled")
@@ -366,12 +388,12 @@ model User {
   updatedAt        DateTime   @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt        DateTime?  @map("deleted_at") @db.Timestamptz(6)
 
-  role             Role       @relation(fields: [roleId], references: [id])
-  createdProducts  Product[]  @relation("ProductCreatedBy")
-  productVersions  ProductVersion[] @relation("VersionCreatedBy")
-  processedRequests LoanRequest[] @relation("RequestProcessedBy")
-  feedbacks        Feedback[]
-  surveyResponses  SurveyResponse[]
+  role              Role             @relation(fields: [roleId], references: [id])
+  createdProducts   Product[]        @relation("ProductCreatedBy")
+  productVersions   ProductVersion[] @relation("VersionCreatedBy")
+  processedRequests LoanRequest[]    @relation("RequestProcessedBy")
+  feedbacks         Feedback[]
+  surveyResponses   SurveyResponse[]
 
   @@unique([tenantId, email])
   @@index([tenantId])
@@ -389,7 +411,7 @@ model Role {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  users       User[]
+  users User[]
 
   @@unique([tenantId, name])
   @@index([tenantId])
@@ -413,8 +435,10 @@ model Lender {
   updatedAt         DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt         DateTime?    @map("deleted_at") @db.Timestamptz(6)
 
-  products          Product[]
-  contracts         Contract[]
+  products         Product[]
+  contracts        Contract[]
+  creditLines      CreditLine[]
+  bnplTransactions BnplTransaction[]
 
   @@index([tenantId])
   @@map("lenders")
@@ -443,18 +467,25 @@ model Customer {
   blacklistReason String?        @map("blacklist_reason") @db.Text
   watchlist       Boolean        @default(false)
   metadata        Json?
+  anonymizedAt    DateTime?      @map("anonymized_at") @db.Timestamptz(6)
+  anonymizedBy    String?        @map("anonymized_by") @db.Uuid
   createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt       DateTime?      @map("deleted_at") @db.Timestamptz(6)
 
-  consents        CustomerConsent[]
-  subscriptions   Subscription[]
-  loanRequests    LoanRequest[]
-  scoringResults  ScoringResult[]
-  contracts       Contract[]
-  disbursements   Disbursement[]
-  repayments      Repayment[]
-  notifications   Notification[]
+  consents         CustomerConsent[]
+  subscriptions    Subscription[]
+  loanRequests     LoanRequest[]
+  scoringResults   ScoringResult[]
+  contracts        Contract[]
+  disbursements    Disbursement[]
+  repayments       Repayment[]
+  notifications    Notification[]
+  screeningResults ScreeningResult[]
+  creditLines      CreditLine[]
+  walletMappings   WalletAccountMapping[]
+  bnplTransactions BnplTransaction[]
+  invoices         Invoice[]
 
   @@unique([tenantId, externalId, externalSource])
   @@index([tenantId])
@@ -463,6 +494,29 @@ model Customer {
   @@index([status])
   @@index([segment])
   @@map("customers")
+}
+
+/// Sprint 11 A10 — indexed lookup table for wallet → customer routing.
+/// Replaces the previous full-scan over `customer.metadata.walletId`. The
+/// wallet-webhook controller resolves an inbound (provider, walletId) to
+/// (tenantId, customerId) via a unique index here, which is O(log n)
+/// instead of O(n) and respects RLS once the tenant is known.
+model WalletAccountMapping {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String   @map("tenant_id") @db.Uuid
+  customerId String   @map("customer_id") @db.Uuid
+  walletId   String   @map("wallet_id") @db.VarChar(255)
+  provider   String   @db.VarChar(50)
+  isPrimary  Boolean  @default(true) @map("is_primary")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@unique([provider, walletId])
+  @@index([tenantId])
+  @@index([customerId])
+  @@map("wallet_account_mappings")
 }
 
 model CustomerConsent {
@@ -479,11 +533,38 @@ model CustomerConsent {
   createdAt   DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt   DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  customer    Customer    @relation(fields: [customerId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
 
   @@index([tenantId])
   @@index([customerId, consentType])
   @@map("customer_consents")
+}
+
+model ScreeningResult {
+  id             String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String             @map("tenant_id") @db.Uuid
+  customerId     String             @map("customer_id") @db.Uuid
+  externalId     String?            @map("external_id") @db.VarChar(255)
+  provider       String             @db.VarChar(50)
+  status         ScreeningStatus    @default(CLEAR)
+  riskLevel      ScreeningRiskLevel @default(LOW) @map("risk_level")
+  matchCount     Int                @default(0) @map("match_count")
+  matchDetails   Json?              @map("match_details")
+  rawResponse    Bytes?             @map("raw_response")
+  screenedAt     DateTime           @default(now()) @map("screened_at") @db.Timestamptz(6)
+  expiresAt      DateTime           @map("expires_at") @db.Timestamptz(6)
+  reviewedBy     String?            @map("reviewed_by") @db.Uuid
+  reviewedAt     DateTime?          @map("reviewed_at") @db.Timestamptz(6)
+  reviewDecision String?            @map("review_decision") @db.VarChar(50)
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([status])
+  @@index([expiresAt])
+  @@map("screening_results")
 }
 
 // ============================================================================
@@ -491,48 +572,54 @@ model CustomerConsent {
 // ============================================================================
 
 model Product {
-  id                 String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId           String           @map("tenant_id") @db.Uuid
-  code               String           @db.VarChar(50)
-  name               String           @db.VarChar(255)
-  description        String?          @db.Text
+  id                 String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String            @map("tenant_id") @db.Uuid
+  code               String            @db.VarChar(50)
+  name               String            @db.VarChar(255)
+  description        String?           @db.Text
   type               ProductType
-  lenderId           String?          @map("lender_id") @db.Uuid
-  currency           String           @db.VarChar(3)
-  minAmount          Decimal?         @map("min_amount") @db.Decimal(19, 4)
-  maxAmount          Decimal?         @map("max_amount") @db.Decimal(19, 4)
-  minTenorDays       Int?             @map("min_tenor_days")
-  maxTenorDays       Int?             @map("max_tenor_days")
+  lenderId           String?           @map("lender_id") @db.Uuid
+  currency           String            @db.VarChar(3)
+  minAmount          Decimal?          @map("min_amount") @db.Decimal(19, 4)
+  maxAmount          Decimal?          @map("max_amount") @db.Decimal(19, 4)
+  minTenorDays       Int?              @map("min_tenor_days")
+  maxTenorDays       Int?              @map("max_tenor_days")
   interestRateModel  InterestRateModel @map("interest_rate_model")
-  interestRate       Decimal?         @map("interest_rate") @db.Decimal(7, 4)
-  rateTiers          Json?            @map("rate_tiers")
-  feeStructure       Json?            @map("fee_structure")
-  repaymentMethod    RepaymentMethod  @map("repayment_method")
-  gracePeriodDays    Int              @default(0) @map("grace_period_days")
-  penaltyConfig      Json?            @map("penalty_config")
-  approvalWorkflow   ApprovalWorkflow @default(auto) @map("approval_workflow")
-  approvalThresholds Json?            @map("approval_thresholds")
-  scoringModelId     String?          @map("scoring_model_id") @db.VarChar(100)
-  eligibilityRules   Json?            @map("eligibility_rules")
-  revenueSharing     Json?            @map("revenue_sharing")
-  notificationConfig Json?            @map("notification_config")
-  coolingOffHours    Int              @default(0) @map("cooling_off_hours")
-  maxActiveLoans     Int              @default(1) @map("max_active_loans")
-  version            Int              @default(1)
-  status             ProductStatus    @default(draft)
-  activatedAt        DateTime?        @map("activated_at") @db.Timestamptz(6)
-  createdBy          String?          @map("created_by") @db.Uuid
-  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt          DateTime?        @map("deleted_at") @db.Timestamptz(6)
+  interestRate       Decimal?          @map("interest_rate") @db.Decimal(7, 4)
+  rateTiers          Json?             @map("rate_tiers")
+  feeStructure       Json?             @map("fee_structure")
+  repaymentMethod    RepaymentMethod   @map("repayment_method")
+  gracePeriodDays    Int               @default(0) @map("grace_period_days")
+  penaltyConfig      Json?             @map("penalty_config")
+  approvalWorkflow   ApprovalWorkflow  @default(auto) @map("approval_workflow")
+  approvalThresholds Json?             @map("approval_thresholds")
+  scoringModelId     String?           @map("scoring_model_id") @db.VarChar(100)
+  eligibilityRules   Json?             @map("eligibility_rules")
+  revenueSharing     Json?             @map("revenue_sharing")
+  notificationConfig Json?             @map("notification_config")
+  overdraftConfig    Json?             @map("overdraft_config")
+  bnplConfig         Json?             @map("bnpl_config")
+  factoringConfig    Json?             @map("factoring_config")
+  coolingOffHours    Int               @default(0) @map("cooling_off_hours")
+  maxActiveLoans     Int               @default(1) @map("max_active_loans")
+  version            Int               @default(1)
+  status             ProductStatus     @default(draft)
+  activatedAt        DateTime?         @map("activated_at") @db.Timestamptz(6)
+  createdBy          String?           @map("created_by") @db.Uuid
+  createdAt          DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt          DateTime?         @map("deleted_at") @db.Timestamptz(6)
 
-  lender             Lender?          @relation(fields: [lenderId], references: [id])
-  creator            User?            @relation("ProductCreatedBy", fields: [createdBy], references: [id])
-  versions           ProductVersion[]
-  subscriptions      Subscription[]
-  loanRequests       LoanRequest[]
-  scoringResults     ScoringResult[]
-  contracts          Contract[]
+  lender           Lender?           @relation(fields: [lenderId], references: [id])
+  creator          User?             @relation("ProductCreatedBy", fields: [createdBy], references: [id])
+  versions         ProductVersion[]
+  subscriptions    Subscription[]
+  loanRequests     LoanRequest[]
+  scoringResults   ScoringResult[]
+  contracts        Contract[]
+  creditLines      CreditLine[]
+  bnplTransactions BnplTransaction[]
+  invoices         Invoice[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -552,8 +639,8 @@ model ProductVersion {
   createdBy     String?  @map("created_by") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  product       Product  @relation(fields: [productId], references: [id])
-  creator       User?    @relation("VersionCreatedBy", fields: [createdBy], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+  creator User?   @relation("VersionCreatedBy", fields: [createdBy], references: [id])
 
   @@unique([productId, version])
   @@index([tenantId])
@@ -578,8 +665,8 @@ model Subscription {
   createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  customer        Customer           @relation(fields: [customerId], references: [id])
-  product         Product            @relation(fields: [productId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
+  product  Product  @relation(fields: [productId], references: [id])
 
   @@unique([tenantId, customerId, productId])
   @@index([tenantId])
@@ -594,7 +681,7 @@ model LoanRequest {
   customerId       String            @map("customer_id") @db.Uuid
   productId        String            @map("product_id") @db.Uuid
   productVersion   Int?              @map("product_version")
-  requestedAmount  Decimal            @map("requested_amount") @db.Decimal(19, 4)
+  requestedAmount  Decimal           @map("requested_amount") @db.Decimal(19, 4)
   requestedTenor   Int?              @map("requested_tenor")
   currency         String            @db.VarChar(3)
   channel          String?           @db.VarChar(50)
@@ -613,11 +700,11 @@ model LoanRequest {
   createdAt        DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt        DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  customer         Customer          @relation(fields: [customerId], references: [id])
-  product          Product           @relation(fields: [productId], references: [id])
-  scoringResult    ScoringResult?    @relation(fields: [scoringResultId], references: [id])
-  contract         Contract?         @relation("RequestContract", fields: [contractId], references: [id])
-  processor        User?             @relation("RequestProcessedBy", fields: [processedBy], references: [id])
+  customer      Customer       @relation(fields: [customerId], references: [id])
+  product       Product        @relation(fields: [productId], references: [id])
+  scoringResult ScoringResult? @relation(fields: [scoringResultId], references: [id])
+  contract      Contract?      @relation("RequestContract", fields: [contractId], references: [id])
+  processor     User?          @relation("RequestProcessedBy", fields: [processedBy], references: [id])
 
   @@index([tenantId])
   @@index([customerId])
@@ -646,9 +733,9 @@ model ScoringResult {
   context             ScoringContext
   createdAt           DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  customer            Customer         @relation(fields: [customerId], references: [id])
-  product             Product          @relation(fields: [productId], references: [id])
-  loanRequests        LoanRequest[]
+  customer     Customer      @relation(fields: [customerId], references: [id])
+  product      Product       @relation(fields: [productId], references: [id])
+  loanRequests LoanRequest[]
 
   @@index([tenantId])
   @@index([customerId])
@@ -657,55 +744,56 @@ model ScoringResult {
 }
 
 model Contract {
-  id                    String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId              String                 @map("tenant_id") @db.Uuid
-  contractNumber        String                 @map("contract_number") @db.VarChar(50)
-  customerId            String                 @map("customer_id") @db.Uuid
-  productId             String                 @map("product_id") @db.Uuid
-  productVersion        Int?                   @map("product_version")
-  lenderId              String                 @map("lender_id") @db.Uuid
-  loanRequestId         String                 @map("loan_request_id") @db.Uuid
-  principalAmount       Decimal                @map("principal_amount") @db.Decimal(19, 4)
-  interestRate          Decimal                @map("interest_rate") @db.Decimal(7, 4)
-  interestAmount        Decimal?               @map("interest_amount") @db.Decimal(19, 4)
-  totalFees             Decimal?               @map("total_fees") @db.Decimal(19, 4)
-  totalCostCredit       Decimal?               @map("total_cost_credit") @db.Decimal(19, 4)
-  currency              String                 @db.VarChar(3)
-  tenorDays             Int?                   @map("tenor_days")
-  repaymentMethod       RepaymentMethod        @map("repayment_method")
-  startDate             DateTime               @map("start_date") @db.Date
-  maturityDate          DateTime               @map("maturity_date") @db.Date
-  firstPaymentDate      DateTime?              @map("first_payment_date") @db.Date
-  outstandingPrincipal  Decimal?               @map("outstanding_principal") @db.Decimal(19, 4)
-  outstandingInterest   Decimal?               @map("outstanding_interest") @db.Decimal(19, 4)
-  outstandingFees       Decimal?               @map("outstanding_fees") @db.Decimal(19, 4)
-  outstandingPenalties  Decimal?               @map("outstanding_penalties") @db.Decimal(19, 4)
-  totalOutstanding      Decimal?               @map("total_outstanding") @db.Decimal(19, 4)
-  totalPaid             Decimal?               @map("total_paid") @db.Decimal(19, 4)
-  daysPastDue           Int                    @default(0) @map("days_past_due")
-  status                ContractStatus         @default(active)
-  classification        ContractClassification @default(performing)
-  termsSnapshot         Json?                  @map("terms_snapshot")
-  restructured          Boolean                @default(false)
-  restructureCount      Int                    @default(0) @map("restructure_count")
-  disbursementId        String?                @map("disbursement_id") @db.Uuid
-  metadata              Json?
-  settledAt             DateTime?              @map("settled_at") @db.Timestamptz(6)
-  defaultedAt           DateTime?              @map("defaulted_at") @db.Timestamptz(6)
-  writtenOffAt          DateTime?              @map("written_off_at") @db.Timestamptz(6)
-  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String                 @map("tenant_id") @db.Uuid
+  contractNumber       String                 @map("contract_number") @db.VarChar(50)
+  customerId           String                 @map("customer_id") @db.Uuid
+  productId            String                 @map("product_id") @db.Uuid
+  productVersion       Int?                   @map("product_version")
+  lenderId             String                 @map("lender_id") @db.Uuid
+  loanRequestId        String                 @map("loan_request_id") @db.Uuid
+  principalAmount      Decimal                @map("principal_amount") @db.Decimal(19, 4)
+  interestRate         Decimal                @map("interest_rate") @db.Decimal(7, 4)
+  interestAmount       Decimal?               @map("interest_amount") @db.Decimal(19, 4)
+  totalFees            Decimal?               @map("total_fees") @db.Decimal(19, 4)
+  totalCostCredit      Decimal?               @map("total_cost_credit") @db.Decimal(19, 4)
+  currency             String                 @db.VarChar(3)
+  tenorDays            Int?                   @map("tenor_days")
+  repaymentMethod      RepaymentMethod        @map("repayment_method")
+  startDate            DateTime               @map("start_date") @db.Date
+  maturityDate         DateTime               @map("maturity_date") @db.Date
+  firstPaymentDate     DateTime?              @map("first_payment_date") @db.Date
+  outstandingPrincipal Decimal?               @map("outstanding_principal") @db.Decimal(19, 4)
+  outstandingInterest  Decimal?               @map("outstanding_interest") @db.Decimal(19, 4)
+  outstandingFees      Decimal?               @map("outstanding_fees") @db.Decimal(19, 4)
+  outstandingPenalties Decimal?               @map("outstanding_penalties") @db.Decimal(19, 4)
+  totalOutstanding     Decimal?               @map("total_outstanding") @db.Decimal(19, 4)
+  totalPaid            Decimal?               @map("total_paid") @db.Decimal(19, 4)
+  daysPastDue          Int                    @default(0) @map("days_past_due")
+  status               ContractStatus         @default(active)
+  classification       ContractClassification @default(performing)
+  termsSnapshot        Json?                  @map("terms_snapshot")
+  restructured         Boolean                @default(false)
+  restructureCount     Int                    @default(0) @map("restructure_count")
+  disbursementId       String?                @map("disbursement_id") @db.Uuid
+  metadata             Json?
+  settledAt            DateTime?              @map("settled_at") @db.Timestamptz(6)
+  defaultedAt          DateTime?              @map("defaulted_at") @db.Timestamptz(6)
+  writtenOffAt         DateTime?              @map("written_off_at") @db.Timestamptz(6)
+  createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  customer              Customer               @relation(fields: [customerId], references: [id])
-  product               Product                @relation(fields: [productId], references: [id])
-  lender                Lender                 @relation(fields: [lenderId], references: [id])
-  loanRequests          LoanRequest[]          @relation("RequestContract")
-  repaymentSchedule     RepaymentScheduleEntry[]
-  disbursements         Disbursement[]
-  repayments            Repayment[]
-  ledgerEntries         LedgerEntry[]
-  notifications         Notification[]
-  collectionsActions    CollectionsAction[]
+  customer           Customer                 @relation(fields: [customerId], references: [id])
+  product            Product                  @relation(fields: [productId], references: [id])
+  lender             Lender                   @relation(fields: [lenderId], references: [id])
+  loanRequests       LoanRequest[]            @relation("RequestContract")
+  repaymentSchedule  RepaymentScheduleEntry[]
+  disbursements      Disbursement[]
+  repayments         Repayment[]
+  ledgerEntries      LedgerEntry[]
+  notifications      Notification[]
+  collectionsActions CollectionsAction[]
+  invoice            Invoice?
 
   @@unique([tenantId, contractNumber])
   @@index([tenantId])
@@ -735,7 +823,7 @@ model RepaymentScheduleEntry {
   createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  contract          Contract                @relation(fields: [contractId], references: [id])
+  contract Contract @relation(fields: [contractId], references: [id])
 
   @@unique([contractId, installmentNumber])
   @@index([tenantId])
@@ -761,8 +849,8 @@ model Disbursement {
   createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  contract      Contract           @relation(fields: [contractId], references: [id])
-  customer      Customer           @relation(fields: [customerId], references: [id])
+  contract Contract @relation(fields: [contractId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
 
   @@index([tenantId])
   @@index([contractId])
@@ -792,8 +880,8 @@ model Repayment {
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  contract           Contract            @relation(fields: [contractId], references: [id])
-  customer           Customer            @relation(fields: [customerId], references: [id])
+  contract Contract @relation(fields: [contractId], references: [id])
+  customer Customer @relation(fields: [customerId], references: [id])
 
   @@index([tenantId])
   @@index([contractId])
@@ -819,7 +907,7 @@ model LedgerEntry {
   referenceId    String?         @map("reference_id") @db.Uuid
   createdAt      DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  contract       Contract        @relation(fields: [contractId], references: [id])
+  contract Contract @relation(fields: [contractId], references: [id])
 
   @@index([tenantId])
   @@index([contractId])
@@ -833,7 +921,7 @@ model LedgerEntry {
 // ============================================================================
 
 model AuditLog {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  id            String    @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId      String    @map("tenant_id") @db.Uuid
   actorId       String?   @map("actor_id") @db.Uuid
   actorType     ActorType @map("actor_type")
@@ -850,6 +938,7 @@ model AuditLog {
   accessType    String?   @map("access_type") @db.VarChar(30)
   createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
+  @@id([id, createdAt])
   @@index([tenantId])
   @@index([actorId])
   @@index([resourceType, resourceId])
@@ -860,27 +949,27 @@ model AuditLog {
 }
 
 model Notification {
-  id            String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId      String             @map("tenant_id") @db.Uuid
-  customerId    String             @map("customer_id") @db.Uuid
-  contractId    String?            @map("contract_id") @db.Uuid
-  eventType     String             @map("event_type") @db.VarChar(100)
+  id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String              @map("tenant_id") @db.Uuid
+  customerId    String              @map("customer_id") @db.Uuid
+  contractId    String?             @map("contract_id") @db.Uuid
+  eventType     String              @map("event_type") @db.VarChar(100)
   channel       NotificationChannel
-  recipient     String?            @db.VarChar(255)
-  templateId    String?            @map("template_id") @db.VarChar(100)
-  content       String?            @db.Text
-  status        NotificationStatus @default(pending)
-  externalRef   String?            @map("external_ref") @db.VarChar(255)
-  retryCount    Int                @default(0) @map("retry_count")
-  sentAt        DateTime?          @map("sent_at") @db.Timestamptz(6)
-  deliveredAt   DateTime?          @map("delivered_at") @db.Timestamptz(6)
-  failedAt      DateTime?          @map("failed_at") @db.Timestamptz(6)
-  failureReason String?            @map("failure_reason") @db.Text
-  createdAt     DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  recipient     String?             @db.VarChar(255)
+  templateId    String?             @map("template_id") @db.VarChar(100)
+  content       String?             @db.Text
+  status        NotificationStatus  @default(pending)
+  externalRef   String?             @map("external_ref") @db.VarChar(255)
+  retryCount    Int                 @default(0) @map("retry_count")
+  sentAt        DateTime?           @map("sent_at") @db.Timestamptz(6)
+  deliveredAt   DateTime?           @map("delivered_at") @db.Timestamptz(6)
+  failedAt      DateTime?           @map("failed_at") @db.Timestamptz(6)
+  failureReason String?             @map("failure_reason") @db.Text
+  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  customer      Customer           @relation(fields: [customerId], references: [id])
-  contract      Contract?          @relation(fields: [contractId], references: [id])
+  customer Customer  @relation(fields: [customerId], references: [id])
+  contract Contract? @relation(fields: [contractId], references: [id])
 
   @@index([tenantId])
   @@index([customerId])
@@ -903,18 +992,18 @@ enum SettlementStatus {
 }
 
 model SettlementRun {
-  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId      String           @map("tenant_id") @db.Uuid
-  periodStart   DateTime         @map("period_start") @db.Date
-  periodEnd     DateTime         @map("period_end") @db.Date
-  status        SettlementStatus @default(calculated)
-  totalRevenue  Decimal          @map("total_revenue") @db.Decimal(19, 4)
-  approvedBy    String?          @map("approved_by") @db.Uuid
-  approvedAt    DateTime?        @map("approved_at") @db.Timestamptz(6)
-  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id           String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId     String           @map("tenant_id") @db.Uuid
+  periodStart  DateTime         @map("period_start") @db.Date
+  periodEnd    DateTime         @map("period_end") @db.Date
+  status       SettlementStatus @default(calculated)
+  totalRevenue Decimal          @map("total_revenue") @db.Decimal(19, 4)
+  approvedBy   String?          @map("approved_by") @db.Uuid
+  approvedAt   DateTime?        @map("approved_at") @db.Timestamptz(6)
+  createdAt    DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt    DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  lines         SettlementLine[]
+  lines SettlementLine[]
 
   @@index([tenantId])
   @@index([status])
@@ -922,19 +1011,19 @@ model SettlementRun {
 }
 
 model SettlementLine {
-  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId          String         @map("tenant_id") @db.Uuid
-  settlementRunId   String         @map("settlement_run_id") @db.Uuid
-  partyType         String         @map("party_type") @db.VarChar(50)
-  partyId           String         @map("party_id") @db.Uuid
-  grossRevenue      Decimal        @map("gross_revenue") @db.Decimal(19, 4)
-  sharePercentage   Decimal        @map("share_percentage") @db.Decimal(5, 2)
-  shareAmount       Decimal        @map("share_amount") @db.Decimal(19, 4)
-  deductions        Decimal        @default(0) @db.Decimal(19, 4)
-  netAmount         Decimal        @map("net_amount") @db.Decimal(19, 4)
-  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  settlementRunId String   @map("settlement_run_id") @db.Uuid
+  partyType       String   @map("party_type") @db.VarChar(50)
+  partyId         String   @map("party_id") @db.Uuid
+  grossRevenue    Decimal  @map("gross_revenue") @db.Decimal(19, 4)
+  sharePercentage Decimal  @map("share_percentage") @db.Decimal(5, 2)
+  shareAmount     Decimal  @map("share_amount") @db.Decimal(19, 4)
+  deductions      Decimal  @default(0) @db.Decimal(19, 4)
+  netAmount       Decimal  @map("net_amount") @db.Decimal(19, 4)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  settlementRun     SettlementRun  @relation(fields: [settlementRunId], references: [id])
+  settlementRun SettlementRun @relation(fields: [settlementRunId], references: [id])
 
   @@index([tenantId])
   @@index([settlementRunId])
@@ -942,17 +1031,17 @@ model SettlementLine {
 }
 
 model ReconciliationRun {
-  id              String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId        String                    @map("tenant_id") @db.Uuid
-  runDate         DateTime                  @map("run_date") @db.Timestamptz(6)
-  status          String                    @db.VarChar(50)
-  matchRate       Decimal?                  @map("match_rate") @db.Decimal(5, 2)
-  totalTxns       Int                       @map("total_txns")
-  matchedTxns     Int                       @map("matched_txns")
-  exceptionCount  Int                       @map("exception_count")
-  createdAt       DateTime                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String   @map("tenant_id") @db.Uuid
+  runDate        DateTime @map("run_date") @db.Timestamptz(6)
+  status         String   @db.VarChar(50)
+  matchRate      Decimal? @map("match_rate") @db.Decimal(5, 2)
+  totalTxns      Int      @map("total_txns")
+  matchedTxns    Int      @map("matched_txns")
+  exceptionCount Int      @map("exception_count")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  exceptions      ReconciliationException[]
+  exceptions ReconciliationException[]
 
   @@index([tenantId])
   @@index([runDate])
@@ -960,23 +1049,23 @@ model ReconciliationRun {
 }
 
 model ReconciliationException {
-  id                    String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId              String             @map("tenant_id") @db.Uuid
-  reconciliationRunId   String             @map("reconciliation_run_id") @db.Uuid
-  contractId            String?            @map("contract_id") @db.Uuid
-  txnType               String             @map("txn_type") @db.VarChar(50)
-  externalRef           String?            @map("external_ref") @db.VarChar(255)
-  exceptionType         String             @map("exception_type") @db.VarChar(50)
-  severity              String             @db.VarChar(50)
-  amount                Decimal?           @db.Decimal(19, 4)
-  description           String?            @db.Text
-  investigation         String?            @db.Text
-  resolved              Boolean            @default(false)
-  resolvedAt            DateTime?          @map("resolved_at") @db.Timestamptz(6)
-  resolvedBy            String?            @map("resolved_by") @db.Uuid
-  createdAt             DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                  String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String    @map("tenant_id") @db.Uuid
+  reconciliationRunId String    @map("reconciliation_run_id") @db.Uuid
+  contractId          String?   @map("contract_id") @db.Uuid
+  txnType             String    @map("txn_type") @db.VarChar(50)
+  externalRef         String?   @map("external_ref") @db.VarChar(255)
+  exceptionType       String    @map("exception_type") @db.VarChar(50)
+  severity            String    @db.VarChar(50)
+  amount              Decimal?  @db.Decimal(19, 4)
+  description         String?   @db.Text
+  investigation       String?   @db.Text
+  resolved            Boolean   @default(false)
+  resolvedAt          DateTime? @map("resolved_at") @db.Timestamptz(6)
+  resolvedBy          String?   @map("resolved_by") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  reconciliationRun     ReconciliationRun  @relation(fields: [reconciliationRunId], references: [id])
+  reconciliationRun ReconciliationRun @relation(fields: [reconciliationRunId], references: [id])
 
   @@index([tenantId])
   @@index([reconciliationRunId])
@@ -996,7 +1085,7 @@ model CollectionsAction {
   metadata    Json?
   createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  contract    Contract  @relation(fields: [contractId], references: [id])
+  contract Contract @relation(fields: [contractId], references: [id])
 
   @@index([tenantId])
   @@index([contractId])
@@ -1009,18 +1098,18 @@ model CollectionsAction {
 // ============================================================================
 
 model WebhookEndpoint {
-  id            String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId      String              @map("tenant_id") @db.Uuid
-  url           String              @db.VarChar(2048)
-  events        String[]
-  authMethod    WebhookAuthMethod   @default(hmac) @map("auth_method")
-  secret        String              @db.Text
-  active        Boolean             @default(true)
-  createdAt     DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt     DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt     DateTime?           @map("deleted_at") @db.Timestamptz(6)
+  id         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId   String            @map("tenant_id") @db.Uuid
+  url        String            @db.VarChar(2048)
+  events     String[]
+  authMethod WebhookAuthMethod @default(hmac) @map("auth_method")
+  secret     String            @db.Text
+  active     Boolean           @default(true)
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt  DateTime?         @map("deleted_at") @db.Timestamptz(6)
 
-  deliveryLogs  WebhookDeliveryLog[]
+  deliveryLogs WebhookDeliveryLog[]
 
   @@index([tenantId])
   @@index([tenantId, active])
@@ -1028,19 +1117,19 @@ model WebhookEndpoint {
 }
 
 model WebhookDeliveryLog {
-  id                  String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  webhookEndpointId   String                @map("webhook_endpoint_id") @db.Uuid
-  event               String                @db.VarChar(100)
-  payload             Json                  @db.JsonB
-  httpStatus          Int?                  @map("http_status")
-  responseBody        String?               @map("response_body") @db.Text
-  retryCount          Int                   @default(0) @map("retry_count")
-  status              WebhookDeliveryStatus @default(pending)
-  nextRetryAt         DateTime?             @map("next_retry_at") @db.Timestamptz(6)
-  deliveredAt         DateTime?             @map("delivered_at") @db.Timestamptz(6)
-  createdAt           DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  id                String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  webhookEndpointId String                @map("webhook_endpoint_id") @db.Uuid
+  event             String                @db.VarChar(100)
+  payload           Json                  @db.JsonB
+  httpStatus        Int?                  @map("http_status")
+  responseBody      String?               @map("response_body") @db.Text
+  retryCount        Int                   @default(0) @map("retry_count")
+  status            WebhookDeliveryStatus @default(pending)
+  nextRetryAt       DateTime?             @map("next_retry_at") @db.Timestamptz(6)
+  deliveredAt       DateTime?             @map("delivered_at") @db.Timestamptz(6)
+  createdAt         DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  webhookEndpoint     WebhookEndpoint       @relation(fields: [webhookEndpointId], references: [id])
+  webhookEndpoint WebhookEndpoint @relation(fields: [webhookEndpointId], references: [id])
 
   @@index([webhookEndpointId])
   @@index([status])
@@ -1053,22 +1142,22 @@ model WebhookDeliveryLog {
 // ============================================================================
 
 model WalletProviderConfig {
-  id                    String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId              String                 @map("tenant_id") @db.Uuid
-  providerType          WalletProviderType     @map("provider_type")
-  environmentMode       AdapterEnvironmentMode @map("environment_mode")
-  displayName           String                 @map("display_name") @db.VarChar(255)
-  apiBaseUrl            String?                @map("api_base_url") @db.VarChar(512)
-  credentialsSecretRef  String?                @map("credentials_secret_ref") @db.VarChar(512)
-  webhookSigningKeyRef  String?                @map("webhook_signing_key_ref") @db.VarChar(512)
-  configJson            Json?                  @map("config_json") @db.JsonB
-  isActive              Boolean                @default(true) @map("is_active")
-  isDefault             Boolean                @default(false) @map("is_default")
-  createdAt             DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt             DateTime?              @map("deleted_at") @db.Timestamptz(6)
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String                 @map("tenant_id") @db.Uuid
+  providerType         WalletProviderType     @map("provider_type")
+  environmentMode      AdapterEnvironmentMode @map("environment_mode")
+  displayName          String                 @map("display_name") @db.VarChar(255)
+  apiBaseUrl           String?                @map("api_base_url") @db.VarChar(512)
+  credentialsSecretRef String?                @map("credentials_secret_ref") @db.VarChar(512)
+  webhookSigningKeyRef String?                @map("webhook_signing_key_ref") @db.VarChar(512)
+  configJson           Json?                  @map("config_json") @db.JsonB
+  isActive             Boolean                @default(true) @map("is_active")
+  isDefault            Boolean                @default(false) @map("is_default")
+  createdAt            DateTime               @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime               @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt            DateTime?              @map("deleted_at") @db.Timestamptz(6)
 
-  tenant                Tenant                 @relation(fields: [tenantId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, providerType, isActive], name: "uq_wallet_provider_active")
   @@index([tenantId])
@@ -1076,20 +1165,20 @@ model WalletProviderConfig {
 }
 
 model NotificationProviderConfig {
-  id                    String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId              String                     @map("tenant_id") @db.Uuid
-  providerType          NotificationProviderType   @map("provider_type")
-  environmentMode       AdapterEnvironmentMode     @map("environment_mode")
-  displayName           String                     @map("display_name") @db.VarChar(255)
-  credentialsSecretRef  String?                    @map("credentials_secret_ref") @db.VarChar(512)
-  configJson            Json?                      @map("config_json") @db.JsonB
-  isActive              Boolean                    @default(true) @map("is_active")
-  isDefault             Boolean                    @default(false) @map("is_default")
-  createdAt             DateTime                   @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt             DateTime                   @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt             DateTime?                  @map("deleted_at") @db.Timestamptz(6)
+  id                   String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String                   @map("tenant_id") @db.Uuid
+  providerType         NotificationProviderType @map("provider_type")
+  environmentMode      AdapterEnvironmentMode   @map("environment_mode")
+  displayName          String                   @map("display_name") @db.VarChar(255)
+  credentialsSecretRef String?                  @map("credentials_secret_ref") @db.VarChar(512)
+  configJson           Json?                    @map("config_json") @db.JsonB
+  isActive             Boolean                  @default(true) @map("is_active")
+  isDefault            Boolean                  @default(false) @map("is_default")
+  createdAt            DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt            DateTime?                @map("deleted_at") @db.Timestamptz(6)
 
-  tenant                Tenant                     @relation(fields: [tenantId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@unique([tenantId, providerType, isActive], name: "uq_notification_provider_active")
   @@index([tenantId])
@@ -1107,7 +1196,7 @@ model NotificationMockLog {
   correlationId   String?  @map("correlation_id") @db.VarChar(100)
   createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  tenant          Tenant   @relation(fields: [tenantId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
 
   @@index([tenantId])
   @@index([correlationId])
@@ -1119,21 +1208,21 @@ model NotificationMockLog {
 // ============================================================================
 
 model Feedback {
-  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId       String           @map("tenant_id") @db.Uuid
-  userId         String           @map("user_id") @db.Uuid
-  category       FeedbackCategory
-  severity       FeedbackSeverity
-  description    String           @db.Text
-  screenshotUrl  String?          @map("screenshot_url") @db.VarChar(512)
-  pageUrl        String?          @map("page_url") @db.VarChar(512)
-  debugContext   Json?            @map("debug_context") @db.JsonB
-  status         FeedbackStatus   @default(NEW)
-  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id            String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String           @map("tenant_id") @db.Uuid
+  userId        String           @map("user_id") @db.Uuid
+  category      FeedbackCategory
+  severity      FeedbackSeverity
+  description   String           @db.Text
+  screenshotUrl String?          @map("screenshot_url") @db.VarChar(512)
+  pageUrl       String?          @map("page_url") @db.VarChar(512)
+  debugContext  Json?            @map("debug_context") @db.JsonB
+  status        FeedbackStatus   @default(NEW)
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  tenant         Tenant           @relation(fields: [tenantId], references: [id])
-  user           User             @relation(fields: [userId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
 
   @@index([tenantId])
   @@index([status])
@@ -1148,9 +1237,646 @@ model SurveyResponse {
   comment   String?  @db.Text
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
 
-  tenant    Tenant   @relation(fields: [tenantId], references: [id])
-  user      User     @relation(fields: [userId], references: [id])
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
 
   @@index([tenantId])
   @@map("survey_responses")
+}
+
+// ============================================================================
+// PLATFORM SCHEMA — IN-APP MESSAGING (Sprint 8)
+// ============================================================================
+
+enum MessageType {
+  announcement
+  direct
+  system
+}
+
+enum MessagePriority {
+  low
+  normal
+  high
+  urgent
+}
+
+model PlatformMessage {
+  id         String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  type       MessageType
+  priority   MessagePriority @default(normal)
+  subject    String          @db.VarChar(500)
+  body       String          @db.Text
+  senderType String          @map("sender_type") @db.VarChar(50)
+  senderId   String          @map("sender_id") @db.Uuid
+  senderName String?         @map("sender_name") @db.VarChar(255)
+  tenantId   String?         @map("tenant_id") @db.Uuid
+  metadata   Json?
+  expiresAt  DateTime?       @map("expires_at") @db.Timestamptz(6)
+  createdAt  DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime        @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  recipients MessageRecipient[]
+
+  @@index([tenantId])
+  @@index([type])
+  @@index([createdAt])
+  @@map("platform_messages")
+}
+
+model MessageRecipient {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  messageId     String    @map("message_id") @db.Uuid
+  recipientType String    @map("recipient_type") @db.VarChar(50)
+  recipientId   String    @map("recipient_id") @db.Uuid
+  tenantId      String?   @map("tenant_id") @db.Uuid
+  readAt        DateTime? @map("read_at") @db.Timestamptz(6)
+  archivedAt    DateTime? @map("archived_at") @db.Timestamptz(6)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  message PlatformMessage @relation(fields: [messageId], references: [id])
+
+  @@unique([messageId, recipientId])
+  @@index([recipientId, readAt])
+  @@index([tenantId])
+  @@map("message_recipients")
+}
+
+// ============================================================================
+// REFRESH TOKENS & API KEYS — auth infrastructure
+//
+// Tables created by 20260326221923_add_refresh_tokens_and_api_keys but missing
+// from this schema until P1-004 (Sprint 10A) aligned them. Adding these models
+// here is a no-op for existing databases; future migrations will track changes.
+// ============================================================================
+
+model RefreshToken {
+  id        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @map("token_hash") @db.Char(64)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(6)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(6)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([tokenHash])
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("refresh_tokens")
+}
+
+model ApiKey {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String    @map("tenant_id") @db.Uuid
+  name               String    @db.VarChar(255)
+  keyHash            String    @map("key_hash") @db.Char(64)
+  rateLimitPerMinute Int       @default(60) @map("rate_limit_per_minute")
+  expiresAt          DateTime? @map("expires_at") @db.Timestamptz(6)
+  revokedAt          DateTime? @map("revoked_at") @db.Timestamptz(6)
+  lastUsedAt         DateTime? @map("last_used_at") @db.Timestamptz(6)
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([keyHash])
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([revokedAt])
+  @@index([expiresAt])
+  @@map("api_keys")
+}
+
+// ============================================================================
+// OVERDRAFT — credit lines, drawdowns, limit changes (Sprint 10B)
+//
+// One CreditLine per (tenant, customer, overdraft product). Drawdowns are
+// individual overdraft transactions; CreditLimitChange is an immutable audit
+// record of every limit adjustment (matched to FR-OD-003.6).
+//
+// All monetary fields are Decimal(19,4). Per CLAUDE.md, money flows as
+// strings through every service boundary — no Number() coercion. The RLS
+// migration in 20260501100000_add_overdraft_models attaches tenant_isolation
+// policies to all three tables.
+// ============================================================================
+
+model CreditLine {
+  id                String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String           @map("tenant_id") @db.Uuid
+  customerId        String           @map("customer_id") @db.Uuid
+  productId         String           @map("product_id") @db.Uuid
+  lenderId          String           @map("lender_id") @db.Uuid
+  currency          String           @db.VarChar(3)
+  approvedLimit     Decimal          @map("approved_limit") @db.Decimal(19, 4)
+  availableBalance  Decimal          @map("available_balance") @db.Decimal(19, 4)
+  outstandingAmount Decimal          @default(0) @map("outstanding_amount") @db.Decimal(19, 4)
+  interestRate      Decimal          @map("interest_rate") @db.Decimal(7, 4)
+  interestAccrued   Decimal          @default(0) @map("interest_accrued") @db.Decimal(19, 4)
+  feesOutstanding   Decimal          @default(0) @map("fees_outstanding") @db.Decimal(19, 4)
+  penaltiesAccrued  Decimal          @default(0) @map("penalties_accrued") @db.Decimal(19, 4)
+  status            CreditLineStatus @default(pending_activation)
+  billingCycleDay   Int              @default(1) @map("billing_cycle_day")
+  currentCycleStart DateTime?        @map("current_cycle_start") @db.Date
+  currentCycleEnd   DateTime?        @map("current_cycle_end") @db.Date
+  /// SPEC §8.2 / §9.1 — when the current cycle's crystallized balance is
+  /// payable. Computed as `currentCycleEnd + product.gracePeriodDays`. Null
+  /// until the first cycle close. Drives DPD / aging classification (A5).
+  dueDate           DateTime?        @map("due_date") @db.Date
+  /// Sprint 11 A5 — DPD/aging snapshot, refreshed daily by the aging job.
+  /// `daysPastDue` is computed from `dueDate` and `today`; `agingBucket`
+  /// is one of "current", "watch", "substandard", "doubtful", "loss".
+  daysPastDue       Int              @default(0) @map("days_past_due")
+  agingBucket       String?          @map("aging_bucket") @db.VarChar(20)
+  agingUpdatedAt    DateTime?        @map("aging_updated_at") @db.Timestamptz(6)
+  lastDrawdownAt    DateTime?        @map("last_drawdown_at") @db.Timestamptz(6)
+  lastRepaymentAt   DateTime?        @map("last_repayment_at") @db.Timestamptz(6)
+  lastLimitReviewAt DateTime?        @map("last_limit_review_at") @db.Timestamptz(6)
+  activatedAt       DateTime?        @map("activated_at") @db.Timestamptz(6)
+  expiresAt         DateTime?        @map("expires_at") @db.Timestamptz(6)
+  frozenAt          DateTime?        @map("frozen_at") @db.Timestamptz(6)
+  frozenReason      String?          @map("frozen_reason") @db.Text
+  closedAt          DateTime?        @map("closed_at") @db.Timestamptz(6)
+  closedReason      String?          @map("closed_reason") @db.Text
+  metadata          Json?
+  createdAt         DateTime         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  customer              Customer              @relation(fields: [customerId], references: [id])
+  product               Product               @relation(fields: [productId], references: [id])
+  lender                Lender                @relation(fields: [lenderId], references: [id])
+  drawdowns             Drawdown[]
+  limitChanges          CreditLimitChange[]
+  billingCycleHistories BillingCycleHistory[]
+
+  @@unique([tenantId, customerId, productId])
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([status])
+  @@index([expiresAt])
+  @@index([dueDate])
+  @@index([agingBucket])
+  @@map("credit_lines")
+}
+
+/// Frozen snapshot of one billing cycle on a credit line. Generated at
+/// cycle close (`InterestService.closeCyclesDue`). Each row records the
+/// cycle's opening / closing balance plus the interest, fees, and
+/// penalties that crystallized during the cycle. Powers statement
+/// regeneration (A6) and the DPD aging classification (A5) without
+/// recomputing from the ledger.
+///
+/// Append-only: rows are never updated or deleted. The `paidInFull` flag
+/// is set the first time a cycle's closing obligation reaches zero.
+model BillingCycleHistory {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String   @map("tenant_id") @db.Uuid
+  creditLineId     String   @map("credit_line_id") @db.Uuid
+  cycleNumber      Int      @map("cycle_number")
+  cycleStart       DateTime @map("cycle_start") @db.Date
+  cycleEnd         DateTime @map("cycle_end") @db.Date
+  dueDate          DateTime @map("due_date") @db.Date
+  openingBalance   Decimal  @map("opening_balance") @db.Decimal(19, 4)
+  closingBalance   Decimal  @map("closing_balance") @db.Decimal(19, 4)
+  interestCharged  Decimal  @map("interest_charged") @db.Decimal(19, 4)
+  feesCharged      Decimal  @map("fees_charged") @db.Decimal(19, 4)
+  penaltiesCharged Decimal  @map("penalties_charged") @db.Decimal(19, 4)
+  totalRepayments  Decimal  @default(0) @map("total_repayments") @db.Decimal(19, 4)
+  paidInFull       Boolean  @default(false) @map("paid_in_full")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  creditLine CreditLine @relation(fields: [creditLineId], references: [id])
+
+  @@unique([creditLineId, cycleNumber])
+  @@index([tenantId])
+  @@index([creditLineId])
+  @@index([dueDate])
+  @@map("billing_cycle_histories")
+}
+
+enum CreditLineStatus {
+  pending_activation
+  active
+  frozen
+  suspended
+  closed
+  expired
+
+  @@map("credit_line_status")
+}
+
+model Drawdown {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String         @map("tenant_id") @db.Uuid
+  creditLineId   String         @map("credit_line_id") @db.Uuid
+  amount         Decimal        @db.Decimal(19, 4)
+  currency       String         @db.VarChar(3)
+  walletBalance  Decimal        @map("wallet_balance") @db.Decimal(19, 4)
+  transactionRef String         @map("transaction_ref") @db.VarChar(255)
+  walletRef      String?        @map("wallet_ref") @db.VarChar(255)
+  feeAmount      Decimal        @default(0) @map("fee_amount") @db.Decimal(19, 4)
+  status         DrawdownStatus @default(initiated)
+  failureReason  String?        @map("failure_reason") @db.Text
+  completedAt    DateTime?      @map("completed_at") @db.Timestamptz(6)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  creditLine CreditLine @relation(fields: [creditLineId], references: [id])
+
+  @@index([tenantId])
+  @@index([creditLineId])
+  @@index([transactionRef])
+  @@index([status])
+  @@map("drawdowns")
+}
+
+enum DrawdownStatus {
+  initiated
+  completed
+  failed
+  reversed
+
+  @@map("drawdown_status")
+}
+
+model CreditLimitChange {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  creditLineId  String   @map("credit_line_id") @db.Uuid
+  previousLimit Decimal  @map("previous_limit") @db.Decimal(19, 4)
+  newLimit      Decimal  @map("new_limit") @db.Decimal(19, 4)
+  reasonCode    String   @map("reason_code") @db.VarChar(50)
+  reasonDetail  String?  @map("reason_detail") @db.Text
+  triggeredBy   String   @map("triggered_by") @db.VarChar(50)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  creditLine CreditLine @relation(fields: [creditLineId], references: [id])
+
+  @@index([tenantId])
+  @@index([creditLineId])
+  @@map("credit_limit_changes")
+}
+
+// ============================================================================
+// SPRINT 11 — BNPL (Track B)
+// ============================================================================
+//
+// Buy-Now-Pay-Later product type. Distinct from overdraft in that it is
+// merchant-triggered (a customer's purchase at a merchant kicks off the
+// origination flow) and broken into a fixed installment schedule. The
+// merchant is settled either immediately (platform takes credit risk) or
+// T+1 (batch settlement next business day) — see SettlementType.
+
+/// SP-onboarded merchant. Owner of `tenantId` is the SP. One merchant
+/// belongs to exactly one SP. Settlement type and discount rate are part
+/// of the merchant's commercial agreement and govern how much of the
+/// purchase amount the merchant receives at settlement.
+model Merchant {
+  id             String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId       String         @map("tenant_id") @db.Uuid
+  name           String         @db.VarChar(255)
+  code           String         @db.VarChar(50)
+  status         MerchantStatus @default(pending)
+  contactEmail   String?        @map("contact_email") @db.VarChar(255)
+  contactPhone   String?        @map("contact_phone") @db.VarChar(50)
+  settlementType SettlementType @default(T_PLUS_1) @map("settlement_type")
+  /// Decimal fraction (e.g. 0.025 = 2.5%) of purchase amount the platform
+  /// retains. Net merchant settlement = `purchaseAmount * (1 - discountRate)`.
+  discountRate   Decimal        @map("discount_rate") @db.Decimal(7, 4)
+  /// Merchant's wallet for settlement disbursement (provider-specific).
+  walletId       String?        @map("wallet_id") @db.VarChar(255)
+  walletProvider String?        @map("wallet_provider") @db.VarChar(50)
+  metadata       Json?
+  onboardedAt    DateTime?      @map("onboarded_at") @db.Timestamptz(6)
+  deletedAt      DateTime?      @map("deleted_at") @db.Timestamptz(6)
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  transactions BnplTransaction[]
+  settlements  MerchantSettlement[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+  @@index([status])
+  @@map("merchants")
+}
+
+enum MerchantStatus {
+  pending
+  active
+  suspended
+  deactivated
+
+  @@map("merchant_status")
+}
+
+enum SettlementType {
+  IMMEDIATE
+  T_PLUS_1
+
+  @@map("settlement_type")
+}
+
+/// One BNPL purchase, parented by a merchant + customer + product. Lives
+/// alongside the installment schedule that breaks `totalRepayable` into
+/// fixed-amount due dates. Status traces the full purchase lifecycle.
+model BnplTransaction {
+  id                   String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String                @map("tenant_id") @db.Uuid
+  customerId           String                @map("customer_id") @db.Uuid
+  merchantId           String                @map("merchant_id") @db.Uuid
+  productId            String                @map("product_id") @db.Uuid
+  lenderId             String                @map("lender_id") @db.Uuid
+  currency             String                @db.VarChar(3)
+  /// What the customer bought, before any interest. Settlement is
+  /// computed off this amount.
+  purchaseAmount       Decimal               @map("purchase_amount") @db.Decimal(19, 4)
+  /// What the customer ultimately repays — `purchaseAmount` plus interest.
+  totalRepayable       Decimal               @map("total_repayable") @db.Decimal(19, 4)
+  numberOfInstallments Int                   @map("number_of_installments")
+  status               BnplTransactionStatus @default(initiated)
+  /// Merchant's order identifier; unique per merchant.
+  purchaseRef          String                @map("purchase_ref") @db.VarChar(255)
+  merchantRef          String?               @map("merchant_ref") @db.VarChar(255)
+  /// Decimal APR. `0` for the common interest-free promo case.
+  interestRate         Decimal               @default(0) @map("interest_rate") @db.Decimal(7, 4)
+  completedAt          DateTime?             @map("completed_at") @db.Timestamptz(6)
+  cancelledAt          DateTime?             @map("cancelled_at") @db.Timestamptz(6)
+  acceleratedAt        DateTime?             @map("accelerated_at") @db.Timestamptz(6)
+  /// Idempotency key supplied by the merchant API call. Repeated calls
+  /// with the same key short-circuit to the original result.
+  idempotencyKey       String?               @map("idempotency_key") @db.VarChar(255)
+  metadata             Json?
+  /// FIX 5: settlementId links many transactions to one MerchantSettlement.
+  /// IMMEDIATE settlements have one tx per row; T+1 batches share the
+  /// same settlementId across all transactions covered by the batch.
+  settlementId         String?               @map("settlement_id") @db.Uuid
+  deletedAt            DateTime?             @map("deleted_at") @db.Timestamptz(6)
+  createdAt            DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  customer     Customer              @relation(fields: [customerId], references: [id])
+  merchant     Merchant              @relation(fields: [merchantId], references: [id])
+  product      Product               @relation(fields: [productId], references: [id])
+  installments InstallmentSchedule[]
+  settlement   MerchantSettlement?   @relation(fields: [settlementId], references: [id])
+  /// FIX 8: Lender FK relation (was missing — only had the scalar lenderId).
+  lender       Lender                @relation(fields: [lenderId], references: [id])
+
+  @@unique([tenantId, merchantId, purchaseRef])
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([merchantId])
+  @@index([lenderId])
+  @@index([status])
+  @@index([purchaseRef])
+  @@index([settlementId])
+  @@map("bnpl_transactions")
+}
+
+enum BnplTransactionStatus {
+  initiated
+  approved
+  active
+  completed
+  cancelled
+  accelerated
+  defaulted
+  refunded
+
+  @@map("bnpl_transaction_status")
+}
+
+/// One row per installment on a BNPL transaction. `installmentNumber`
+/// 1..N; due dates are derived from product config (first-installment
+/// deferral + 30-day cadence by default). Status transitions:
+///   pending → due (when `dueDate <= today`)
+///   due → paid (full payment) | overdue (missed)
+///   any → waived (operator action, e.g. partial refund offset)
+model InstallmentSchedule {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String            @map("tenant_id") @db.Uuid
+  transactionId     String            @map("transaction_id") @db.Uuid
+  installmentNumber Int               @map("installment_number")
+  amount            Decimal           @db.Decimal(19, 4)
+  principalPortion  Decimal           @map("principal_portion") @db.Decimal(19, 4)
+  interestPortion   Decimal           @default(0) @map("interest_portion") @db.Decimal(19, 4)
+  feePortion        Decimal           @default(0) @map("fee_portion") @db.Decimal(19, 4)
+  dueDate           DateTime          @map("due_date") @db.Date
+  status            InstallmentStatus @default(pending)
+  paidAmount        Decimal           @default(0) @map("paid_amount") @db.Decimal(19, 4)
+  paidAt            DateTime?         @map("paid_at") @db.Timestamptz(6)
+  daysPastDue       Int               @default(0) @map("days_past_due")
+  /// Sprint 12 G2 — auto-collection tracking. Last time the BNPL
+  /// auto-collect scheduler attempted a wallet pull on this installment.
+  /// Used for same-day idempotency: a re-run of the scheduler on the
+  /// same UTC day skips installments where this is >= startOfToday().
+  lastCollectionAttemptAt DateTime?    @map("last_collection_attempt_at") @db.Timestamptz(6)
+  /// Cumulative count of failed auto-collection attempts. The scheduler
+  /// stops trying once this hits `bnplConfig.collectionRetryMaxAttempts`
+  /// (default 3) and hands the installment off to the overdue/recovery flow.
+  collectionAttemptCount  Int          @default(0) @map("collection_attempt_count")
+  createdAt         DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime          @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  transaction BnplTransaction @relation(fields: [transactionId], references: [id])
+
+  @@unique([transactionId, installmentNumber])
+  @@index([tenantId])
+  @@index([transactionId])
+  @@index([dueDate])
+  @@index([status])
+  @@map("installment_schedules")
+}
+
+enum InstallmentStatus {
+  pending
+  due
+  paid
+  overdue
+  waived
+
+  @@map("installment_status")
+}
+
+/// Settlement run paying a merchant for one or more transactions. For
+/// IMMEDIATE merchants there's one settlement per transaction (created
+/// at origination). For T+1 merchants the daily batch job groups all
+/// approved-but-unsettled transactions into one row per merchant per day.
+model MerchantSettlement {
+  id               String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String                   @map("tenant_id") @db.Uuid
+  merchantId       String                   @map("merchant_id") @db.Uuid
+  /// Single-transaction settlements (IMMEDIATE mode) link the source
+  /// transaction here; batch (T+1) settlements leave it null and use the
+  /// `transactionCount` summary instead.
+  currency         String                   @db.VarChar(3)
+  grossAmount      Decimal                  @map("gross_amount") @db.Decimal(19, 4)
+  discountFee      Decimal                  @map("discount_fee") @db.Decimal(19, 4)
+  netAmount        Decimal                  @map("net_amount") @db.Decimal(19, 4)
+  transactionCount Int                      @map("transaction_count")
+  periodStart      DateTime                 @map("period_start") @db.Date
+  periodEnd        DateTime                 @map("period_end") @db.Date
+  status           MerchantSettlementStatus @default(pending)
+  settledAt        DateTime?                @map("settled_at") @db.Timestamptz(6)
+  walletRef        String?                  @map("wallet_ref") @db.VarChar(255)
+  failureReason    String?                  @map("failure_reason") @db.Text
+  createdAt        DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  merchant     Merchant          @relation(fields: [merchantId], references: [id])
+  /// FIX 5: many transactions can share one settlement (T+1 batches).
+  /// IMMEDIATE settlements still have exactly one transaction in this list.
+  transactions BnplTransaction[]
+
+  @@index([tenantId])
+  @@index([merchantId])
+  @@index([status])
+  @@index([periodEnd])
+  @@map("merchant_settlements")
+}
+
+enum MerchantSettlementStatus {
+  pending
+  processing
+  settled
+  failed
+
+  @@map("merchant_settlement_status")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Sprint 12 — Invoice Factoring (spec: Docs/SPEC-invoice-factoring.md)
+// Buyer (debtor) is modelled as a separate entity from Customer because the
+// debtor is NOT a borrower in the IF flow — they're the counterparty whose
+// obligation backs the seller's advance. Different lifecycle, different
+// risk model, different KYC requirements.
+// ─────────────────────────────────────────────────────────────────────────
+
+model Debtor {
+  id                   String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String       @map("tenant_id") @db.Uuid
+  companyName          String       @map("company_name") @db.VarChar(255)
+  tradingName          String?      @map("trading_name") @db.VarChar(255)
+  registrationNumber   String?      @map("registration_number") @db.VarChar(100)
+  taxId                String?      @map("tax_id") @db.VarChar(100)
+  country              String       @db.VarChar(3)
+  industrySector       String?      @map("industry_sector") @db.VarChar(100)
+  contactEmail         String?      @map("contact_email") @db.VarChar(255)
+  contactPhone         String?      @map("contact_phone") @db.VarChar(50)
+  contactName          String?      @map("contact_name") @db.VarChar(255)
+  address              Json?
+  paymentTerms         String?      @map("payment_terms") @db.VarChar(50)
+  averagePaymentDays   Int?         @map("average_payment_days")
+  externalCreditRating String?      @map("external_credit_rating") @db.VarChar(50)
+  internalRiskScore    Decimal?     @map("internal_risk_score") @db.Decimal(5, 2)
+  totalExposure        Decimal      @default(0) @map("total_exposure") @db.Decimal(19, 4)
+  exposureLimit        Decimal?     @map("exposure_limit") @db.Decimal(19, 4)
+  status               DebtorStatus @default(active)
+  verifiedAt           DateTime?    @map("verified_at") @db.Timestamptz(6)
+  metadata             Json?
+  createdAt            DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt            DateTime?    @map("deleted_at") @db.Timestamptz(6)
+
+  invoices Invoice[]
+
+  @@unique([tenantId, companyName, registrationNumber])
+  @@index([tenantId])
+  @@index([status])
+  @@index([industrySector])
+  @@map("debtors")
+}
+
+enum DebtorStatus {
+  active
+  under_review
+  suspended
+  blacklisted
+
+  @@map("debtor_status")
+}
+
+model Invoice {
+  id                 String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String             @map("tenant_id") @db.Uuid
+  sellerId           String             @map("seller_id") @db.Uuid
+  debtorId           String             @map("debtor_id") @db.Uuid
+  productId          String             @map("product_id") @db.Uuid
+  contractId         String?            @unique @map("contract_id") @db.Uuid
+  idempotencyKey     String             @map("idempotency_key") @db.VarChar(255)
+  invoiceNumber      String             @map("invoice_number") @db.VarChar(100)
+  issueDate          DateTime           @map("issue_date") @db.Date
+  dueDate            DateTime           @map("due_date") @db.Date
+  faceValue          Decimal            @map("face_value") @db.Decimal(19, 4)
+  currency           String             @db.VarChar(3)
+  advanceRatePercent Decimal            @map("advance_rate_percent") @db.Decimal(5, 2)
+  advancedAmount     Decimal?           @map("advanced_amount") @db.Decimal(19, 4)
+  reserveAmount      Decimal?           @map("reserve_amount") @db.Decimal(19, 4)
+  discountFee        Decimal?           @map("discount_fee") @db.Decimal(19, 4)
+  serviceFee         Decimal?           @map("service_fee") @db.Decimal(19, 4)
+  netDisbursement    Decimal?           @map("net_disbursement") @db.Decimal(19, 4)
+  status             InvoiceStatus      @default(submitted)
+  verificationStatus VerificationStatus @default(pending) @map("verification_status")
+  verifiedBy         String?            @map("verified_by") @db.Uuid
+  verifiedAt         DateTime?          @map("verified_at") @db.Timestamptz(6)
+  verificationNotes  String?            @map("verification_notes") @db.Text
+  recourseType       RecourseType       @default(with_recourse) @map("recourse_type")
+  debtorNotifiedAt   DateTime?          @map("debtor_notified_at") @db.Timestamptz(6)
+  debtorPaymentRef   String?            @map("debtor_payment_ref") @db.VarChar(255)
+  amountReceived     Decimal?           @default(0) @map("amount_received") @db.Decimal(19, 4)
+  reserveReleased    Decimal?           @default(0) @map("reserve_released") @db.Decimal(19, 4)
+  disputeReason      String?            @map("dispute_reason") @db.Text
+  documents          Json?
+  metadata           Json?
+  fundedAt           DateTime?          @map("funded_at") @db.Timestamptz(6)
+  settledAt          DateTime?          @map("settled_at") @db.Timestamptz(6)
+  defaultedAt        DateTime?          @map("defaulted_at") @db.Timestamptz(6)
+  createdAt          DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  seller   Customer  @relation(fields: [sellerId], references: [id])
+  debtor   Debtor    @relation(fields: [debtorId], references: [id])
+  product  Product   @relation(fields: [productId], references: [id])
+  contract Contract? @relation(fields: [contractId], references: [id])
+
+  @@unique([tenantId, idempotencyKey])
+  @@unique([tenantId, sellerId, invoiceNumber])
+  @@index([tenantId])
+  @@index([sellerId])
+  @@index([debtorId])
+  @@index([status])
+  @@index([dueDate])
+  @@map("invoices")
+}
+
+enum InvoiceStatus {
+  submitted
+  under_review
+  verified
+  offer_generated
+  offer_accepted
+  funded
+  debtor_notified
+  payment_received
+  reserve_released
+  settled
+  disputed
+  defaulted
+  cancelled
+  rejected
+
+  @@map("invoice_status")
+}
+
+enum VerificationStatus {
+  pending
+  verified
+  failed
+  waived
+
+  @@map("verification_status")
+}
+
+enum RecourseType {
+  with_recourse
+  without_recourse
+
+  @@map("recourse_type")
 }
