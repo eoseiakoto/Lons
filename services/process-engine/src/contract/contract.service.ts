@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService, Prisma, LoanRequestStatus, ContractStatus } from '@lons/database';
-import { EventBusService, NotFoundError, ValidationError } from '@lons/common';
+import { EventBusService, NotFoundError, ValidationError, add as addDecimal } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
 import { LoanRequestService } from '../loan-request/loan-request.service';
@@ -27,12 +27,16 @@ export class ContractService {
     if (!offerDetails) throw new ValidationError('No offer details found');
 
     const contractNumber = await this.contractNumberGenerator.generate(tenantId);
-    const principalAmount = Number(lr.approvedAmount);
-    const interestRate = Number(offerDetails.interestRate || product.interestRate || 0);
+    // Money preserved as strings end-to-end. Prisma Decimal columns accept
+    // strings directly — never cast to Number() (precision loss).
+    const principalAmount = String(lr.approvedAmount ?? '0');
+    const interestRate = String(offerDetails.interestRate || product.interestRate || '0');
     const tenor = lr.approvedTenor || product.maxTenorDays || 30;
-    const totalInterest = Number(offerDetails.totalInterest || 0);
-    const totalFees = Number(offerDetails.totalFees || 0);
-    const totalCostCredit = Number(offerDetails.totalCostCredit || principalAmount + totalInterest + totalFees);
+    const totalInterest = String(offerDetails.totalInterest || '0');
+    const totalFees = String(offerDetails.totalFees || '0');
+    // Use Decimal arithmetic for the fallback sum if the offer didn't carry it.
+    const fallbackTotal = addDecimal(addDecimal(principalAmount, totalInterest), totalFees);
+    const totalCostCredit = String(offerDetails.totalCostCredit || fallbackTotal);
 
     const startDate = new Date();
     const maturityDate = new Date(startDate.getTime() + tenor * 24 * 60 * 60 * 1000);
@@ -57,9 +61,9 @@ export class ContractService {
         outstandingPrincipal: principalAmount,
         outstandingInterest: totalInterest,
         outstandingFees: totalFees,
-        outstandingPenalties: 0,
+        outstandingPenalties: '0',
         totalOutstanding: totalCostCredit,
-        totalPaid: 0,
+        totalPaid: '0',
         daysPastDue: 0,
         status: ContractStatus.active,
         classification: 'performing',
@@ -84,16 +88,18 @@ export class ContractService {
       contractNumber,
       customerId: lr.customerId,
       productId: lr.productId,
-      principalAmount: String(principalAmount),
+      principalAmount,
       currency: lr.currency,
     });
 
     return contract;
   }
 
-  async findById(tenantId: string, id: string) {
+  async findById(tenantId: string | undefined, id: string) {
+    const where: Prisma.ContractWhereInput = { id };
+    if (tenantId) where.tenantId = tenantId;
     const contract = await this.prisma.contract.findFirst({
-      where: { id, tenantId },
+      where,
       include: { customer: true, product: true, lender: true, repaymentSchedule: true },
     });
     if (!contract) throw new NotFoundError('Contract', id);
@@ -134,12 +140,13 @@ export class ContractService {
     return this.prisma.contract.count({ where });
   }
 
-  async findMany(tenantId: string, filters?: {
+  async findMany(tenantId: string | undefined, filters?: {
     customerId?: string;
     productId?: string;
     status?: string;
   }, take: number = 20, cursor?: string) {
-    const where: Prisma.ContractWhereInput = { tenantId };
+    const where: Prisma.ContractWhereInput = {};
+    if (tenantId) where.tenantId = tenantId;
     if (filters?.customerId) where.customerId = filters.customerId;
     if (filters?.productId) where.productId = filters.productId;
     if (filters?.status) where.status = filters.status as ContractStatus;

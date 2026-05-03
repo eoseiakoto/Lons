@@ -11,7 +11,7 @@
  * - All scores are Decimal strings
  */
 import { DualScoringStrategy } from '../../scoring/dual-scoring.strategy';
-import { MlScoringClient, MlScoringResponse } from '../../scoring/ml-scoring.client';
+import { MlScoringClient, MlScoringResponse, MlScoringUnavailableError } from '../../scoring/ml-scoring.client';
 import { CreditLimitService } from '../../scoring/credit-limit.service';
 import { ScoringService } from '../../scoring/scoring.service';
 import { ScorecardConfig } from '../../scoring/scorecard/scorecard-engine';

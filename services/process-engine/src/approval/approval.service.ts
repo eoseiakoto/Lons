@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService, LoanRequestStatus, Prisma } from '@lons/database';
-import { ValidationError } from '@lons/common';
+import { ValidationError, compare, min as decMin } from '@lons/common';
 
 import { LoanRequestService } from '../loan-request/loan-request.service';
 
@@ -45,7 +45,7 @@ export class ApprovalService {
         }
 
         return this.loanRequestService.transitionStatus(tenantId, loanRequestId, LoanRequestStatus.approved, {
-          approvedAmount: Number(approvedAmount),
+          approvedAmount,
           approvedTenor: lr.requestedTenor || product.maxTenorDays,
         });
       } else if (score < autoRejectBelow) {
@@ -61,16 +61,60 @@ export class ApprovalService {
     return this.loanRequestService.transitionStatus(tenantId, loanRequestId, LoanRequestStatus.manual_review);
   }
 
-  async approveManual(tenantId: string, loanRequestId: string, approvedAmount: number, approvedTenor: number) {
+  /**
+   * Approves a loan request that's in `manual_review`. The operator can
+   * accept the requested amount or substitute an adjusted amount (still
+   * subject to the product's min/max). `approvedTenor` defaults to the
+   * requested tenor if absent.
+   *
+   * P0-001: `approvedAmount` is a Decimal string — never `number`.
+   */
+  async approveManual(
+    tenantId: string,
+    loanRequestId: string,
+    approvedAmount: string,
+    approvedTenor: number,
+  ) {
+    const lr = await this.loanRequestService.findById(tenantId, loanRequestId);
+    if (lr.status !== LoanRequestStatus.manual_review) {
+      throw new ValidationError(
+        `Loan request must be in manual_review to approve manually; current status: ${lr.status}`,
+      );
+    }
+
+    // Clamp the operator-supplied amount to product min/max. Operators can
+    // override an auto-approval recommendation but they can't go outside
+    // product bounds.
+    const product = lr.product;
+    const productMax = product?.maxAmount ? String(product.maxAmount) : approvedAmount;
+    const productMin = product?.minAmount ? String(product.minAmount) : '0';
+    let amount = decMin(approvedAmount, productMax);
+    if (compare(amount, productMin) < 0) {
+      amount = productMin;
+    }
+
     return this.loanRequestService.transitionStatus(tenantId, loanRequestId, LoanRequestStatus.approved, {
-      approvedAmount,
+      approvedAmount: amount,
       approvedTenor,
     });
   }
 
-  async rejectManual(tenantId: string, loanRequestId: string, reason: string) {
+  async rejectManual(
+    tenantId: string,
+    loanRequestId: string,
+    reasonCode: string,
+    reasonDetail?: string,
+  ) {
+    const lr = await this.loanRequestService.findById(tenantId, loanRequestId);
+    if (lr.status !== LoanRequestStatus.manual_review) {
+      throw new ValidationError(
+        `Loan request must be in manual_review to reject manually; current status: ${lr.status}`,
+      );
+    }
     return this.loanRequestService.transitionStatus(tenantId, loanRequestId, LoanRequestStatus.rejected, {
-      rejectionReasons: [{ code: 'MANUAL_REJECTION', message: reason }] as unknown as Prisma.InputJsonValue,
+      rejectionReasons: [
+        { code: reasonCode, message: reasonDetail ?? reasonCode },
+      ] as unknown as Prisma.InputJsonValue,
     });
   }
 }

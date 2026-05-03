@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService, Prisma, LoanRequestStatus } from '@lons/database';
-import { EventBusService } from '@lons/common';
+import { EventBusService, compare } from '@lons/common';
 import { NotFoundError, ValidationError } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
@@ -16,7 +16,8 @@ export class LoanRequestService {
   async create(tenantId: string, input: {
     customerId: string;
     productId: string;
-    requestedAmount: number;
+    /** Decimal string — see MoneyString in @lons/shared-types. */
+    requestedAmount: string;
     requestedTenor?: number;
     currency: string;
     channel?: string;
@@ -52,7 +53,7 @@ export class LoanRequestService {
         loanRequestId: loanRequest.id,
         customerId: input.customerId,
         productId: input.productId,
-        amount: input.requestedAmount.toString(),
+        amount: input.requestedAmount,
         currency: input.currency,
       },
     );
@@ -190,13 +191,13 @@ export class LoanRequestService {
       }
     }
 
-    // 4. Amount in bounds
+    // 4. Amount in bounds — Decimal compare to avoid float precision drift.
     if (product) {
-      const requestedAmount = Number(lr.requestedAmount);
-      if (product.minAmount && requestedAmount < Number(product.minAmount)) {
+      const requestedAmount = String(lr.requestedAmount);
+      if (product.minAmount && compare(requestedAmount, String(product.minAmount)) < 0) {
         rejectionReasons.push({ code: 'AMOUNT_BELOW_MINIMUM', message: `Amount below minimum ${product.minAmount}` });
       }
-      if (product.maxAmount && requestedAmount > Number(product.maxAmount)) {
+      if (product.maxAmount && compare(requestedAmount, String(product.maxAmount)) > 0) {
         rejectionReasons.push({ code: 'AMOUNT_ABOVE_MAXIMUM', message: `Amount above maximum ${product.maxAmount}` });
       }
     }

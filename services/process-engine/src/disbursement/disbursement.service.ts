@@ -4,7 +4,9 @@ import { EventBusService, NotFoundError } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
 import { LoanRequestService } from '../loan-request/loan-request.service';
+import { CoolingOffService } from '../cooling-off/cooling-off.service';
 import { WALLET_ADAPTER, IWalletAdapter } from './adapters/wallet-adapter.interface';
+import { SCREENING_GATE, IScreeningGate } from './screening-gate.interface';
 
 const MAX_RETRIES = 3;
 
@@ -14,6 +16,8 @@ export class DisbursementService {
     private prisma: PrismaService,
     private eventBus: EventBusService,
     private loanRequestService: LoanRequestService,
+    private coolingOffService: CoolingOffService,
+    @Inject(SCREENING_GATE) private screeningGate: IScreeningGate,
     @Inject(WALLET_ADAPTER) private walletAdapter: IWalletAdapter,
   ) {}
 
@@ -31,6 +35,52 @@ export class DisbursementService {
 
     if (loanRequest) {
       await this.loanRequestService.transitionStatus(tenantId, loanRequest.id, LoanRequestStatus.disbursing);
+    }
+
+    // AML screening gate — check before disbursement
+    const screening = await this.screeningGate.screenCustomer(tenantId, contract.customerId);
+
+    switch (screening.status) {
+      case 'MATCH':
+        if (loanRequest) {
+          await this.loanRequestService.transitionStatus(tenantId, loanRequest.id, LoanRequestStatus.rejected);
+        }
+        this.eventBus.emitAndBuild(EventType.SCREENING_MATCH_FOUND, tenantId, {
+          customerId: contract.customerId,
+          loanRequestId: loanRequest?.id,
+          screeningId: screening.screeningId,
+        });
+        throw new Error(`Disbursement blocked: AML screening match for customer ${contract.customerId}`);
+
+      case 'POTENTIAL_MATCH':
+        if (loanRequest) {
+          await this.loanRequestService.transitionStatus(tenantId, loanRequest.id, LoanRequestStatus.manual_review);
+        }
+        this.eventBus.emitAndBuild(EventType.SCREENING_MANUAL_REVIEW_REQUIRED, tenantId, {
+          customerId: contract.customerId,
+          loanRequestId: loanRequest?.id,
+          screeningId: screening.screeningId,
+        });
+        return { status: 'held_for_review', screeningId: screening.screeningId };
+
+      case 'ERROR':
+        // Retry once
+        const retryScreening = await this.screeningGate.screenCustomer(tenantId, contract.customerId);
+        if (retryScreening.status !== 'CLEAR') {
+          if (loanRequest) {
+            await this.loanRequestService.transitionStatus(tenantId, loanRequest.id, LoanRequestStatus.manual_review);
+          }
+          this.eventBus.emitAndBuild(EventType.SCREENING_MANUAL_REVIEW_REQUIRED, tenantId, {
+            customerId: contract.customerId,
+            loanRequestId: loanRequest?.id,
+            screeningId: retryScreening.screeningId,
+          });
+          return { status: 'held_for_review', screeningId: retryScreening.screeningId };
+        }
+        break; // CLEAR after retry, proceed
+
+      case 'CLEAR':
+        break; // Proceed with disbursement
     }
 
     const disbursement = await this.prisma.disbursement.create({
@@ -91,6 +141,9 @@ export class DisbursementService {
         customerId: disbursement.customerId,
         amount: String(disbursement.amount),
       });
+
+      // Activate cooling-off period if product requires it
+      await this.coolingOffService.activateCoolingOff(tenantId, contractId);
 
       return this.prisma.disbursement.findUniqueOrThrow({ where: { id: disbursementId } });
     }

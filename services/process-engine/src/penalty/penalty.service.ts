@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@lons/database';
-import { EventBusService, NotFoundError, bankersRound, add, subtract, min as decMin, percentage } from '@lons/common';
+import { EventBusService, NotFoundError, bankersRound, add, subtract, min as decMin, percentage, compare, isNegative } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
 export interface PenaltyConfig {
@@ -41,11 +41,12 @@ export class PenaltyService {
       add(String(contract.outstandingFees || 0), newOutstandingPenalties),
     );
 
+    // Money preserved as strings — Prisma Decimal columns accept strings directly.
     await this.prisma.contract.update({
       where: { id: contractId },
       data: {
-        outstandingPenalties: Number(newOutstandingPenalties),
-        totalOutstanding: Number(newTotalOutstanding),
+        outstandingPenalties: newOutstandingPenalties,
+        totalOutstanding: newTotalOutstanding,
       },
     });
 
@@ -54,9 +55,9 @@ export class PenaltyService {
         tenantId,
         entryType: 'penalty',
         debitCredit: 'debit',
-        amount: Number(penaltyAmount),
+        amount: penaltyAmount,
         currency: contract.currency,
-        runningBalance: Number(newTotalOutstanding),
+        runningBalance: newTotalOutstanding,
         effectiveDate: new Date(),
         valueDate: new Date(),
         description: `Late payment penalty: ${penaltyAmount} ${contract.currency}`,
@@ -87,14 +88,14 @@ export class PenaltyService {
       penalty = bankersRound(percentage(String(contract.outstandingPrincipal || 0), String(config.rate)), 4);
     }
 
-    // Apply cap
+    // Apply cap. Use Decimal compare/isNegative to avoid float precision loss.
     if (config.cap !== undefined && config.cap > 0) {
       const capAmount = bankersRound(percentage(String(contract.principalAmount), String(config.cap)), 4);
       const currentPenalties = String(contract.outstandingPenalties || 0);
       const totalAfterNew = add(currentPenalties, penalty);
-      if (Number(totalAfterNew) > Number(capAmount)) {
+      if (compare(totalAfterNew, capAmount) > 0) {
         penalty = bankersRound(subtract(capAmount, currentPenalties), 4);
-        if (Number(penalty) < 0) penalty = '0.0000';
+        if (isNegative(penalty)) penalty = '0.0000';
       }
     }
 
@@ -117,8 +118,8 @@ export class PenaltyService {
     await this.prisma.contract.update({
       where: { id: contractId },
       data: {
-        outstandingPenalties: Number(newOutstandingPenalties),
-        totalOutstanding: Number(newTotalOutstanding),
+        outstandingPenalties: newOutstandingPenalties,
+        totalOutstanding: newTotalOutstanding,
       },
     });
 
@@ -127,9 +128,9 @@ export class PenaltyService {
         tenantId,
         entryType: 'reversal',
         debitCredit: 'credit',
-        amount: Number(waiveAmount),
+        amount: waiveAmount,
         currency: contract.currency,
-        runningBalance: Number(newTotalOutstanding),
+        runningBalance: newTotalOutstanding,
         effectiveDate: new Date(),
         valueDate: new Date(),
         description: `Penalty waiver: ${waiveAmount} ${contract.currency}. Reason: ${reason}`,

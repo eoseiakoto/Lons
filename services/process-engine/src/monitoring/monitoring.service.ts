@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '@lons/database';
+import { divide, compare, isPositive } from '@lons/common';
 
 export interface RiskIndicator {
   contractId: string;
@@ -29,10 +30,15 @@ export class MonitoringService {
       factors.push(`${contract.daysPastDue} days past due`);
     }
 
-    // Outstanding ratio
-    const totalCost = Number(contract.totalCostCredit || contract.principalAmount);
-    const paid = Number(contract.totalPaid || 0);
-    if (totalCost > 0 && paid / totalCost < 0.1 && contract.daysPastDue > 7) {
+    // Outstanding ratio — Decimal compare so the threshold is exact for any
+    // contract size. Float division would drift on large outstanding balances.
+    const totalCost = String(contract.totalCostCredit || contract.principalAmount);
+    const paid = String(contract.totalPaid || '0');
+    if (
+      isPositive(totalCost) &&
+      compare(divide(paid, totalCost), '0.1') < 0 &&
+      contract.daysPastDue > 7
+    ) {
       score += 20;
       factors.push('Less than 10% of total cost paid');
     }

@@ -15,6 +15,9 @@ import { PenaltyModule } from './penalty/penalty.module';
 import { CollectionsModule } from './collections/collections.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { MonitoringModule } from './monitoring/monitoring.module';
+import { CoolingOffModule } from './cooling-off/cooling-off.module';
+import { ExposureModule } from './exposure/exposure.module';
+import { BnplModule } from './bnpl/bnpl.module';
 
 @Module({
   imports: [
@@ -34,6 +37,9 @@ import { MonitoringModule } from './monitoring/monitoring.module';
     CollectionsModule,
     AnalyticsModule,
     MonitoringModule,
+    CoolingOffModule,
+    ExposureModule,
+    BnplModule,
   ],
   exports: [
     LoanRequestModule,
@@ -49,6 +55,9 @@ import { MonitoringModule } from './monitoring/monitoring.module';
     CollectionsModule,
     AnalyticsModule,
     MonitoringModule,
+    CoolingOffModule,
+    ExposureModule,
+    BnplModule,
   ],
 })
 export class ProcessEngineModule {}

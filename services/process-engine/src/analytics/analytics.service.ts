@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService, ContractStatus, ContractClassification } from '@lons/database';
-import { add, divide, bankersRound } from '@lons/common';
+import { add, divide, bankersRound, multiply, isPositive } from '@lons/common';
 
 export interface PortfolioMetrics {
   activeLoans: number;
@@ -69,7 +69,7 @@ export class AnalyticsService {
       for (const c of atRisk) {
         amount = add(amount, String(c.outstandingPrincipal || 0));
       }
-      const pct = Number(activePrincipal) > 0
+      const pct = isPositive(activePrincipal)
         ? bankersRound(divide(amount, activePrincipal), 4)
         : '0.0000';
       return { count: atRisk.length, amount, pct };
@@ -82,7 +82,7 @@ export class AnalyticsService {
     for (const c of nplContracts) {
       nplAmount = add(nplAmount, String(c.outstandingPrincipal || 0));
     }
-    const nplRatio = Number(activePrincipal) > 0
+    const nplRatio = isPositive(activePrincipal)
       ? bankersRound(divide(nplAmount, activePrincipal), 4)
       : '0.0000';
 
@@ -95,9 +95,10 @@ export class AnalyticsService {
       for (const c of classContracts) {
         classOutstanding = add(classOutstanding, String(c.outstandingPrincipal || 0));
       }
+      // Decimal multiply preserves precision when classOutstanding is large.
       const provision = bankersRound(
         divide(
-          String(Number(classOutstanding) * PROVISIONING_RATES[classification]),
+          multiply(classOutstanding, String(PROVISIONING_RATES[classification])),
           '100',
         ),
         4,

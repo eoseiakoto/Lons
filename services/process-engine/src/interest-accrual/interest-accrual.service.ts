@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService, ContractStatus } from '@lons/database';
-import { EventBusService, multiply, divide, bankersRound, add } from '@lons/common';
+import { EventBusService, multiply, divide, bankersRound, add, isZero } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
 @Injectable()
@@ -33,8 +33,8 @@ export class InterestAccrualService {
         gracePeriodEnd.setDate(gracePeriodEnd.getDate() + (contract.product.gracePeriodDays || 0));
         if (date < gracePeriodEnd) continue;
 
-        // Skip zero-interest contracts
-        if (!contract.interestRate || Number(contract.interestRate) === 0) continue;
+        // Skip zero-interest contracts (Decimal-safe zero check)
+        if (!contract.interestRate || isZero(String(contract.interestRate))) continue;
 
         const dailyAccrual = this.calculateDailyAccrual(contract);
         if (dailyAccrual === '0.0000') continue;
@@ -75,11 +75,12 @@ export class InterestAccrualService {
       add(String(contract.outstandingFees || 0), String(contract.outstandingPenalties || 0)),
     );
 
+    // Money preserved as strings — Prisma Decimal columns accept strings directly.
     await this.prisma.contract.update({
       where: { id: contractId },
       data: {
-        outstandingInterest: Number(newOutstandingInterest),
-        totalOutstanding: Number(newTotalOutstanding),
+        outstandingInterest: newOutstandingInterest,
+        totalOutstanding: newTotalOutstanding,
       },
     });
 
@@ -88,9 +89,9 @@ export class InterestAccrualService {
         tenantId,
         entryType: 'interest_accrual',
         debitCredit: 'debit',
-        amount: Number(amount),
+        amount,
         currency: contract.currency,
-        runningBalance: Number(newTotalOutstanding),
+        runningBalance: newTotalOutstanding,
         effectiveDate: date,
         valueDate: date,
         description: `Daily interest accrual: ${amount} ${contract.currency}`,

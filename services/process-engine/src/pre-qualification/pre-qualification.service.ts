@@ -3,10 +3,12 @@ import { PrismaService, ContractStatus } from '@lons/database';
 
 import { RuleEvaluationContext, RuleResult } from './rules/rule.interface';
 import { getRule } from './rules/rule-factory';
+import { ExposureService } from '../exposure/exposure.service';
 
 export interface PreQualificationResult {
   qualified: boolean;
   failedRules: { code: string; message: string }[];
+  exposureCheck?: { allowed: boolean; currentExposure: string; maxAllowed: string; headroom: string };
 }
 
 interface EligibilityRuleConfig {
@@ -16,9 +18,12 @@ interface EligibilityRuleConfig {
 
 @Injectable()
 export class PreQualificationService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private exposureService: ExposureService,
+  ) {}
 
-  async evaluate(tenantId: string, customerId: string, productId: string): Promise<PreQualificationResult> {
+  async evaluate(tenantId: string, customerId: string, productId: string, requestedAmount?: string): Promise<PreQualificationResult> {
     const customer = await this.prisma.customer.findFirst({
       where: { id: customerId, tenantId },
     });
@@ -78,6 +83,31 @@ export class PreQualificationService {
       }
     }
 
-    return { qualified: failedRules.length === 0, failedRules };
+    // Cross-product exposure check
+    let exposureCheck: PreQualificationResult['exposureCheck'];
+    if (requestedAmount) {
+      const check = await this.exposureService.checkExposureLimit(
+        tenantId,
+        customerId,
+        requestedAmount,
+        productId,
+      );
+      exposureCheck = {
+        allowed: check.allowed,
+        currentExposure: check.currentExposure,
+        maxAllowed: check.maxAllowed,
+        headroom: check.headroom,
+      };
+      if (!check.allowed) {
+        failedRules.push({
+          code: 'EXPOSURE_LIMIT_EXCEEDED',
+          message: check.reason === 'TENANT_LIMIT_EXCEEDED'
+            ? `Total exposure would exceed tenant limit of ${check.maxAllowed}`
+            : `Exposure limit exceeded`,
+        });
+      }
+    }
+
+    return { qualified: failedRules.length === 0, failedRules, exposureCheck };
   }
 }

@@ -1,4 +1,3 @@
-import { Test } from '@nestjs/testing';
 import { AlertRulesService } from '../alert-rules.service';
 import { RiskIndicator } from '../monitoring.service';
 import { AlertSeverity, AdaptiveActionType } from '@lons/shared-types';
@@ -41,17 +40,6 @@ describe('AlertRulesService', () => {
       },
     };
 
-    await Test.createTestingModule({
-      providers: [
-        AlertRulesService,
-        { provide: 'PrismaService', useValue: prisma },
-      ],
-    })
-      .overrideProvider('PrismaService')
-      .useValue(prisma)
-      .compile();
-
-    // Manually instantiate to inject our mock
     service = new AlertRulesService(prisma);
   });
 
