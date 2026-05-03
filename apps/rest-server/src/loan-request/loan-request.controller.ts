@@ -51,10 +51,11 @@ export class LoanRequestController {
     @Headers('x-idempotency-key') idempotencyKey?: string,
   ): Promise<any> {
     const tenantId = req.tenantId;
+    // Pass amount as a string straight through (CLAUDE.md: never Number() money).
     return this.loanRequestService.create(tenantId, {
       customerId: body.customerId,
       productId: body.productId,
-      requestedAmount: Number(body.amount),
+      requestedAmount: body.amount,
       requestedTenor: body.termDays ? Number(body.termDays) : undefined,
       currency: body.currency,
       idempotencyKey,

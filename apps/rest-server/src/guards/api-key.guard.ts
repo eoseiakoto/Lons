@@ -14,7 +14,7 @@ export class ApiKeyGuard implements CanActivate {
   constructor(private readonly apiKeyService: ApiKeyService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest();
+    const request = this.getRequest(context);
 
     // Check for Bearer token — JWT auth handled elsewhere, pass through
     const authHeader = request.headers['authorization'];
@@ -50,5 +50,22 @@ export class ApiKeyGuard implements CanActivate {
         message: error.message || 'Invalid API key or secret',
       });
     }
+  }
+
+  /**
+   * Extract the request object from either HTTP or GraphQL execution contexts.
+   *
+   * We avoid importing @nestjs/graphql (not a dependency of this package) and
+   * instead manually extract `req` from the GraphQL context argument, which is
+   * the third element in the resolver args array: [root, args, context, info].
+   */
+  private getRequest(context: ExecutionContext): any {
+    const contextType = context.getType<string>();
+    if (contextType === 'graphql') {
+      const gqlArgs = context.getArgs();
+      const ctx = gqlArgs[2]; // [root, args, context, info]
+      return ctx?.req ?? {};
+    }
+    return context.switchToHttp().getRequest();
   }
 }

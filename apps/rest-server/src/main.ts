@@ -32,7 +32,24 @@ async function bootstrap() {
   app.useGlobalFilters(new BusinessExceptionFilter());
   app.useGlobalInterceptors(new ResponseEnvelopeInterceptor());
 
-  app.enableCors();
+  // CORS — explicit allowlist. The default `enableCors()` reflects any
+  // Origin header back, which is forbidden by CLAUDE.md (functionally `*`
+  // for credentialed requests). Webhook endpoints are server-to-server and
+  // don't go through CORS, so they're not affected.
+  const adminOrigin = process.env.ADMIN_PORTAL_URL || 'http://localhost:3001';
+  const platformOrigin = process.env.PLATFORM_PORTAL_URL || 'http://localhost:3002';
+  const extraOrigins = (process.env.CORS_ORIGINS || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const allowedOrigins = [adminOrigin, platformOrigin, ...extraOrigins];
+
+  app.enableCors({
+    origin: allowedOrigins,
+    credentials: true,
+    methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'X-API-Key', 'X-API-Secret', 'X-Idempotency-Key', 'X-Tenant-Context'],
+  });
 
   // --- OpenAPI / Swagger ---
   const config = new DocumentBuilder()

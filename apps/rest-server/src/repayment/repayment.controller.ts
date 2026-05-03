@@ -47,9 +47,11 @@ export class RepaymentController {
     @Headers('x-idempotency-key') _idempotencyKey?: string,
   ): Promise<any> {
     const tenantId = req.tenantId;
+    // Pass amount as a string straight through. parseFloat() loses precision
+    // beyond ~15 significant digits and is forbidden by CLAUDE.md for money.
     return this.paymentService.processPayment(tenantId, {
       contractId: body.contractId,
-      amount: parseFloat(body.amount),
+      amount: body.amount,
       currency: body.currency,
       method: body.method,
       source: body.source,

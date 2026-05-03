@@ -21,6 +21,9 @@ import { RepaymentModule } from './repayment/repayment.module';
 import { ProductModule } from './product/product.module';
 import { WebhookModule } from './webhook/webhook.module';
 import { ApiKeyRestModule } from './api-key/api-key.module';
+import { PublicModule } from './public/public.module';
+import { WalletWebhookModule } from './wallet-webhook/wallet-webhook.module';
+import { BnplRestModule } from './bnpl/bnpl.module';
 
 @Module({
   imports: [
@@ -41,6 +44,9 @@ import { ApiKeyRestModule } from './api-key/api-key.module';
     ProductModule,
     WebhookModule,
     ApiKeyRestModule,
+    PublicModule,
+    WalletWebhookModule,
+    BnplRestModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantThrottlerGuard },

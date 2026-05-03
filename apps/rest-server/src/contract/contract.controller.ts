@@ -1,7 +1,9 @@
 import {
+  Body,
   Controller,
   Get,
   Param,
+  Post,
   Query,
   Req,
   UseGuards,
@@ -10,10 +12,11 @@ import {
   ApiTags,
   ApiOperation,
   ApiResponse,
+  ApiBody,
   ApiSecurity,
   ApiQuery,
 } from '@nestjs/swagger';
-import { ContractService } from '@lons/process-engine';
+import { ContractService, CoolingOffService } from '@lons/process-engine';
 import { ScheduleService } from '@lons/repayment-service';
 import { ApiKeyGuard } from '../guards/api-key.guard';
 import { PaginationQueryDto, buildPaginatedResponse } from '../dto/pagination.dto';
@@ -27,6 +30,7 @@ export class ContractController {
   constructor(
     private readonly contractService: ContractService,
     private readonly scheduleService: ScheduleService,
+    private readonly coolingOffService: CoolingOffService,
   ) {}
 
   @Get(':id')
@@ -69,5 +73,29 @@ export class ContractController {
     ]);
 
     return buildPaginatedResponse(items, total, page, limit);
+  }
+
+  @Post(':id/cancel-cooling-off')
+  @ApiOperation({ summary: 'Cancel contract during cooling-off period' })
+  @ApiResponse({ status: 200, description: 'Contract cancelled during cooling-off' })
+  @ApiResponse({ status: 400, description: 'Contract not in cooling-off period' })
+  @ApiResponse({ status: 404, description: 'Contract not found' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        reason: { type: 'string', description: 'Optional cancellation reason' },
+        idempotencyKey: { type: 'string', description: 'Idempotency key' },
+      },
+      required: ['idempotencyKey'],
+    },
+  })
+  async cancelCoolingOff(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: { reason?: string; idempotencyKey: string },
+  ): Promise<any> {
+    const tenantId = req.tenantId;
+    return this.coolingOffService.cancelDuringCoolingOff(tenantId, id, body.reason, body.idempotencyKey);
   }
 }

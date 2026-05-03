@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsDecimal, IsNotEmpty } from 'class-validator';
 
 export class CreateLoanRequestDto {
   @ApiProperty({ description: 'Customer ID' })
@@ -10,8 +10,10 @@ export class CreateLoanRequestDto {
   @IsString()
   productId!: string;
 
-  @ApiProperty({ description: 'Requested loan amount (string, e.g. "5000.00")', example: '5000.00' })
+  @ApiProperty({ description: 'Requested loan amount as a decimal string (preserves precision)', example: '5000.00' })
   @IsString()
+  @IsNotEmpty()
+  @IsDecimal({ decimal_digits: '0,4', force_decimal: false })
   amount!: string;
 
   @ApiProperty({ description: 'Currency code (ISO 4217)', example: 'GHS' })

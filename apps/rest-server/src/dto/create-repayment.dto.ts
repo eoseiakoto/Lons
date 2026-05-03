@@ -1,13 +1,15 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsOptional } from 'class-validator';
+import { IsString, IsOptional, IsDecimal, IsNotEmpty } from 'class-validator';
 
 export class CreateRepaymentDto {
   @ApiProperty({ description: 'Contract ID the repayment is for' })
   @IsString()
   contractId!: string;
 
-  @ApiProperty({ description: 'Payment amount (string, e.g. "250.00")', example: '250.00' })
+  @ApiProperty({ description: 'Payment amount as a decimal string (preserves precision)', example: '250.00' })
   @IsString()
+  @IsNotEmpty()
+  @IsDecimal({ decimal_digits: '0,4', force_decimal: false })
   amount!: string;
 
   @ApiProperty({ description: 'Currency code (ISO 4217)', example: 'GHS' })
