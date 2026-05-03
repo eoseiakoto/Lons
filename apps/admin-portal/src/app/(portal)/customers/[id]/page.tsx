@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, ShieldAlert, UserX } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { TabCreditSummary } from '@/components/customers/tab-credit-summary';
+import { TabInvoices } from '@/components/customers/tab-invoices';
 import { PageBackdrop } from '@/components/dashboard/page-backdrop';
 import { ProgressBar } from '@/components/ui/progress-bar';
 import { formatDate, formatDateTime, formatMoney } from '@/lib/utils';
@@ -20,6 +21,14 @@ const CUSTOMER_QUERY = gql`
       id externalId externalSource fullName gender country region city
       nationalId phonePrimary email kycLevel status blacklistReason watchlist
       anonymizedAt createdAt updatedAt
+    }
+  }
+`;
+
+const HAS_INVOICES_QUERY = gql`
+  query CustomerHasInvoices($filters: InvoiceFiltersInput) {
+    invoices(filters: $filters, pagination: { first: 1 }) {
+      totalCount
     }
   }
 `;
@@ -434,8 +443,14 @@ export default function CustomerDetailPage() {
   const { data, loading, refetch } = useQuery(CUSTOMER_QUERY, { variables: { id } });
   const [blacklist] = useMutation(BLACKLIST);
   const [unblacklist] = useMutation(UNBLACKLIST);
-  const [tab, setTab] = useState<'profile' | 'credit' | 'contracts' | 'screening'>('profile');
+  const [tab, setTab] = useState<'profile' | 'credit' | 'contracts' | 'screening' | 'invoices'>('profile');
   const { data: exposureData } = useQuery(EXPOSURE_QUERY, { variables: { customerId: id }, skip: !id });
+  const { data: invoicesProbe } = useQuery(HAS_INVOICES_QUERY, {
+    variables: { filters: { sellerId: id } },
+    skip: !id,
+    fetchPolicy: 'cache-and-network',
+  });
+  const hasInvoices: boolean = (invoicesProbe?.invoices?.totalCount ?? 0) > 0;
   const [showAnonymizationDialog, setShowAnonymizationDialog] = useState(false);
 
   if (loading) return <div className="text-[color:var(--text-secondary)]">{t('common.loading')}</div>;
@@ -591,6 +606,9 @@ export default function CustomerDetailPage() {
               { key: 'credit', label: t('customers.credit') },
               { key: 'contracts', label: t('loans.contracts') },
               { key: 'screening', label: t('customers.screeningTab') },
+              ...(hasInvoices
+                ? ([{ key: 'invoices', label: t('customers.invoicesTab') }] as const)
+                : ([] as const)),
             ] as const
           ).map((item) => {
             const isActive = tab === item.key;
@@ -598,7 +616,14 @@ export default function CustomerDetailPage() {
               <button
                 key={item.key}
                 onClick={() =>
-                  setTab(item.key as 'profile' | 'credit' | 'contracts' | 'screening')
+                  setTab(
+                    item.key as
+                      | 'profile'
+                      | 'credit'
+                      | 'contracts'
+                      | 'screening'
+                      | 'invoices',
+                  )
                 }
                 className="relative px-4 py-1.5 rounded-md text-[13px] font-medium transition-colors"
                 style={{
@@ -749,6 +774,12 @@ export default function CustomerDetailPage() {
       {tab === 'screening' && (
         <div className="relative z-10">
           <ScreeningTab customerId={id as string} />
+        </div>
+      )}
+
+      {tab === 'invoices' && hasInvoices && (
+        <div className="relative z-10">
+          <TabInvoices customerId={id as string} />
         </div>
       )}
 

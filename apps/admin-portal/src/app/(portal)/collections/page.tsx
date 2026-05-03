@@ -10,6 +10,7 @@ import { PageBackdrop } from '@/components/dashboard/page-backdrop';
 import { PageHeader } from '@/components/ui/page-header';
 import { MetricCard } from '@/components/ui/metric-card';
 import { FilterPill } from '@/components/ui/filter-pill';
+import { FactoringDefaultsTable } from '@/components/collections/factoring-defaults-table';
 
 const COLLECTIONS_QUERY = gql`
   query Collections($sortBy: String, $take: Int, $cursor: String) {
@@ -261,6 +262,8 @@ export default function CollectionsPage() {
               )}
             </div>
           </section>
+
+          <FactoringDefaultsTable />
         </>
       )}
 

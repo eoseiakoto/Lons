@@ -27,6 +27,7 @@ import {
   ArrowLeft,
   Sun,
   Moon,
+  Briefcase,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n/i18n-context';
@@ -39,6 +40,7 @@ const navigationKeys = [
   { key: 'nav.products', href: '/products', icon: Package },
   { key: 'nav.lenders', href: '/lenders', icon: Landmark },
   { key: 'nav.merchants', href: '/merchants', icon: Store },
+  { key: 'nav.debtors', href: '/debtors', icon: Briefcase },
   { key: 'nav.customers', href: '/customers', icon: Users },
   { key: 'nav.loans', href: '/loans/contracts', icon: FileText },
   { key: 'nav.collections', href: '/collections', icon: AlertTriangle },

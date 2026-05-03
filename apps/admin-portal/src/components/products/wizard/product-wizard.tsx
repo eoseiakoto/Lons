@@ -11,6 +11,7 @@ import { StepFinancialTerms } from './step-financial-terms';
 import { StepFees } from './step-fees';
 import { StepEligibility } from './step-eligibility';
 import { StepFundingSource } from './step-funding-source';
+import { StepFactoringConfig, type FactoringConfigData } from './step-factoring-config';
 import { StepApproval } from './step-approval';
 import { StepNotifications } from './step-notifications';
 import { StepReview } from './step-review';
@@ -82,7 +83,47 @@ export interface ProductFormState {
   autoApproveThreshold: string;
   slaHours: string;
   notifications: { event: string; channel: 'SMS' | 'EMAIL'; template: string }[];
+  /** Invoice-factoring product configuration. Present only when type === 'INVOICE_FACTORING'. */
+  factoringConfig?: FactoringConfigData;
 }
+
+/** Default factoring config used when productType becomes invoice_financing. */
+const DEFAULT_FACTORING_CONFIG: FactoringConfigData = {
+  advanceRateMin: '',
+  advanceRateMax: '',
+  advanceRateDefault: '',
+  discountRateAnnual: '',
+  serviceFeeFlat: '',
+  defaultRecourseType: 'with_recourse',
+  nonRecourseEligibility: {
+    minDebtorRiskScore: '',
+    minDebtorPaymentHistory: '',
+    maxInvoiceTenorDays: '',
+    feeMultiplier: '',
+  },
+  verificationRules: {
+    autoVerifyBelow: '',
+    manualVerifyAbove: '',
+    manualVerifyNewSeller: true,
+    manualVerifyNewDebtor: true,
+  },
+  concentrationLimits: {
+    maxDebtorExposurePercent: '',
+    maxDebtorExposureAmount: '',
+    maxIndustryExposurePercent: '',
+    maxSellerDebtorPercent: '',
+  },
+  agingThresholds: {
+    graceEndDpd: '',
+    overdueEndDpd: '',
+    seriouslyOverdueEndDpd: '',
+    defaultDpd: '',
+  },
+  reserveRelease: {
+    auto: true,
+    manualReleaseAbove: '',
+  },
+};
 
 const DEFAULT_STATE: ProductFormState = {
   code: '',
@@ -130,6 +171,41 @@ interface ProductWizardProps {
   productId?: string;
   mode?: 'create' | 'edit';
 }
+
+/** Logical step identifiers; numeric step → id depends on the active sequence. */
+export type StepId =
+  | 'basic-info'
+  | 'financial-terms'
+  | 'fees'
+  | 'eligibility'
+  | 'funding-source'
+  | 'factoring-config'
+  | 'approval'
+  | 'notifications'
+  | 'review';
+
+const STEP_IDS_DEFAULT: StepId[] = [
+  'basic-info',
+  'financial-terms',
+  'fees',
+  'eligibility',
+  'funding-source',
+  'approval',
+  'notifications',
+  'review',
+];
+
+const STEP_IDS_FACTORING: StepId[] = [
+  'basic-info',
+  'financial-terms',
+  'fees',
+  'eligibility',
+  'funding-source',
+  'factoring-config',
+  'approval',
+  'notifications',
+  'review',
+];
 
 function buildFeeEntry(fee: { type: 'FLAT' | 'PERCENTAGE'; amount: string }) {
   return { type: fee.type.toLowerCase(), amount: fee.amount ? Number(fee.amount) : 0 };
@@ -185,6 +261,50 @@ function buildMutationInput(form: ProductFormState, mode: 'create' | 'edit' = 'c
     eligibilityRules,
     approvalThresholds,
   };
+
+  // Invoice-factoring product config — written to product.factoringConfig JSON.
+  if (form.type === 'INVOICE_FACTORING' && form.factoringConfig) {
+    const fc = form.factoringConfig;
+    const numOrNull = (s: string) => (s && s.trim() !== '' ? Number(s) : null);
+    const strOrNull = (s: string) => (s && s.trim() !== '' ? s.trim() : null);
+    base.factoringConfig = {
+      advanceRateMin: numOrNull(fc.advanceRateMin),
+      advanceRateMax: numOrNull(fc.advanceRateMax),
+      advanceRateDefault: numOrNull(fc.advanceRateDefault),
+      discountRateAnnual: numOrNull(fc.discountRateAnnual),
+      // Decimal-as-string for monetary amounts
+      serviceFeeFlat: strOrNull(fc.serviceFeeFlat),
+      defaultRecourseType: fc.defaultRecourseType,
+      nonRecourseEligibility: {
+        minDebtorRiskScore: numOrNull(fc.nonRecourseEligibility.minDebtorRiskScore),
+        minDebtorPaymentHistory: numOrNull(fc.nonRecourseEligibility.minDebtorPaymentHistory),
+        maxInvoiceTenorDays: numOrNull(fc.nonRecourseEligibility.maxInvoiceTenorDays),
+        feeMultiplier: numOrNull(fc.nonRecourseEligibility.feeMultiplier),
+      },
+      verificationRules: {
+        autoVerifyBelow: strOrNull(fc.verificationRules.autoVerifyBelow),
+        manualVerifyAbove: strOrNull(fc.verificationRules.manualVerifyAbove),
+        manualVerifyNewSeller: fc.verificationRules.manualVerifyNewSeller,
+        manualVerifyNewDebtor: fc.verificationRules.manualVerifyNewDebtor,
+      },
+      concentrationLimits: {
+        maxDebtorExposurePercent: numOrNull(fc.concentrationLimits.maxDebtorExposurePercent),
+        maxDebtorExposureAmount: strOrNull(fc.concentrationLimits.maxDebtorExposureAmount),
+        maxIndustryExposurePercent: numOrNull(fc.concentrationLimits.maxIndustryExposurePercent),
+        maxSellerDebtorPercent: numOrNull(fc.concentrationLimits.maxSellerDebtorPercent),
+      },
+      agingThresholds: {
+        graceEndDpd: numOrNull(fc.agingThresholds.graceEndDpd),
+        overdueEndDpd: numOrNull(fc.agingThresholds.overdueEndDpd),
+        seriouslyOverdueEndDpd: numOrNull(fc.agingThresholds.seriouslyOverdueEndDpd),
+        defaultDpd: numOrNull(fc.agingThresholds.defaultDpd),
+      },
+      reserveRelease: {
+        auto: fc.reserveRelease.auto,
+        manualReleaseAbove: strOrNull(fc.reserveRelease.manualReleaseAbove),
+      },
+    };
+  }
 
   // Map frontend UI enum values → Prisma enum values
   const TYPE_TO_DB: Record<string, string> = {
@@ -286,6 +406,27 @@ export function ProductWizard({ initialData, productId, mode = 'create' }: Produ
 
   const saving = creating || updating || activating;
 
+  // Step sequence is dynamic: invoice-financing products have an extra
+  // "factoring config" step inserted after Funding Source.
+  const isFactoring = form.type === 'INVOICE_FACTORING';
+  const stepIds = useMemo<StepId[]>(
+    () => (isFactoring ? STEP_IDS_FACTORING : STEP_IDS_DEFAULT),
+    [isFactoring],
+  );
+  const totalSteps = stepIds.length;
+
+  // Ensure factoringConfig exists when type becomes invoice_financing.
+  useEffect(() => {
+    if (isFactoring && !form.factoringConfig) {
+      setForm((prev) => ({ ...prev, factoringConfig: { ...DEFAULT_FACTORING_CONFIG } }));
+    }
+  }, [isFactoring, form.factoringConfig]);
+
+  // Clamp current step if user changes type and shrinks the sequence.
+  useEffect(() => {
+    if (currentStep > totalSteps) setCurrentStep(totalSteps);
+  }, [totalSteps, currentStep]);
+
   const updateForm = useCallback((updates: Partial<ProductFormState>) => {
     setForm((prev) => ({ ...prev, ...updates }));
     // Clear errors as user edits — they'll be re-validated on Next
@@ -298,11 +439,13 @@ export function ProductWizard({ initialData, productId, mode = 'create' }: Produ
     }
   }, [showErrors, activationErrors]);
 
+  const currentStepId = stepIds[currentStep - 1];
+
   const goToStep = (step: number) => {
-    if (step >= 1 && step <= 8) {
+    if (step >= 1 && step <= totalSteps) {
       // Validate current step before allowing jump forward
       if (step > currentStep) {
-        const result = validateStep(currentStep, form);
+        const result = validateStep(currentStepId, form);
         if (!result.valid) {
           setStepErrors(result.errors);
           setShowErrors(true);
@@ -317,7 +460,7 @@ export function ProductWizard({ initialData, productId, mode = 'create' }: Produ
   };
 
   const handleNext = () => {
-    const result = validateStep(currentStep, form);
+    const result = validateStep(currentStepId, form);
     if (!result.valid) {
       setStepErrors(result.errors);
       setShowErrors(true);
@@ -327,7 +470,7 @@ export function ProductWizard({ initialData, productId, mode = 'create' }: Produ
     setStepErrors([]);
     setShowErrors(false);
     setCompletedSteps((prev) => new Set([...prev, currentStep]));
-    setCurrentStep((s) => Math.min(s + 1, 8));
+    setCurrentStep((s) => Math.min(s + 1, totalSteps));
   };
 
   const handleBack = () => {
@@ -343,7 +486,8 @@ export function ProductWizard({ initialData, productId, mode = 'create' }: Produ
       if (firstInvalid) {
         setStepErrors(firstInvalid.result.errors);
         setShowErrors(true);
-        setCurrentStep(firstInvalid.step);
+        const idx = stepIds.indexOf(firstInvalid.step);
+        if (idx >= 0) setCurrentStep(idx + 1);
         scrollToFirstError();
         return;
       }
@@ -359,7 +503,7 @@ export function ProductWizard({ initialData, productId, mode = 'create' }: Produ
       }
 
       // Also validate the current step to avoid saving bad partial data
-      const currentResult = validateStep(currentStep, form);
+      const currentResult = validateStep(currentStepId, form);
       if (!currentResult.valid) {
         setStepErrors(currentResult.errors);
         setShowErrors(true);
@@ -468,8 +612,8 @@ export function ProductWizard({ initialData, productId, mode = 'create' }: Produ
   const currentErrors = showErrors ? stepErrors : [];
 
   const renderStep = () => {
-    switch (currentStep) {
-      case 1:
+    switch (currentStepId) {
+      case 'basic-info':
         return (
           <StepBasicInfo
             data={{ code: codeLoading ? '...' : generatedCode, name: form.name, description: form.description, type: form.type, currency: form.currency }}
@@ -478,7 +622,7 @@ export function ProductWizard({ initialData, productId, mode = 'create' }: Produ
             errors={currentErrors}
           />
         );
-      case 2:
+      case 'financial-terms':
         return (
           <StepFinancialTerms
             data={{
@@ -493,7 +637,7 @@ export function ProductWizard({ initialData, productId, mode = 'create' }: Produ
             errors={currentErrors}
           />
         );
-      case 3:
+      case 'fees':
         return (
           <StepFees
             data={{
@@ -505,7 +649,7 @@ export function ProductWizard({ initialData, productId, mode = 'create' }: Produ
             errors={currentErrors}
           />
         );
-      case 4:
+      case 'eligibility':
         return (
           <StepEligibility
             data={{
@@ -516,7 +660,7 @@ export function ProductWizard({ initialData, productId, mode = 'create' }: Produ
             errors={currentErrors}
           />
         );
-      case 5:
+      case 'funding-source':
         return (
           <StepFundingSource
             data={{
@@ -532,7 +676,23 @@ export function ProductWizard({ initialData, productId, mode = 'create' }: Produ
             errors={currentErrors}
           />
         );
-      case 6:
+      case 'factoring-config':
+        return (
+          <StepFactoringConfig
+            data={form.factoringConfig ?? DEFAULT_FACTORING_CONFIG}
+            currency={form.currency}
+            onChange={(updates) =>
+              updateForm({
+                factoringConfig: {
+                  ...(form.factoringConfig ?? DEFAULT_FACTORING_CONFIG),
+                  ...updates,
+                } as FactoringConfigData,
+              })
+            }
+            errors={currentErrors}
+          />
+        );
+      case 'approval':
         return (
           <StepApproval
             data={{
@@ -544,7 +704,7 @@ export function ProductWizard({ initialData, productId, mode = 'create' }: Produ
             errors={currentErrors}
           />
         );
-      case 7: {
+      case 'notifications': {
         const notifResult = validateNotifications(form);
         return (
           <StepNotifications
@@ -556,7 +716,7 @@ export function ProductWizard({ initialData, productId, mode = 'create' }: Produ
           />
         );
       }
-      case 8:
+      case 'review':
         return (
           <StepReview
             data={{ ...form, code: generatedCode }}
@@ -571,6 +731,7 @@ export function ProductWizard({ initialData, productId, mode = 'create' }: Produ
   return (
     <div>
       <WizardProgress
+        stepIds={stepIds}
         currentStep={currentStep}
         completedSteps={completedSteps}
         onStepClick={goToStep}
@@ -611,7 +772,7 @@ export function ProductWizard({ initialData, productId, mode = 'create' }: Produ
             }
           </button>
 
-          {currentStep < 8 ? (
+          {currentStep < totalSteps ? (
             <button
               type="button"
               onClick={handleNext}

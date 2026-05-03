@@ -4,26 +4,42 @@ import { cn } from '@/lib/utils';
 import { Check } from 'lucide-react';
 import { useI18n } from '@/lib/i18n/i18n-context';
 
+type WizardStepId =
+  | 'basic-info'
+  | 'financial-terms'
+  | 'fees'
+  | 'eligibility'
+  | 'funding-source'
+  | 'factoring-config'
+  | 'approval'
+  | 'notifications'
+  | 'review';
+
 interface WizardProgressProps {
+  /** Ordered list of step ids actually visible in this wizard run. */
+  stepIds: WizardStepId[];
   currentStep: number;
   completedSteps: Set<number>;
   onStepClick: (step: number) => void;
   errorStep?: number;
 }
 
-export function WizardProgress({ currentStep, completedSteps, onStepClick, errorStep }: WizardProgressProps) {
+export function WizardProgress({ stepIds, currentStep, completedSteps, onStepClick, errorStep }: WizardProgressProps) {
   const { t } = useI18n();
 
-  const STEPS = [
-    { number: 1, label: t('products.wizard.basicInfo') },
-    { number: 2, label: t('products.wizard.financialTerms') },
-    { number: 3, label: t('products.wizard.fees') },
-    { number: 4, label: t('products.wizard.eligibility') },
-    { number: 5, label: t('products.wizard.fundingSource') },
-    { number: 6, label: t('products.wizard.approval') },
-    { number: 7, label: t('products.wizard.notifications') },
-    { number: 8, label: t('products.wizard.review') },
-  ];
+  const LABEL_KEY: Record<WizardStepId, string> = {
+    'basic-info': 'products.wizard.basicInfo',
+    'financial-terms': 'products.wizard.financialTerms',
+    'fees': 'products.wizard.feesStep',
+    'eligibility': 'products.wizard.eligibility',
+    'funding-source': 'products.wizard.fundingSource',
+    'factoring-config': 'products.wizard.factoringConfigStep',
+    'approval': 'products.wizard.approval',
+    'notifications': 'products.wizard.notificationsStep',
+    'review': 'products.wizard.reviewStep',
+  };
+
+  const STEPS = stepIds.map((id, idx) => ({ number: idx + 1, label: t(LABEL_KEY[id]) }));
 
   return (
     <div className="flex items-center justify-between mb-8">

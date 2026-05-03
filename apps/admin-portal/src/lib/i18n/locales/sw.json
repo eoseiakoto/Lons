@@ -6,6 +6,7 @@
     "products": "Bidhaa",
     "lenders": "Wakopeshaji",
     "merchants": "Merchants",
+    "debtors": "Debtors",
     "customers": "Wateja",
     "loans": "Mikopo",
     "collections": "Ukusanyaji",
@@ -411,6 +412,81 @@
         "fieldMinAmount": "Minimum Amount",
         "fieldMinTenor": "Minimum Tenor",
         "missingTemplates": "Recommended notification templates missing for: {{events}}. These help ensure customers are informed about key loan events."
+      },
+      "feesStep": "Fees",
+      "notificationsStep": "Notifications",
+      "reviewStep": "Review",
+      "factoringConfigStep": "Factoring Config",
+      "factoring": {
+        "title": "Invoice Factoring Configuration",
+        "description": "Configure advance rates, recourse, verification, and concentration limits for invoice factoring.",
+        "advanceRateRange": "Advance Rate Range",
+        "advanceRateRangeHelp": "Allowed minimum, maximum, and default advance rate (% of invoice face value).",
+        "advanceRateMin": "Minimum Advance Rate (%)",
+        "advanceRateMax": "Maximum Advance Rate (%)",
+        "advanceRateDefault": "Default Advance Rate (%)",
+        "feesAndDiscount": "Discount Rate & Service Fee",
+        "discountRateAnnual": "Discount Rate (Annual %)",
+        "discountRateHelp": "Annual discount rate applied pro-rata to the invoice tenor.",
+        "serviceFeeFlat": "Service Fee (flat)",
+        "defaultRecourseType": "Default Recourse Type",
+        "defaultRecourseTypeHelp": "How defaults are handled by default for invoices funded under this product.",
+        "recourse": {
+          "withRecourse": "With Recourse — collect from seller on default",
+          "withoutRecourse": "Without Recourse — lender absorbs default loss"
+        },
+        "nonRecourseEligibility": "Non-Recourse Eligibility",
+        "nonRecourseEligibilityHelp": "Thresholds an invoice must meet for non-recourse funding.",
+        "minDebtorRiskScore": "Minimum Debtor Risk Score",
+        "minDebtorPaymentHistory": "Minimum Debtor Payment History (count)",
+        "maxInvoiceTenorDays": "Maximum Invoice Tenor (days)",
+        "feeMultiplier": "Fee Multiplier",
+        "verificationRules": "Verification Rules",
+        "verificationRulesHelp": "When invoices auto-verify vs. require manual operator review.",
+        "autoVerifyBelow": "Auto-Verify Below",
+        "manualVerifyAbove": "Manual-Verify Above",
+        "manualVerifyNewSeller": "Require manual verification for new sellers",
+        "manualVerifyNewDebtor": "Require manual verification for new debtors",
+        "concentrationLimits": "Concentration Limits",
+        "concentrationLimitsHelp": "Caps that prevent over-concentration of exposure to any one debtor or industry.",
+        "maxDebtorExposurePercent": "Max Debtor Exposure (%)",
+        "maxDebtorExposureAmount": "Max Debtor Exposure (amount)",
+        "maxIndustryExposurePercent": "Max Industry Exposure (%)",
+        "maxSellerDebtorPercent": "Max Seller-Debtor Concentration (%)",
+        "agingThresholds": "Aging Thresholds (DPD)",
+        "agingThresholdsHelp": "Day-count thresholds that drive aging classification and recourse triggers. Must be ascending.",
+        "graceEndDpd": "Grace Ends (DPD)",
+        "overdueEndDpd": "Overdue Ends (DPD)",
+        "seriouslyOverdueEndDpd": "Seriously Overdue Ends (DPD)",
+        "defaultDpd": "Default (DPD)",
+        "reserveRelease": "Reserve Release",
+        "reserveReleaseAuto": "Release reserve automatically on payment confirmation",
+        "reserveManualReleaseAbove": "Require manual approval above",
+        "reserveManualReleaseAboveHelp": "Invoices above this face value require operator approval to release the reserve. Leave blank to disable.",
+        "placeholder": {
+          "advanceRateMin": "e.g. 60",
+          "advanceRateMax": "e.g. 95",
+          "advanceRateDefault": "e.g. 80",
+          "discountRate": "e.g. 12.5",
+          "serviceFeeFlat": "e.g. 500.00",
+          "minDebtorRiskScore": "e.g. 70",
+          "minDebtorPaymentHistory": "e.g. 6",
+          "maxInvoiceTenorDays": "e.g. 90",
+          "feeMultiplier": "e.g. 1.5",
+          "autoVerifyBelow": "e.g. 50000.00",
+          "manualVerifyAbove": "e.g. 200000.00",
+          "exposurePercent": "e.g. 15",
+          "exposureAmount": "e.g. 500000.00",
+          "graceEndDpd": "e.g. 7",
+          "overdueEndDpd": "e.g. 30",
+          "seriouslyOverdueEndDpd": "e.g. 60",
+          "defaultDpd": "e.g. 60",
+          "manualReleaseAbove": "e.g. 100000.00"
+        },
+        "validation": {
+          "defaultOutsideRange": "Default advance rate must be between minimum and maximum.",
+          "agingMustAscend": "Aging thresholds must be strictly ascending (grace < overdue < seriously overdue ≤ default)."
+        }
       }
     },
     "list": {
@@ -567,6 +643,22 @@
     "noCustomersYet": "No customers yet.",
     "credit": "Credit",
     "screeningTab": "Screening",
+    "invoicesTab": "Invoices",
+    "invoices": {
+      "title": "Invoices",
+      "empty": "This customer has no invoices yet.",
+      "loadError": "Failed to load invoices.",
+      "totalCount": "{{count}} total",
+      "column": {
+        "invoiceNumber": "Invoice #",
+        "debtor": "Debtor",
+        "faceValue": "Face Value",
+        "advanceAmount": "Advance",
+        "netDisbursement": "Net Disbursement",
+        "status": "Status",
+        "dueDate": "Due Date"
+      }
+    },
     "eyebrowPrefix": "Customer",
     "anonymizedTag": "[Anonymized]",
     "anonymizedOn": "Anonymized {{date}}",
@@ -974,6 +1066,40 @@
     "actionHistory": "Historia ya Vitendo",
     "noActionsYet": "Hakuna vitendo vilivyorekodiwa bado.",
     "promiseDateLabel": "Tarehe ya ahadi:",
+    "factoringDefaults": {
+      "title": "Defaulted Invoices",
+      "subtitle": "Invoices past the default threshold — debtor or seller collection depending on recourse.",
+      "empty": "No defaulted invoices.",
+      "loadError": "Failed to load defaulted invoices.",
+      "recoveryTarget": "Target",
+      "daysShort": "{{days}}d",
+      "summary": {
+        "debtorCollection": "{{count}} debtor collection",
+        "sellerCollection": "{{count}} seller collection",
+        "total": "{{count}} total"
+      },
+      "column": {
+        "invoice": "Invoice",
+        "parties": "Parties",
+        "seller": "Seller",
+        "debtor": "Debtor",
+        "faceValue": "Face Value",
+        "outstanding": "Outstanding",
+        "recourseType": "Recourse",
+        "daysSinceDefault": "Days Since Default",
+        "graceStatus": "Grace Status",
+        "dueDate": "Due"
+      },
+      "recourse": {
+        "withRecourse": "With Recourse",
+        "withoutRecourse": "Without Recourse"
+      },
+      "grace": {
+        "inGrace": "In grace · {{days}}d remaining",
+        "elapsed": "Grace elapsed",
+        "nonRecourseWriteOff": "Non-recourse write-off"
+      }
+    },
     "action": {
       "drawerTitle": "Collections Action",
       "contractNotFound": "Contract not found",
@@ -1913,6 +2039,377 @@
       "reactivate": "Failed to reactivate",
       "suspend": "Failed to suspend",
       "deactivate": "Failed to deactivate"
+    }
+  },
+  "debtors": {
+    "title": "Debtors",
+    "eyebrow": "Invoice factoring · counterparties",
+    "subtitle": "Companies that owe payment on factored invoices.",
+    "subtitleWithCount": "{{count}} debtors registered. Counterparties for invoice factoring.",
+    "addDebtor": "Add Debtor",
+    "editDebtor": "Edit Debtor",
+    "status": {
+      "active": "Active",
+      "underReview": "Under review",
+      "suspended": "Suspended",
+      "blacklisted": "Blacklisted"
+    },
+    "risk": {
+      "tierLow": "Low",
+      "tierMedium": "Medium",
+      "tierHigh": "High",
+      "notAvailable": "Not assessed",
+      "tooltip": "Score {{score}} · {{tier}} risk"
+    },
+    "actions": {
+      "suspend": "Suspend",
+      "blacklist": "Blacklist",
+      "reactivate": "Reactivate"
+    },
+    "list": {
+      "filterByStatus": "Filter by status",
+      "searchPlaceholder": "Search by company name or registration number…",
+      "countLabel": "{{count}} on this page",
+      "empty": "No debtors found. Add a debtor to start factoring invoices against them.",
+      "column": {
+        "companyName": "Company",
+        "registrationNumber": "Registration",
+        "industrySector": "Industry",
+        "country": "Country",
+        "riskScore": "Risk score",
+        "totalExposure": "Exposure",
+        "status": "Status"
+      }
+    },
+    "form": {
+      "companyName": "Company name",
+      "tradingName": "Trading name",
+      "registrationNumber": "Registration number",
+      "taxId": "Tax ID",
+      "country": "Country (ISO-3)",
+      "industrySector": "Industry sector",
+      "contactName": "Contact name",
+      "contactEmail": "Contact email",
+      "contactPhone": "Contact phone",
+      "paymentTerms": "Payment terms",
+      "externalCreditRating": "External credit rating",
+      "exposureLimit": "Exposure limit",
+      "exposureLimitHint": "Maximum total outstanding exposure for this debtor. Decimal with up to 4 fractional digits.",
+      "legend": {
+        "company": "Company information",
+        "contact": "Primary contact",
+        "commercial": "Commercial terms"
+      },
+      "placeholder": {
+        "companyName": "Acme Industries Ltd.",
+        "tradingName": "Acme",
+        "registrationNumber": "RC-12345678",
+        "taxId": "TIN-987654",
+        "country": "GHA",
+        "industrySector": "Manufacturing",
+        "contactName": "Jane Mensah",
+        "contactEmail": "ap@acme.example",
+        "contactPhone": "+233...",
+        "paymentTerms": "Net 30",
+        "externalCreditRating": "BBB+",
+        "exposureLimit": "100000.0000"
+      },
+      "error": {
+        "fieldRequired": "{{field}} is required",
+        "countryInvalid": "Country must be a 3-letter ISO code",
+        "exposureLimitInvalid": "Exposure limit must be a number with up to 4 decimal places",
+        "exposureLimitNegative": "Exposure limit cannot be negative"
+      }
+    },
+    "confirm": {
+      "suspendTitle": "Suspend debtor",
+      "suspendMessage": "Suspend {{name}}? New invoices against this debtor will be blocked until reactivated.",
+      "blacklistTitle": "Blacklist debtor",
+      "blacklistMessage": "Blacklist {{name}}? This permanently blocks all future invoices against this debtor.",
+      "reasonLabel": "Reason",
+      "reasonPlaceholder": "e.g. fraud_suspected"
+    },
+    "toast": {
+      "created": "Debtor created",
+      "updated": "Debtor updated",
+      "suspended": "Debtor suspended",
+      "blacklisted": "Debtor blacklisted",
+      "reactivated": "Debtor reactivated",
+      "errorSave": "Failed to save debtor",
+      "errorSuspend": "Failed to suspend debtor",
+      "errorBlacklist": "Failed to blacklist debtor",
+      "errorReactivate": "Failed to reactivate debtor"
+    },
+    "detail": {
+      "notFound": "Debtor not found",
+      "reassessRisk": "Reassess risk",
+      "section": {
+        "contact": "Contact information",
+        "risk": "Risk assessment",
+        "paymentHistory": "Payment history",
+        "invoices": "Invoices"
+      },
+      "externalRating": "External rating",
+      "reliability": "Reliability",
+      "factorBreakdown": "Factor breakdown",
+      "factor": {
+        "paymentHistory": "Payment history",
+        "industry": "Industry risk",
+        "country": "Country risk",
+        "default": "Default penalty"
+      },
+      "avgPaymentDays": "Avg payment days",
+      "disputeCount": "Disputes",
+      "defaultCount": "Defaults",
+      "daysCount": "{{count}} days",
+      "exposureTitle": "Exposure",
+      "exposureOf": "of {{limit}}",
+      "noLimitSet": "No exposure limit set",
+      "exposureUtilization": "Exposure utilization",
+      "noInvoices": "No invoices for this debtor yet."
+    }
+  },
+  "factoring": {
+    "eyebrow": "Origination · invoice factoring",
+    "pipelineTitle": "Invoice pipeline",
+    "pipelineSubtitle": "Track invoice submissions through verification, offer, funding, and settlement.",
+    "pipelineSubtitleWithCount": "{{count}} invoices in the pipeline.",
+    "viewConcentration": "Concentration dashboard",
+    "view": {
+      "list": "List",
+      "kanban": "Kanban"
+    },
+    "status": {
+      "submitted": "Submitted",
+      "underReview": "Under review",
+      "verified": "Verified",
+      "offerGenerated": "Offer generated",
+      "offerAccepted": "Offer accepted",
+      "funded": "Funded",
+      "debtorNotified": "Debtor notified",
+      "paymentReceived": "Payment received",
+      "reserveReleased": "Reserve released",
+      "settled": "Settled",
+      "disputed": "Disputed",
+      "defaulted": "Defaulted",
+      "cancelled": "Cancelled",
+      "rejected": "Rejected"
+    },
+    "filter": {
+      "byStatus": "Filter by status",
+      "searchPlaceholder": "Search by invoice number…",
+      "sellerPlaceholder": "Filter by seller ID…",
+      "debtorPlaceholder": "Filter by debtor ID…",
+      "dateFromLabel": "Due date from",
+      "dateToLabel": "Due date to",
+      "amountMinLabel": "Amount min",
+      "amountMaxLabel": "Amount max",
+      "amountMinPlaceholder": "Min amount",
+      "amountMaxPlaceholder": "Max amount"
+    },
+    "list": {
+      "empty": "No invoices match the current filters.",
+      "column": {
+        "invoiceNumber": "Invoice #",
+        "seller": "Seller",
+        "debtor": "Debtor",
+        "faceValue": "Face value",
+        "advancedAmount": "Advanced",
+        "status": "Status",
+        "dueDate": "Due date",
+        "dueTiming": "Timing"
+      },
+      "action": {
+        "verify": "Verify",
+        "recordPayment": "Record payment"
+      },
+      "dueToday": "Due today",
+      "daysToDue": "in {{count}} days",
+      "daysPastDue": "{{count}} days past due"
+    },
+    "kanban": {
+      "empty": "No invoices",
+      "dueOn": "Due {{date}}",
+      "column": {
+        "review": "Submitted · review",
+        "verified": "Verified",
+        "offer": "Offer",
+        "funded": "Funded · notified",
+        "payment": "Payment received",
+        "completed": "Settled",
+        "issues": "Disputed · defaulted"
+      }
+    },
+    "detail": {
+      "title": "Invoice",
+      "eyebrow": "Invoice factoring",
+      "notFound": "Invoice not found",
+      "subtitle": "{{faceValue}} · due {{dueDate}}",
+      "financialTerms": "Financial terms",
+      "faceValue": "Face value",
+      "advanceRate": "Advance rate",
+      "advancedAmount": "Advanced amount",
+      "reserveAmount": "Reserve amount",
+      "discountFee": "Discount fee",
+      "serviceFee": "Service fee",
+      "netDisbursement": "Net disbursement",
+      "recourseType": "Recourse",
+      "dueDate": "Due date",
+      "debtorSection": "Debtor",
+      "notifiedAt": "Notified at",
+      "notNotified": "Not yet notified",
+      "notificationChannel": "Notification channel",
+      "notificationChannelEmail": "Email",
+      "paymentTracking": "Payment tracking",
+      "amountReceived": "Amount received",
+      "paymentRef": "Payment reference",
+      "remaining": "Remaining",
+      "paymentState": "Payment state",
+      "paymentStateNone": "Awaiting payment",
+      "paymentStatePartial": "Partial",
+      "paymentStateFull": "Fully paid",
+      "reserveStatus": "Reserve status",
+      "reserveHeld": "Reserve held",
+      "reserveReleased": "Released",
+      "reservePending": "Pending release",
+      "reserveAutoReleased": "Auto-released",
+      "reserveReleasedLabel": "Reserve release"
+    },
+    "timeline": {
+      "title": "Lifecycle timeline",
+      "branchNotice": "Invoice deviated from the happy path: {{state}}.",
+      "submitted": "Submitted",
+      "underReview": "Under review",
+      "verified": "Verified",
+      "offerGenerated": "Offer generated",
+      "offerAccepted": "Offer accepted",
+      "funded": "Funded",
+      "debtorNotified": "Debtor notified",
+      "paymentReceived": "Payment received",
+      "reserveReleased": "Reserve released",
+      "settled": "Settled",
+      "disputed": "Disputed",
+      "defaulted": "Defaulted",
+      "cancelled": "Cancelled",
+      "rejected": "Rejected"
+    },
+    "actions": {
+      "panelTitle": "Operator actions",
+      "approve": "Approve verification",
+      "reject": "Reject verification",
+      "generateOffer": "Generate offer",
+      "acceptOffer": "Accept offer",
+      "declineOffer": "Decline offer",
+      "disburseAdvance": "Disburse advance",
+      "notifyDebtor": "Notify debtor",
+      "recordPayment": "Record debtor payment",
+      "releaseReserve": "Release reserve",
+      "reserveReleased": "Reserve already released",
+      "dispute": "Dispute"
+    },
+    "verify": {
+      "titleApprove": "Approve invoice verification",
+      "titleReject": "Reject invoice verification",
+      "descriptionApprove": "Mark this invoice as verified. The seller will be eligible for an offer.",
+      "descriptionReject": "Reject this invoice. The seller will be notified of the rejection reason.",
+      "notesLabelOptional": "Notes (optional)",
+      "notesLabelRequired": "Rejection reason",
+      "notesPlaceholder": "Add context for the audit trail…",
+      "confirmApprove": "Approve",
+      "confirmReject": "Reject",
+      "toastApproved": "Invoice verification approved",
+      "toastRejected": "Invoice verification rejected",
+      "errorGeneric": "Failed to resolve invoice verification",
+      "error": {
+        "notesRequired": "A rejection reason is required."
+      }
+    },
+    "offer": {
+      "drawerTitle": "Invoice offer",
+      "descriptionGenerate": "Generate a factoring offer for this invoice. The system will compute the advance, reserve, and fees from the product configuration.",
+      "recourseTypeLabel": "Recourse type",
+      "recourseWith": "With recourse",
+      "recourseWithout": "Without recourse",
+      "recourseHint": "With-recourse offers transfer credit risk back to the seller on default.",
+      "financialTerms": "Proposed financial terms",
+      "expiresAt": "Offer expires",
+      "declineReasonLabel": "Decline reason (optional)",
+      "declineReasonPlaceholder": "e.g. terms_unacceptable",
+      "confirmGenerate": "Generate offer",
+      "confirmAccept": "Accept offer",
+      "confirmDecline": "Decline offer",
+      "toastAccepted": "Offer accepted",
+      "toastDeclined": "Offer declined",
+      "errorGenerate": "Failed to generate offer",
+      "errorAccept": "Failed to accept offer",
+      "errorDecline": "Failed to decline offer"
+    },
+    "disburse": {
+      "toast": "Advance disbursed to seller wallet",
+      "error": "Failed to disburse advance"
+    },
+    "notify": {
+      "toast": "Debtor notification dispatched",
+      "error": "Failed to notify debtor"
+    },
+    "reserve": {
+      "toast": "Reserve released to seller",
+      "error": "Failed to release reserve"
+    },
+    "recordPayment": {
+      "title": "Record debtor payment",
+      "description": "Record a payment received from the debtor against this invoice (face value {{faceValue}} {{currency}}).",
+      "amountLabel": "Amount received ({{currency}})",
+      "paymentRefLabel": "Payment reference",
+      "paymentRefPlaceholder": "Wallet/bank transaction reference",
+      "confirm": "Record payment",
+      "toastRecorded": "Debtor payment recorded",
+      "errorGeneric": "Failed to record payment",
+      "error": {
+        "amountInvalid": "Amount must be a positive number with up to 4 decimal places.",
+        "amountPositive": "Amount must be greater than zero.",
+        "paymentRefRequired": "Payment reference is required."
+      }
+    },
+    "dispute": {
+      "title": "Dispute invoice",
+      "description": "Mark this invoice as disputed. Document the reason — this triggers downstream collections and recourse logic.",
+      "reasonLabel": "Dispute reason",
+      "reasonPlaceholder": "e.g. goods_not_delivered, invoice_incorrect, debtor_dispute",
+      "confirm": "Dispute invoice",
+      "toast": "Invoice marked as disputed",
+      "error": {
+        "reasonRequired": "A dispute reason is required.",
+        "generic": "Failed to mark invoice as disputed."
+      }
+    },
+    "concentration": {
+      "title": "Concentration dashboard",
+      "subtitle": "Monitor portfolio concentration across debtors, industries, and seller-debtor pairs.",
+      "limitsTitle": "Limit utilization",
+      "topDebtorsTitle": "Top debtors by exposure",
+      "industryTitle": "Industry breakdown",
+      "noLimits": "No concentration limits configured.",
+      "noDebtors": "No debtor exposure recorded yet.",
+      "noIndustries": "No industry exposure recorded yet.",
+      "unspecifiedIndustry": "Unspecified",
+      "healthy": "Healthy",
+      "watch": "Watch",
+      "breach": "Breach risk",
+      "limit": {
+        "debtorPercent": "Per debtor (%)",
+        "debtorAbsolute": "Per debtor (abs)",
+        "industryPercent": "Per industry (%)",
+        "sellerDebtorPercent": "Seller-debtor (%)",
+        "unknown": "Unknown limit"
+      },
+      "column": {
+        "debtor": "Debtor",
+        "industry": "Industry",
+        "debtorCount": "Debtors",
+        "exposure": "Exposure",
+        "percentOfPortfolio": "Portfolio share"
+      }
     }
   },
   "screening": {

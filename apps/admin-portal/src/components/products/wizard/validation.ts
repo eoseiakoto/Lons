@@ -269,6 +269,213 @@ export function validateFundingSource(
   return { valid: errors.length === 0, errors };
 }
 
+// ─── Optional Factoring Step (only for invoice_financing products) ───
+function isPositiveNumeric(value: string): boolean {
+  if (!value || !value.trim()) return false;
+  const n = Number(value);
+  return !isNaN(n) && n >= 0;
+}
+
+function pushNumberError(
+  errors: FieldError[],
+  field: string,
+  value: string,
+  opts: { required?: boolean; min?: number; max?: number; integer?: boolean } = {},
+): void {
+  const { required = false, min, max, integer } = opts;
+  const empty = !value || !value.trim();
+  if (empty) {
+    if (required) errors.push({ field, messageKey: 'validation.required' });
+    return;
+  }
+  const n = Number(value);
+  if (isNaN(n)) {
+    errors.push({ field, messageKey: 'validation.invalidNumber' });
+    return;
+  }
+  if (integer && !Number.isInteger(n)) {
+    errors.push({ field, messageKey: 'validation.minIntValue', params: { min: min ?? 0 } });
+    return;
+  }
+  if (min !== undefined && n < min) {
+    errors.push({ field, messageKey: 'validation.minValue', params: { min } });
+    return;
+  }
+  if (max !== undefined && n > max) {
+    errors.push({ field, messageKey: 'validation.maxValue', params: { max } });
+  }
+}
+
+export function validateFactoringConfig(
+  form: ProductFormState,
+): StepValidationResult {
+  const errors: FieldError[] = [];
+  const fc = form.factoringConfig;
+  if (!fc) return { valid: true, errors };
+
+  // Advance rate range
+  pushNumberError(errors, 'factoringConfig.advanceRateMin', fc.advanceRateMin, {
+    required: true, min: 0, max: 100,
+  });
+  pushNumberError(errors, 'factoringConfig.advanceRateMax', fc.advanceRateMax, {
+    required: true, min: 0, max: 100,
+  });
+  pushNumberError(errors, 'factoringConfig.advanceRateDefault', fc.advanceRateDefault, {
+    required: true, min: 0, max: 100,
+  });
+  if (
+    isPositiveNumeric(fc.advanceRateMin) &&
+    isPositiveNumeric(fc.advanceRateMax) &&
+    Number(fc.advanceRateMin) >= Number(fc.advanceRateMax)
+  ) {
+    errors.push({
+      field: 'factoringConfig.advanceRateMax',
+      messageKey: 'validation.mustBeGreaterThan',
+      paramKeys: { field: 'products.wizard.factoring.advanceRateMin' },
+    });
+  }
+  if (
+    isPositiveNumeric(fc.advanceRateMin) &&
+    isPositiveNumeric(fc.advanceRateMax) &&
+    isPositiveNumeric(fc.advanceRateDefault)
+  ) {
+    const def = Number(fc.advanceRateDefault);
+    if (def < Number(fc.advanceRateMin) || def > Number(fc.advanceRateMax)) {
+      errors.push({
+        field: 'factoringConfig.advanceRateDefault',
+        messageKey: 'products.wizard.factoring.validation.defaultOutsideRange',
+      });
+    }
+  }
+
+  pushNumberError(errors, 'factoringConfig.discountRateAnnual', fc.discountRateAnnual, {
+    required: true, min: 0, max: 100,
+  });
+  pushNumberError(errors, 'factoringConfig.serviceFeeFlat', fc.serviceFeeFlat, {
+    required: false, min: 0,
+  });
+
+  // Non-recourse eligibility
+  pushNumberError(
+    errors,
+    'factoringConfig.nonRecourseEligibility.minDebtorRiskScore',
+    fc.nonRecourseEligibility.minDebtorRiskScore,
+    { min: 0, max: 100 },
+  );
+  pushNumberError(
+    errors,
+    'factoringConfig.nonRecourseEligibility.minDebtorPaymentHistory',
+    fc.nonRecourseEligibility.minDebtorPaymentHistory,
+    { min: 0, integer: true },
+  );
+  pushNumberError(
+    errors,
+    'factoringConfig.nonRecourseEligibility.maxInvoiceTenorDays',
+    fc.nonRecourseEligibility.maxInvoiceTenorDays,
+    { min: 1, integer: true },
+  );
+  pushNumberError(
+    errors,
+    'factoringConfig.nonRecourseEligibility.feeMultiplier',
+    fc.nonRecourseEligibility.feeMultiplier,
+    { min: 1 },
+  );
+
+  // Verification rules
+  pushNumberError(
+    errors,
+    'factoringConfig.verificationRules.autoVerifyBelow',
+    fc.verificationRules.autoVerifyBelow,
+    { min: 0 },
+  );
+  pushNumberError(
+    errors,
+    'factoringConfig.verificationRules.manualVerifyAbove',
+    fc.verificationRules.manualVerifyAbove,
+    { min: 0 },
+  );
+  if (
+    isPositiveNumeric(fc.verificationRules.autoVerifyBelow) &&
+    isPositiveNumeric(fc.verificationRules.manualVerifyAbove) &&
+    Number(fc.verificationRules.autoVerifyBelow) >=
+      Number(fc.verificationRules.manualVerifyAbove)
+  ) {
+    errors.push({
+      field: 'factoringConfig.verificationRules.manualVerifyAbove',
+      messageKey: 'validation.mustBeGreaterThan',
+      paramKeys: { field: 'products.wizard.factoring.autoVerifyBelow' },
+    });
+  }
+
+  // Concentration limits
+  pushNumberError(
+    errors,
+    'factoringConfig.concentrationLimits.maxDebtorExposurePercent',
+    fc.concentrationLimits.maxDebtorExposurePercent,
+    { min: 0, max: 100 },
+  );
+  pushNumberError(
+    errors,
+    'factoringConfig.concentrationLimits.maxDebtorExposureAmount',
+    fc.concentrationLimits.maxDebtorExposureAmount,
+    { min: 0 },
+  );
+  pushNumberError(
+    errors,
+    'factoringConfig.concentrationLimits.maxIndustryExposurePercent',
+    fc.concentrationLimits.maxIndustryExposurePercent,
+    { min: 0, max: 100 },
+  );
+  pushNumberError(
+    errors,
+    'factoringConfig.concentrationLimits.maxSellerDebtorPercent',
+    fc.concentrationLimits.maxSellerDebtorPercent,
+    { min: 0, max: 100 },
+  );
+
+  // Aging thresholds — must be ascending
+  const grace = fc.agingThresholds.graceEndDpd;
+  const overdue = fc.agingThresholds.overdueEndDpd;
+  const seriously = fc.agingThresholds.seriouslyOverdueEndDpd;
+  const def = fc.agingThresholds.defaultDpd;
+  pushNumberError(errors, 'factoringConfig.agingThresholds.graceEndDpd', grace, {
+    required: true, min: 0, integer: true,
+  });
+  pushNumberError(errors, 'factoringConfig.agingThresholds.overdueEndDpd', overdue, {
+    required: true, min: 0, integer: true,
+  });
+  pushNumberError(errors, 'factoringConfig.agingThresholds.seriouslyOverdueEndDpd', seriously, {
+    required: true, min: 0, integer: true,
+  });
+  pushNumberError(errors, 'factoringConfig.agingThresholds.defaultDpd', def, {
+    required: true, min: 0, integer: true,
+  });
+  const gN = Number(grace);
+  const oN = Number(overdue);
+  const sN = Number(seriously);
+  const dN = Number(def);
+  if (
+    isPositiveNumeric(grace) && isPositiveNumeric(overdue) && isPositiveNumeric(seriously) && isPositiveNumeric(def)
+  ) {
+    if (!(gN < oN && oN < sN && sN <= dN)) {
+      errors.push({
+        field: 'factoringConfig.agingThresholds.defaultDpd',
+        messageKey: 'products.wizard.factoring.validation.agingMustAscend',
+      });
+    }
+  }
+
+  // Reserve release
+  pushNumberError(
+    errors,
+    'factoringConfig.reserveRelease.manualReleaseAbove',
+    fc.reserveRelease.manualReleaseAbove,
+    { min: 0 },
+  );
+
+  return { valid: errors.length === 0, errors };
+}
+
 // ─── Step 6: Approval ─────────────────────────────────────────────
 export function validateApproval(
   data: Pick<ProductFormState, 'approvalWorkflow' | 'autoApproveThreshold' | 'slaHours'>,
@@ -361,6 +568,10 @@ export function validateForActivation(
   const step3 = validateFees(form);
   const step4 = validateEligibility(form);
   const step5 = validateFundingSource(form);
+  const stepFactoring =
+    form.type === 'INVOICE_FACTORING'
+      ? validateFactoringConfig(form)
+      : { valid: true, errors: [] as FieldError[] };
   const step6 = validateApproval(form);
   const step7 = validateNotifications(form);
 
@@ -371,15 +582,53 @@ export function validateForActivation(
     ...step3.errors,
     ...step4.errors,
     ...step5.errors,
+    ...stepFactoring.errors,
     ...step6.errors,
     ...step7.errors,
   ];
   return { valid: allErrors.length === 0, errors: allErrors };
 }
 
+/** Stable identifier per wizard step (decoupled from positional index). */
+export type WizardStepId =
+  | 'basic-info'
+  | 'financial-terms'
+  | 'fees'
+  | 'eligibility'
+  | 'funding-source'
+  | 'factoring-config'
+  | 'approval'
+  | 'notifications'
+  | 'review';
+
+/** Steps to run for full edit-mode validation (excludes review). */
+const VALIDATABLE_STEPS_DEFAULT: WizardStepId[] = [
+  'basic-info',
+  'financial-terms',
+  'fees',
+  'eligibility',
+  'funding-source',
+  'approval',
+  'notifications',
+];
+
+const VALIDATABLE_STEPS_FACTORING: WizardStepId[] = [
+  'basic-info',
+  'financial-terms',
+  'fees',
+  'eligibility',
+  'funding-source',
+  'factoring-config',
+  'approval',
+  'notifications',
+];
+
 // ─── Validate ALL steps at once (for edit-mode Save Changes) ─────
-export function validateAllSteps(form: ProductFormState): { step: number; result: StepValidationResult } | null {
-  for (let step = 1; step <= 7; step++) {
+export function validateAllSteps(form: ProductFormState): { step: WizardStepId; result: StepValidationResult } | null {
+  const sequence = form.type === 'INVOICE_FACTORING'
+    ? VALIDATABLE_STEPS_FACTORING
+    : VALIDATABLE_STEPS_DEFAULT;
+  for (const step of sequence) {
     const result = validateStep(step, form);
     if (!result.valid) {
       return { step, result };
@@ -389,23 +638,25 @@ export function validateAllSteps(form: ProductFormState): { step: number; result
 }
 
 // ─── Validate a specific step ─────────────────────────────────────
-export function validateStep(step: number, form: ProductFormState): StepValidationResult {
+export function validateStep(step: WizardStepId, form: ProductFormState): StepValidationResult {
   switch (step) {
-    case 1:
+    case 'basic-info':
       return validateBasicInfo(form);
-    case 2:
+    case 'financial-terms':
       return validateFinancialTerms(form);
-    case 3:
+    case 'fees':
       return validateFees(form);
-    case 4:
+    case 'eligibility':
       return validateEligibility(form);
-    case 5:
+    case 'funding-source':
       return validateFundingSource(form);
-    case 6:
+    case 'factoring-config':
+      return validateFactoringConfig(form);
+    case 'approval':
       return validateApproval(form);
-    case 7:
+    case 'notifications':
       return validateNotifications(form);
-    case 8:
+    case 'review':
       // Review step — no input validation needed (it's read-only)
       return { valid: true, errors: [] };
     default:
