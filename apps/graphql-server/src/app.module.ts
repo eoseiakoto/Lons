@@ -59,6 +59,7 @@ import { PlatformConfigResolver } from './graphql/resolvers/platform-config.reso
 import { ReportResolver } from './graphql/resolvers/report.resolver';
 import { OverdraftResolver } from './graphql/resolvers/overdraft.resolver';
 import { BnplResolver } from './graphql/resolvers/bnpl.resolver';
+import { FactoringResolver } from './graphql/resolvers/factoring.resolver';
 import { DebugLogService } from './graphql/services/debug-log.service';
 import { GraphqlExceptionFilter } from './filters/graphql-exception.filter';
 import { SubscriptionModule } from './subscriptions/subscription.module';
@@ -132,6 +133,7 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
     ReportResolver,
     OverdraftResolver,
     BnplResolver,
+    FactoringResolver,
     PlatformConfigResolver,
     DebugLogService,
     {

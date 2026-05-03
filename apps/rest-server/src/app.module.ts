@@ -24,6 +24,7 @@ import { ApiKeyRestModule } from './api-key/api-key.module';
 import { PublicModule } from './public/public.module';
 import { WalletWebhookModule } from './wallet-webhook/wallet-webhook.module';
 import { BnplRestModule } from './bnpl/bnpl.module';
+import { FactoringRestModule } from './factoring/factoring.module';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { BnplRestModule } from './bnpl/bnpl.module';
     PublicModule,
     WalletWebhookModule,
     BnplRestModule,
+    FactoringRestModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantThrottlerGuard },
