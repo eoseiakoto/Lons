@@ -65,7 +65,7 @@ export class AuditService {
         );
 
         await tx.auditLog.update({
-          where: { id: entry.id },
+          where: { id_createdAt: { id: entry.id, createdAt: entry.createdAt } },
           data: { entryHash },
         });
       });
@@ -73,6 +73,83 @@ export class AuditService {
       // Audit logging must never break the primary operation
       this.logger.error('Failed to write audit log', error);
     }
+  }
+
+  async findAllCrossTenant(
+    filters?: {
+      tenantId?: string;
+      actorType?: string;
+      action?: string;
+      resourceType?: string;
+      dateFrom?: Date;
+      dateTo?: Date;
+      search?: string;
+    },
+    take: number = 50,
+    cursor?: string,
+  ) {
+    const where: Prisma.AuditLogWhereInput = {};
+    if (filters?.tenantId) where.tenantId = filters.tenantId;
+    if (filters?.actorType) where.actorType = filters.actorType as ActorType;
+    if (filters?.action) where.action = filters.action;
+    if (filters?.resourceType) where.resourceType = filters.resourceType;
+    if (filters?.dateFrom || filters?.dateTo) {
+      const createdAt: Prisma.DateTimeFilter = {};
+      if (filters?.dateFrom) createdAt.gte = filters.dateFrom;
+      if (filters?.dateTo) createdAt.lte = filters.dateTo;
+      where.createdAt = createdAt;
+    }
+    if (filters?.search) {
+      where.OR = [
+        { action: { contains: filters.search, mode: 'insensitive' } },
+        { resourceType: { contains: filters.search, mode: 'insensitive' } },
+        { resourceId: filters.search },
+      ];
+    }
+
+    let cursorClause = {};
+    if (cursor) {
+      const cursorEntry = await this.prisma.auditLog.findFirst({
+        where: { id: cursor },
+        select: { id: true, createdAt: true },
+      });
+      if (cursorEntry) {
+        cursorClause = {
+          cursor: { id_createdAt: { id: cursorEntry.id, createdAt: cursorEntry.createdAt } },
+          skip: 1,
+        };
+      }
+    }
+
+    const logs = await this.prisma.auditLog.findMany({
+      where,
+      take: take + 1,
+      ...cursorClause,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // Look up tenant names
+    const tenantIds = [...new Set(logs.map((l) => l.tenantId))];
+    const tenants = tenantIds.length > 0
+      ? await this.prisma.tenant.findMany({
+          where: { id: { in: tenantIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+    const tenantMap = new Map(tenants.map((t) => [t.id, t.name]));
+
+    const items = logs.slice(0, take).map((log) => ({
+      ...log,
+      tenantName: tenantMap.get(log.tenantId) ?? 'Unknown',
+      // Strip sensitive before/after values for cross-tenant queries
+      beforeValue: undefined,
+      afterValue: undefined,
+    }));
+
+    return {
+      items,
+      hasMore: logs.length > take,
+    };
   }
 
   async findMany(
@@ -100,10 +177,26 @@ export class AuditService {
       where.createdAt = createdAt;
     }
 
+    // AuditLog uses compound PK (id, createdAt) for partitioning.
+    // Resolve the cursor entry to get both fields.
+    let cursorClause = {};
+    if (cursor) {
+      const cursorEntry = await this.prisma.auditLog.findFirst({
+        where: { id: cursor, tenantId },
+        select: { id: true, createdAt: true },
+      });
+      if (cursorEntry) {
+        cursorClause = {
+          cursor: { id_createdAt: { id: cursorEntry.id, createdAt: cursorEntry.createdAt } },
+          skip: 1,
+        };
+      }
+    }
+
     const logs = await this.prisma.auditLog.findMany({
       where,
       take: take + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      ...cursorClause,
       orderBy: { createdAt: 'desc' },
     });
 

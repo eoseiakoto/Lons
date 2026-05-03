@@ -65,6 +65,8 @@ export class AuthService {
       tenantId,
       role: user.role.name,
       permissions,
+      email: user.email,
+      name: user.name ?? undefined,
     });
 
     const refreshToken = this.jwtService.signRefreshToken({
@@ -121,6 +123,8 @@ export class AuthService {
       tenantId: 'platform',
       role: user.role,
       permissions: ['*'],
+      email: user.email,
+      name: user.name ?? undefined,
     });
 
     const refreshToken = this.jwtService.signRefreshToken({
@@ -163,6 +167,8 @@ export class AuthService {
           tenantId: 'platform',
           role: user.role,
           permissions: ['*'],
+          email: user.email,
+          name: user.name ?? undefined,
         }),
         refreshToken: this.jwtService.signRefreshToken({
           sub: user.id,
@@ -188,6 +194,8 @@ export class AuthService {
         tenantId: payload.tenantId,
         role: user.role.name,
         permissions,
+        email: user.email,
+        name: user.name ?? undefined,
       }),
       refreshToken: this.jwtService.signRefreshToken({
         sub: user.id,
@@ -213,6 +221,27 @@ export class AuthService {
     this.passwordService.validateStrength(newPassword);
     const newHash = await this.passwordService.hash(newPassword);
     await this.prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash: newHash, updatedAt: new Date() },
+    });
+  }
+
+  async changePlatformPassword(
+    userId: string,
+    currentPassword: string,
+    newPassword: string,
+  ): Promise<void> {
+    const user = await this.prisma.platformUser.findFirst({
+      where: { id: userId, deletedAt: null },
+    });
+    if (!user) throw new NotFoundException('User not found');
+
+    const valid = await this.passwordService.verify(user.passwordHash, currentPassword);
+    if (!valid) throw new UnauthorizedException('Current password is incorrect');
+
+    this.passwordService.validateStrength(newPassword);
+    const newHash = await this.passwordService.hash(newPassword);
+    await this.prisma.platformUser.update({
       where: { id: userId },
       data: { passwordHash: newHash, updatedAt: new Date() },
     });

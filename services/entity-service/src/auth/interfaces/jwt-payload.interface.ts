@@ -4,6 +4,8 @@ export interface IJwtPayload {
   role: string;
   permissions: string[];
   type: 'access' | 'refresh';
+  email?: string;
+  name?: string;
   iat?: number;
   exp?: number;
 }

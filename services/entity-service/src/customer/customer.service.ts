@@ -56,10 +56,10 @@ export class CustomerService {
     });
   }
 
-  async findById(tenantId: string, id: string) {
-    const customer = await this.prisma.customer.findFirst({
-      where: { id, tenantId, deletedAt: null },
-    });
+  async findById(tenantId: string | undefined, id: string) {
+    const where: Prisma.CustomerWhereInput = { id, deletedAt: null };
+    if (tenantId) where.tenantId = tenantId;
+    const customer = await this.prisma.customer.findFirst({ where });
     if (!customer) throw new NotFoundError('Customer', id);
     return customer;
   }
@@ -70,14 +70,15 @@ export class CustomerService {
     });
   }
 
-  async search(tenantId: string, filters: {
+  async search(tenantId: string | undefined, filters: {
     status?: string;
     kycLevel?: string;
     segment?: string;
     phonePrimary?: string;
     externalId?: string;
   }, take: number = 20, cursor?: string) {
-    const where: Prisma.CustomerWhereInput = { tenantId, deletedAt: null };
+    const where: Prisma.CustomerWhereInput = { deletedAt: null };
+    if (tenantId) where.tenantId = tenantId;
     if (filters.status) where.status = filters.status as Prisma.EnumCustomerStatusFilter['equals'];
     if (filters.kycLevel) where.kycLevel = filters.kycLevel as Prisma.EnumKycLevelFilter['equals'];
     if (filters.segment) where.segment = filters.segment;

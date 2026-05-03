@@ -1,6 +1,7 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable, Optional, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { GqlExecutionContext } from '@nestjs/graphql';
+import { PrismaService } from '@lons/database';
 
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { JwtService } from '../jwt.service';
@@ -10,6 +11,7 @@ export class AuthGuard implements CanActivate {
   constructor(
     private reflector: Reflector,
     private jwtService: JwtService,
+    @Optional() private prisma?: PrismaService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -30,15 +32,48 @@ export class AuthGuard implements CanActivate {
       if (payload.type !== 'access') {
         throw new UnauthorizedException('Invalid token type');
       }
+      const isPlatformAdmin = payload.role === 'platform_admin' || payload.role === 'platform_support';
+
+      // Platform admins can override tenant context via X-Tenant-Context header
+      let effectiveTenantId = payload.tenantId;
+      const tenantOverride = request.headers?.['x-tenant-context'];
+      if (tenantOverride) {
+        if (!isPlatformAdmin) {
+          throw new UnauthorizedException('Only platform admins can use X-Tenant-Context');
+        }
+        // Validate UUID format
+        if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantOverride)) {
+          throw new UnauthorizedException('Invalid tenant ID in X-Tenant-Context');
+        }
+        // Validate tenant exists and is active
+        if (this.prisma) {
+          const targetTenant = await this.prisma.tenant.findUnique({
+            where: { id: tenantOverride },
+            select: { status: true },
+          });
+          if (!targetTenant) {
+            throw new ForbiddenException('Target tenant does not exist');
+          }
+          if (targetTenant.status !== 'active') {
+            throw new ForbiddenException('Target tenant is inactive');
+          }
+        }
+        effectiveTenantId = tenantOverride;
+      }
+
       request.user = {
         userId: payload.sub,
-        tenantId: payload.tenantId,
+        tenantId: effectiveTenantId,
         role: payload.role,
         permissions: payload.permissions,
-        isPlatformAdmin: payload.role === 'platform_admin' || payload.role === 'platform_support',
+        isPlatformAdmin,
+        tenantOverride: tenantOverride || undefined,
       };
       return true;
-    } catch {
+    } catch (err) {
+      if (err instanceof UnauthorizedException || err instanceof ForbiddenException) {
+        throw err;
+      }
       throw new UnauthorizedException('Invalid or expired token');
     }
   }

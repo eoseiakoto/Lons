@@ -4,4 +4,5 @@ export * from './jwt.service';
 export * from './password.service';
 export * from './decorators';
 export * from './guards';
+export * from './interceptors/rls-tenant-context.interceptor';
 export * from './interfaces/jwt-payload.interface';

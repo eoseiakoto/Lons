@@ -27,6 +27,7 @@ describe('AuthService', () => {
     email,
     passwordHash: hashedPassword,
     name: 'Test User',
+    phone: null,
     roleId: mockRoleId,
     mfaSecret: null,
     mfaEnabled: false,
@@ -120,14 +121,6 @@ describe('AuthService', () => {
       jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(mockUser);
       jest.spyOn(passwordService, 'verify').mockResolvedValue(true);
       jest.spyOn(prisma.user, 'update').mockResolvedValue(mockUser);
-      jest.spyOn((prisma as any).refreshToken, 'create').mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000004',
-        userId: mockUserId,
-        tokenHash: 'hash',
-        revokedAt: null,
-        expiresAt: new Date(),
-        createdAt: new Date(),
-      });
 
       const result = await service.loginTenantUser(mockTenantId, email, password);
 
@@ -140,7 +133,6 @@ describe('AuthService', () => {
         permissions: ['loan.read', 'loan.approve'],
         isPlatformAdmin: false,
       });
-      expect((prisma as any).refreshToken.create).toHaveBeenCalled();
     });
 
     it('should throw UnauthorizedException if user not found', async () => {
@@ -269,7 +261,7 @@ describe('AuthService', () => {
       expect(passwordService.hash).toHaveBeenCalledWith('NewStr0ng!Pass#');
       expect(prisma.user.update).toHaveBeenCalledWith({
         where: { id: mockUserId },
-        data: { passwordHash: 'new-hashed-password' },
+        data: { passwordHash: 'new-hashed-password', updatedAt: expect.any(Date) },
       });
     });
 
@@ -311,7 +303,6 @@ describe('AuthService', () => {
         sub: mockUserId,
         tenantId: mockTenantId,
       });
-      const tokenHash = crypto.createHash('sha256').update(refreshToken).digest('hex');
 
       jest.spyOn(jwtService, 'verifyToken').mockReturnValue({
         sub: mockUserId,
@@ -323,39 +314,12 @@ describe('AuthService', () => {
         exp: Math.floor(Date.now() / 1000) + 3600,
       });
 
-      jest.spyOn((prisma as any).refreshToken, 'findUnique').mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000004',
-        userId: mockUserId,
-        tokenHash,
-        revokedAt: null,
-        expiresAt: new Date(Date.now() + 3600 * 1000),
-        createdAt: new Date(),
-      });
-
       jest.spyOn(prisma.user, 'findUnique').mockResolvedValue(mockUser);
-      jest.spyOn((prisma as any).refreshToken, 'update').mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000004',
-        userId: mockUserId,
-        tokenHash,
-        revokedAt: new Date(),
-        expiresAt: new Date(),
-        createdAt: new Date(),
-      });
-      jest.spyOn((prisma as any).refreshToken, 'create').mockResolvedValue({
-        id: '00000000-0000-0000-0000-000000000005',
-        userId: mockUserId,
-        tokenHash: 'newhash',
-        revokedAt: null,
-        expiresAt: new Date(),
-        createdAt: new Date(),
-      });
 
       const result = await service.refreshTokens(refreshToken);
 
       expect(result.accessToken).toBeDefined();
       expect(result.refreshToken).toBeDefined();
-      expect((prisma as any).refreshToken.update).toHaveBeenCalled();
-      expect((prisma as any).refreshToken.create).toHaveBeenCalled();
     });
 
     it('should throw if refresh token is revoked', async () => {

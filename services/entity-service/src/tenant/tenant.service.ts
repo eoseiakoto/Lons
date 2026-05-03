@@ -62,6 +62,9 @@ export class TenantService {
   }
 
   async findAll(take: number = 20, cursor?: string) {
+    // NOTE: Cannot use Prisma `startsWith('__')` because `_` is a SQL LIKE
+    // wildcard and Prisma does not escape it, causing all rows to be filtered.
+    // Instead, fetch all non-deleted tenants and filter in application code.
     const tenants = await this.prisma.tenant.findMany({
       where: { deletedAt: null },
       take: take + 1,
@@ -69,9 +72,11 @@ export class TenantService {
       orderBy: { createdAt: 'desc' },
     });
 
+    const filtered = tenants.filter(t => !t.slug.startsWith('__'));
+
     return {
-      items: tenants.slice(0, take),
-      hasMore: tenants.length > take,
+      items: filtered.slice(0, take),
+      hasMore: filtered.length > take,
     };
   }
 

@@ -55,6 +55,7 @@ export class UserService {
   async update(tenantId: string, id: string, data: {
     name?: string;
     email?: string;
+    phone?: string;
     roleId?: string;
   }) {
     await this.findById(tenantId, id);
@@ -62,11 +63,40 @@ export class UserService {
     const updateData: Prisma.UserUpdateInput = {};
     if (data.name !== undefined) updateData.name = data.name;
     if (data.email !== undefined) updateData.email = data.email;
+    if (data.phone !== undefined) updateData.phone = data.phone;
     if (data.roleId !== undefined) updateData.role = { connect: { id: data.roleId } };
 
     return this.prisma.user.update({
       where: { id },
       data: updateData,
+      include: { role: true },
+    });
+  }
+
+  async updateProfile(tenantId: string, id: string, data: {
+    name?: string;
+    email?: string;
+    phone?: string;
+  }) {
+    await this.findById(tenantId, id);
+
+    const updateData: Prisma.UserUpdateInput = {};
+    if (data.name !== undefined) updateData.name = data.name;
+    if (data.email !== undefined) updateData.email = data.email;
+    if (data.phone !== undefined) updateData.phone = data.phone;
+
+    return this.prisma.user.update({
+      where: { id },
+      data: updateData,
+      include: { role: true },
+    });
+  }
+
+  async resetPassword(tenantId: string, id: string, passwordHash: string) {
+    await this.findById(tenantId, id);
+    return this.prisma.user.update({
+      where: { id },
+      data: { passwordHash },
       include: { role: true },
     });
   }

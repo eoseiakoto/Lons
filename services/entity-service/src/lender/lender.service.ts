@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService, Prisma } from '@lons/database';
-import { NotFoundError } from '@lons/common';
+import { NotFoundError, ValidationError } from '@lons/common';
 
 @Injectable()
 export class LenderService {
@@ -10,10 +10,11 @@ export class LenderService {
     name: string;
     licenseNumber?: string;
     country?: string;
-    fundingCapacity?: number;
+    /** Money/rates as Decimal strings — see MoneyString in @lons/shared-types. */
+    fundingCapacity?: string;
     fundingCurrency?: string;
-    minInterestRate?: number;
-    maxInterestRate?: number;
+    minInterestRate?: string;
+    maxInterestRate?: string;
     settlementAccount?: Prisma.InputJsonValue;
     riskParameters?: Prisma.InputJsonValue;
   }) {
@@ -55,22 +56,29 @@ export class LenderService {
   async update(tenantId: string, id: string, data: {
     name?: string;
     licenseNumber?: string;
-    fundingCapacity?: number;
-    minInterestRate?: number;
-    maxInterestRate?: number;
+    country?: string;
+    /** Money/rates as Decimal strings — see MoneyString in @lons/shared-types. */
+    fundingCapacity?: string;
+    fundingCurrency?: string;
+    minInterestRate?: string;
+    maxInterestRate?: string;
     settlementAccount?: Prisma.InputJsonValue;
     riskParameters?: Prisma.InputJsonValue;
+    status?: 'active' | 'suspended';
   }) {
     await this.findById(tenantId, id);
 
     const updateData: Prisma.LenderUpdateInput = {};
     if (data.name !== undefined) updateData.name = data.name;
     if (data.licenseNumber !== undefined) updateData.licenseNumber = data.licenseNumber;
+    if (data.country !== undefined) updateData.country = data.country;
     if (data.fundingCapacity !== undefined) updateData.fundingCapacity = data.fundingCapacity;
+    if (data.fundingCurrency !== undefined) updateData.fundingCurrency = data.fundingCurrency;
     if (data.minInterestRate !== undefined) updateData.minInterestRate = data.minInterestRate;
     if (data.maxInterestRate !== undefined) updateData.maxInterestRate = data.maxInterestRate;
     if (data.settlementAccount !== undefined) updateData.settlementAccount = data.settlementAccount;
     if (data.riskParameters !== undefined) updateData.riskParameters = data.riskParameters;
+    if (data.status !== undefined) updateData.status = data.status;
 
     return this.prisma.lender.update({ where: { id }, data: updateData });
   }
@@ -80,6 +88,31 @@ export class LenderService {
     return this.prisma.lender.update({
       where: { id },
       data: { status: 'suspended' },
+    });
+  }
+
+  async deactivate(tenantId: string, id: string) {
+    const lender = await this.findById(tenantId, id);
+
+    // Check for active products linked to this lender
+    const activeProducts = await this.prisma.product.count({
+      where: {
+        lenderId: id,
+        tenantId,
+        status: 'active',
+        deletedAt: null,
+      },
+    });
+
+    if (activeProducts > 0) {
+      throw new ValidationError(
+        `Cannot deactivate lender "${lender.name}" — it has ${activeProducts} active product(s). Suspend or reassign them first.`,
+      );
+    }
+
+    return this.prisma.lender.update({
+      where: { id },
+      data: { status: 'inactive', deletedAt: new Date() },
     });
   }
 }

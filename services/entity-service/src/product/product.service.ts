@@ -10,25 +10,101 @@ const idempotencyCache = new Map<string, { result: any; expiresAt: number }>();
 export class ProductService {
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * Find or create the tenant's "Self-Funded" lender record.
+   * Used when a product is created without an external lender.
+   */
+  private async getOrCreateSelfFundedLender(tenantId: string): Promise<string> {
+    const existing = await this.prisma.lender.findFirst({
+      where: {
+        tenantId,
+        name: 'Self-Funded',
+        deletedAt: null,
+      },
+    });
+
+    if (existing) return existing.id;
+
+    // Create one — wrap in try/catch for race-condition safety
+    try {
+      const lender = await this.prisma.lender.create({
+        data: {
+          tenantId,
+          name: 'Self-Funded',
+          status: 'active',
+        },
+      });
+      return lender.id;
+    } catch (err: any) {
+      // If another request created it concurrently, find and return it
+      const retry = await this.prisma.lender.findFirst({
+        where: { tenantId, name: 'Self-Funded', deletedAt: null },
+      });
+      if (retry) return retry.id;
+      throw err;
+    }
+  }
+
+  private static readonly TYPE_PREFIXES: Record<string, string> = {
+    overdraft: 'OD',
+    micro_loan: 'ML',
+    bnpl: 'BNPL',
+    invoice_financing: 'IF',
+    // Also support uppercase frontend values
+    OVERDRAFT: 'OD',
+    MICRO_LOAN: 'ML',
+    BNPL: 'BNPL',
+    INVOICE_FACTORING: 'IF',
+  };
+
+  private getTypePrefix(type: string): string {
+    return ProductService.TYPE_PREFIXES[type] || 'ML';
+  }
+
+  /**
+   * Atomically determine the next product code sequence for a given type + currency.
+   * Queries the database directly to find the highest existing sequence number,
+   * avoiding stale-cache and pagination issues.
+   */
+  async getNextProductCode(tenantId: string, type: string, currency: string): Promise<string> {
+    const prefix = this.getTypePrefix(type);
+    const codePattern = `${prefix}-${currency}-%`;
+
+    // Extract the trailing digits from matching codes and find the max
+    const result = await this.prisma.$queryRaw<{ max_seq: number }[]>`
+      SELECT COALESCE(MAX(
+        CAST(SUBSTRING(code FROM '[0-9]+$') AS INTEGER)
+      ), 0) AS max_seq
+      FROM products
+      WHERE tenant_id = ${tenantId}::uuid
+        AND code LIKE ${codePattern}
+    `;
+
+    const nextSeq = (result[0]?.max_seq ?? 0) + 1;
+    return `${prefix}-${currency}-${String(nextSeq).padStart(3, '0')}`;
+  }
+
   async create(tenantId: string, data: {
-    code: string;
+    code?: string;
     name: string;
     description?: string;
     type: 'overdraft' | 'micro_loan' | 'bnpl' | 'invoice_financing';
     lenderId?: string;
     currency: string;
-    minAmount?: number;
-    maxAmount?: number;
+    /** Money/rates as Decimal strings — see MoneyString in @lons/shared-types. */
+    minAmount?: string;
+    maxAmount?: string;
     minTenorDays?: number;
     maxTenorDays?: number;
     interestRateModel: 'flat' | 'reducing_balance' | 'tiered';
-    interestRate?: number;
+    interestRate?: string;
     rateTiers?: Prisma.InputJsonValue;
     feeStructure?: Prisma.InputJsonValue;
     repaymentMethod: 'lump_sum' | 'equal_installments' | 'reducing' | 'balloon' | 'auto_deduction';
     gracePeriodDays?: number;
     penaltyConfig?: Prisma.InputJsonValue;
     approvalWorkflow?: 'auto' | 'semi_auto' | 'single_level' | 'multi_level';
+    approvalThresholds?: Prisma.InputJsonValue;
     eligibilityRules?: Prisma.InputJsonValue;
     revenueSharing?: Prisma.InputJsonValue;
     maxActiveLoans?: number;
@@ -43,35 +119,61 @@ export class ProductService {
       }
     }
 
-    const result = await this.prisma.product.create({
-      data: {
-        tenantId,
-        code: data.code,
-        name: data.name,
-        description: data.description,
-        type: data.type,
-        currency: data.currency,
-        minAmount: data.minAmount,
-        maxAmount: data.maxAmount,
-        minTenorDays: data.minTenorDays,
-        maxTenorDays: data.maxTenorDays,
-        interestRateModel: data.interestRateModel,
-        interestRate: data.interestRate,
-        rateTiers: data.rateTiers ?? undefined,
-        feeStructure: data.feeStructure ?? undefined,
-        repaymentMethod: data.repaymentMethod,
-        gracePeriodDays: data.gracePeriodDays,
-        penaltyConfig: data.penaltyConfig ?? undefined,
-        approvalWorkflow: data.approvalWorkflow,
-        eligibilityRules: data.eligibilityRules ?? undefined,
-        revenueSharing: data.revenueSharing ?? undefined,
-        maxActiveLoans: data.maxActiveLoans,
-        status: 'draft',
-        ...(data.lenderId ? { lender: { connect: { id: data.lenderId } } } : {}),
-        ...(data.createdBy ? { creator: { connect: { id: data.createdBy } } } : {}),
-      },
-      include: { lender: true },
-    });
+    // Generate code server-side if not provided or placeholder
+    let code = data.code;
+    if (!code || code === '' || code.endsWith('-000')) {
+      code = await this.getNextProductCode(tenantId, data.type, data.currency);
+    }
+
+    // If no lender provided, use the tenant's self-funded lender
+    let lenderId = data.lenderId;
+    if (!lenderId) {
+      lenderId = await this.getOrCreateSelfFundedLender(tenantId);
+    }
+
+    // Retry with re-query on collision (handles race between getNextProductCode and insert)
+    let result: any;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      try {
+        result = await this.prisma.product.create({
+          data: {
+            tenantId,
+            code,
+            name: data.name,
+            description: data.description,
+            type: data.type,
+            currency: data.currency,
+            minAmount: data.minAmount,
+            maxAmount: data.maxAmount,
+            minTenorDays: data.minTenorDays,
+            maxTenorDays: data.maxTenorDays,
+            interestRateModel: data.interestRateModel,
+            interestRate: data.interestRate,
+            rateTiers: data.rateTiers ?? undefined,
+            feeStructure: data.feeStructure ?? undefined,
+            repaymentMethod: data.repaymentMethod,
+            gracePeriodDays: data.gracePeriodDays,
+            penaltyConfig: data.penaltyConfig ?? undefined,
+            approvalWorkflow: data.approvalWorkflow,
+            approvalThresholds: data.approvalThresholds ?? undefined,
+            eligibilityRules: data.eligibilityRules ?? undefined,
+            revenueSharing: data.revenueSharing ?? undefined,
+            maxActiveLoans: data.maxActiveLoans,
+            status: 'draft',
+            lender: { connect: { id: lenderId } },
+            ...(data.createdBy ? { creator: { connect: { id: data.createdBy } } } : {}),
+          },
+          include: { lender: true },
+        });
+        break; // success
+      } catch (err: any) {
+        const isCodeCollision = err?.code === 'P2002' &&
+          Array.isArray(err?.meta?.target) && err.meta.target.includes('code');
+        if (!isCodeCollision || attempt === 9) throw err;
+        // Re-query the DB for the actual next code instead of blindly incrementing
+        code = await this.getNextProductCode(tenantId, data.type, data.currency);
+      }
+    }
 
     // Cache result for idempotency (1 hour TTL)
     if (idempotencyKey) {
@@ -82,20 +184,23 @@ export class ProductService {
     return result;
   }
 
-  async findById(tenantId: string, id: string) {
+  async findById(tenantId: string | undefined, id: string) {
+    const where: Prisma.ProductWhereInput = { id, deletedAt: null };
+    if (tenantId) where.tenantId = tenantId;
     const product = await this.prisma.product.findFirst({
-      where: { id, tenantId, deletedAt: null },
+      where,
       include: { lender: true },
     });
     if (!product) throw new NotFoundError('Product', id);
     return product;
   }
 
-  async findAll(tenantId: string, filters?: {
+  async findAll(tenantId: string | undefined, filters?: {
     type?: string;
     status?: string;
   }, take: number = 20, cursor?: string) {
-    const where: Prisma.ProductWhereInput = { tenantId, deletedAt: null };
+    const where: Prisma.ProductWhereInput = { deletedAt: null };
+    if (tenantId) where.tenantId = tenantId;
     if (filters?.type) where.type = filters.type as Prisma.EnumProductTypeFilter['equals'];
     if (filters?.status) where.status = filters.status as Prisma.EnumProductStatusFilter['equals'];
 
@@ -112,19 +217,23 @@ export class ProductService {
   async update(tenantId: string, id: string, data: {
     name?: string;
     description?: string;
-    minAmount?: number;
-    maxAmount?: number;
+    /** Money/rates as Decimal strings — see MoneyString in @lons/shared-types. */
+    minAmount?: string;
+    maxAmount?: string;
     minTenorDays?: number;
     maxTenorDays?: number;
-    interestRate?: number;
+    interestRate?: string;
     rateTiers?: Prisma.InputJsonValue;
     feeStructure?: Prisma.InputJsonValue;
     gracePeriodDays?: number;
     penaltyConfig?: Prisma.InputJsonValue;
     approvalWorkflow?: 'auto' | 'semi_auto' | 'single_level' | 'multi_level';
+    approvalThresholds?: Prisma.InputJsonValue;
     eligibilityRules?: Prisma.InputJsonValue;
     revenueSharing?: Prisma.InputJsonValue;
     maxActiveLoans?: number;
+    lenderId?: string;
+    notificationConfig?: Prisma.InputJsonValue;
   }, userId?: string) {
     const product = await this.findById(tenantId, id);
 
@@ -155,9 +264,20 @@ export class ProductService {
     if (data.gracePeriodDays !== undefined) updateData.gracePeriodDays = data.gracePeriodDays;
     if (data.penaltyConfig !== undefined) updateData.penaltyConfig = data.penaltyConfig;
     if (data.approvalWorkflow !== undefined) updateData.approvalWorkflow = data.approvalWorkflow;
+    if (data.approvalThresholds !== undefined) updateData.approvalThresholds = data.approvalThresholds;
     if (data.eligibilityRules !== undefined) updateData.eligibilityRules = data.eligibilityRules;
     if (data.revenueSharing !== undefined) updateData.revenueSharing = data.revenueSharing;
     if (data.maxActiveLoans !== undefined) updateData.maxActiveLoans = data.maxActiveLoans;
+    if (data.notificationConfig !== undefined) updateData.notificationConfig = data.notificationConfig;
+    if (data.lenderId !== undefined) {
+      if (data.lenderId) {
+        updateData.lender = { connect: { id: data.lenderId } };
+      } else {
+        // Switching to self-funded: connect the tenant's self-funded lender
+        const selfFundedId = await this.getOrCreateSelfFundedLender(tenantId);
+        updateData.lender = { connect: { id: selfFundedId } };
+      }
+    }
 
     return this.prisma.product.update({
       where: { id },
