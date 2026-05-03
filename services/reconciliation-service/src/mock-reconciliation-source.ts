@@ -1,9 +1,11 @@
 import { Injectable } from '@nestjs/common';
+import { multiply, bankersRound } from '@lons/common';
 
 export interface ExternalTransaction {
   externalRef: string;
   type: 'disbursement' | 'repayment';
-  amount: number;
+  /** Decimal string. Reconciliation matches byte-exact, never via float coercion. */
+  amount: string;
   date: Date;
   status: 'completed' | 'pending';
 }
@@ -21,7 +23,7 @@ export class MockReconciliationSource {
    * Configurable match/timing/exception rates for realistic test scenarios.
    */
   generateExternalRecords(
-    internalTxns: Array<{ id: string; type: 'disbursement' | 'repayment'; amount: number; externalRef: string | null; date: Date }>,
+    internalTxns: Array<{ id: string; type: 'disbursement' | 'repayment'; amount: string; externalRef: string | null; date: Date }>,
     config: MockConfig = {},
   ): ExternalTransaction[] {
     const { matchRate = 0.95, timingDiffRate = 0.03, exceptionRate = 0.02 } = config;
@@ -40,9 +42,11 @@ export class MockReconciliationSource {
         offsetDate.setDate(offsetDate.getDate() + (Math.random() > 0.5 ? 1 : 2));
         external.push({ externalRef: ref, type: txn.type, amount: txn.amount, date: offsetDate, status: 'completed' });
       } else if (rand < matchRate + timingDiffRate + (exceptionRate / 2)) {
-        // Amount mismatch
-        const mismatchAmount = txn.amount * (1 + (Math.random() * 0.1 - 0.05)); // +-5%
-        external.push({ externalRef: ref, type: txn.type, amount: Number(mismatchAmount.toFixed(4)), date: txn.date, status: 'completed' });
+        // Amount mismatch — use Decimal multiply so the simulated drift stays
+        // within the Decimal precision contract.
+        const drift = String(1 + (Math.random() * 0.1 - 0.05)); // +-5%
+        const mismatchAmount = bankersRound(multiply(txn.amount, drift), 4);
+        external.push({ externalRef: ref, type: txn.type, amount: mismatchAmount, date: txn.date, status: 'completed' });
       }
       // else: omitted entirely (Lons-only, unmatched)
     }
@@ -50,10 +54,11 @@ export class MockReconciliationSource {
     // Add some orphaned external-only transactions
     const orphanCount = Math.max(1, Math.floor(internalTxns.length * (exceptionRate / 2)));
     for (let i = 0; i < orphanCount; i++) {
+      const orphanAmount = bankersRound(String(Math.random() * 1000 + 100), 4);
       external.push({
         externalRef: `ORPHAN-${Date.now()}-${i}`,
         type: Math.random() > 0.5 ? 'disbursement' : 'repayment',
-        amount: Number((Math.random() * 1000 + 100).toFixed(4)),
+        amount: orphanAmount,
         date: new Date(),
         status: 'completed',
       });

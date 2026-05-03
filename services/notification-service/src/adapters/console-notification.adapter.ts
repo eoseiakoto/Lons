@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService, NotificationChannel, NotificationStatus } from '@lons/database';
+import { maskNotificationRecipient } from './pii-masking';
 
 @Injectable()
 export class ConsoleNotificationAdapter {
@@ -15,7 +16,12 @@ export class ConsoleNotificationAdapter {
     recipient: string;
     content: string;
   }) {
-    this.logger.log(`[${params.channel.toUpperCase()}] To: ${params.recipient} | ${params.content}`);
+    // P1-003 fix: never log cleartext recipients or full content. Templated
+    // messages routinely embed names, amounts, and contract numbers — none
+    // of which belong in plaintext logs (CLAUDE.md §Security).
+    this.logger.log(
+      `[${params.channel.toUpperCase()}] To: ${maskNotificationRecipient(params.channel, params.recipient)} | event=${params.eventType} customer=${params.customerId.slice(0, 8)}… contentBytes=${params.content.length}`,
+    );
 
     const notification = await this.prisma.notification.create({
       data: {

@@ -118,7 +118,7 @@ describe('NotificationService', () => {
   });
 
   describe('Core Notification Templates', () => {
-    it('should have all 6 core templates defined', () => {
+    it('should have all 9 core templates defined', () => {
       const requiredTemplates = [
         'loan_approved',
         'offer_sent',
@@ -126,6 +126,9 @@ describe('NotificationService', () => {
         'repayment_reminder',
         'repayment_received',
         'overdue_notice',
+        'cooling_off_started',
+        'cooling_off_cancelled',
+        'cooling_off_expired',
       ];
 
       for (const template of requiredTemplates) {
@@ -175,6 +178,39 @@ describe('NotificationService', () => {
       expect(template).toContain('{{amount}}');
       expect(template).toContain('{{contractNumber}}');
       expect(template).toContain('{{daysOverdue}}');
+    });
+
+    it('cooling_off_started template should contain required variables', () => {
+      const template = NOTIFICATION_TEMPLATES.cooling_off_started;
+      expect(template.sms).toContain('{{customerName}}');
+      expect(template.sms).toContain('{{currency}}');
+      expect(template.sms).toContain('{{amount}}');
+      expect(template.sms).toContain('{{coolingOffHours}}');
+      expect(template.email).toContain('{{expiresAt}}');
+      expect(template.push).toBeDefined();
+      expect(template.in_app).toBeDefined();
+    });
+
+    it('cooling_off_cancelled template should contain required variables', () => {
+      const template = NOTIFICATION_TEMPLATES.cooling_off_cancelled;
+      expect(template.sms).toContain('{{customerName}}');
+      expect(template.sms).toContain('{{currency}}');
+      expect(template.sms).toContain('{{amount}}');
+      expect(template.email).toContain('{{contractNumber}}');
+      expect(template.push).toBeDefined();
+      expect(template.in_app).toBeDefined();
+    });
+
+    it('cooling_off_expired template should contain required variables', () => {
+      const template = NOTIFICATION_TEMPLATES.cooling_off_expired;
+      expect(template.sms).toContain('{{customerName}}');
+      expect(template.sms).toContain('{{currency}}');
+      expect(template.sms).toContain('{{amount}}');
+      expect(template.sms).toContain('{{firstRepaymentDate}}');
+      expect(template.email).toContain('{{contractNumber}}');
+      expect(template.email).toContain('{{repaymentAmount}}');
+      expect(template.push).toBeDefined();
+      expect(template.in_app).toBeDefined();
     });
 
     it('templates should support multiple channels', () => {

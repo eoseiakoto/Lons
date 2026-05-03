@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '@lons/database';
-import { NotFoundError } from '@lons/common';
+import { NotFoundError, multiply, bankersRound } from '@lons/common';
 
 export interface RecoveryStrategy {
   type: 'restructure' | 'grace_period' | 'partial_settlement' | 'escalation' | 'fee_recovery';
@@ -24,7 +24,10 @@ export class RecoveryStrategyService {
     if (!contract) throw new NotFoundError('Contract', contractId);
 
     const dpd = contract.daysPastDue;
-    const outstanding = Number(contract.totalOutstanding || 0);
+    // Outstanding stays as a Decimal string. All recovery estimates use
+    // Decimal multiply so probability-weighted recoveries don't drift
+    // (matters for large books where rollups feed risk reports).
+    const outstanding = String(contract.totalOutstanding || 0);
     const strategies: RecoveryStrategy[] = [];
 
     // Early overdue (1-30 DPD): gentle reminder + grace period
@@ -33,7 +36,7 @@ export class RecoveryStrategyService {
         type: 'grace_period',
         description: `Extend grace period by 7 days. Customer may be experiencing temporary cash flow issues.`,
         successProbability: 0.75,
-        estimatedRecovery: String(outstanding),
+        estimatedRecovery: outstanding,
         priority: 1,
       });
     }
@@ -44,19 +47,19 @@ export class RecoveryStrategyService {
         type: 'restructure',
         description: `Restructure loan: extend tenor by 30 days with reduced installments.`,
         successProbability: 0.6,
-        estimatedRecovery: String(outstanding * 0.95),
+        estimatedRecovery: bankersRound(multiply(outstanding, '0.95'), 2),
         priority: 2,
       });
     }
 
     // Significant overdue (31-90 DPD): partial settlement
     if (dpd >= 31) {
-      const settlementAmount = outstanding * 0.7;
+      const settlementAmount = bankersRound(multiply(outstanding, '0.7'), 2);
       strategies.push({
         type: 'partial_settlement',
-        description: `Offer partial settlement at 70% of outstanding (${settlementAmount.toFixed(2)}).`,
+        description: `Offer partial settlement at 70% of outstanding (${settlementAmount}).`,
         successProbability: 0.45,
-        estimatedRecovery: String(settlementAmount),
+        estimatedRecovery: settlementAmount,
         priority: 3,
       });
     }
@@ -67,7 +70,7 @@ export class RecoveryStrategyService {
         type: 'fee_recovery',
         description: `Enable micro-deductions from wallet transactions (2% per transaction, max 50/day).`,
         successProbability: 0.55,
-        estimatedRecovery: String(outstanding * 0.8),
+        estimatedRecovery: bankersRound(multiply(outstanding, '0.8'), 2),
         priority: 4,
       });
     }
@@ -78,7 +81,7 @@ export class RecoveryStrategyService {
         type: 'escalation',
         description: `Escalate to external collections agency. Internal recovery options exhausted.`,
         successProbability: 0.2,
-        estimatedRecovery: String(outstanding * 0.3),
+        estimatedRecovery: bankersRound(multiply(outstanding, '0.3'), 2),
         priority: 5,
       });
     }

@@ -237,7 +237,10 @@ export class PredictiveRiskService {
       return { score: 0.4, factors };
     }
 
-    // Analyze payment amounts trend (are they declining?)
+    // Analyze payment amounts trend (are they declining?). Float math is
+    // acceptable here — the output is a fuzzy "30% drop?" heuristic that
+    // feeds a 0–1 risk score, not a ledger value. Using Number() is
+    // intentional and bounded (slice of <= ~10 repayments).
     const amounts = repayments.map((r: any) => Number(String(r.amount)));
     const recentAvg = amounts.slice(0, Math.min(3, amounts.length)).reduce((a: number, b: number) => a + b, 0) / Math.min(3, amounts.length);
     const olderAvg = amounts.slice(3).length > 0

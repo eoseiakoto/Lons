@@ -11,9 +11,20 @@ from pathlib import Path
 from typing import Any, Optional
 
 import numpy as np
-import xgboost as xgb
 
 from app.models.feature_engineering import transform_features, get_feature_names
+
+
+def _import_xgboost():
+    """Lazy import of xgboost — fails gracefully when OpenMP is missing."""
+    try:
+        import xgboost as xgb
+        return xgb
+    except (ImportError, Exception) as exc:
+        raise RuntimeError(
+            "xgboost is not available. On macOS run 'brew install libomp' "
+            "to install the OpenMP runtime required by XGBoost."
+        ) from exc
 
 
 # Risk tiers based on score ranges
@@ -44,7 +55,7 @@ class MLModel:
     """
 
     def __init__(self):
-        self.model: Optional[xgb.XGBClassifier] = None
+        self.model = None  # Optional[xgb.XGBClassifier] — set after train() or load()
         self.feature_names: list[str] = []
         self.params: dict = {}
         self.metrics: dict = {}
@@ -90,6 +101,7 @@ class MLModel:
             }
         }
 
+        xgb = _import_xgboost()
         self.model = xgb.XGBClassifier(**model_params)
         self.model.fit(X, y)
 

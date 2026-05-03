@@ -180,8 +180,8 @@ describe('OutcomeTrackerService', () => {
       expect(result.totalOutcomes).toBe(4);
       // 3 success/partial out of 4 = 0.75
       expect(result.successRate).toBeCloseTo(0.75, 2);
-      // avg recovery: (5000 + 3000 + 0 + 2000) / 4 = 2500
-      expect(Number(result.avgRecovery)).toBeCloseTo(2500, 0);
+      // avg recovery: (5000 + 3000 + 2000) / 3 = 3333.3333 (zero-recovery outcomes excluded)
+      expect(Number(result.avgRecovery)).toBeCloseTo(3333.3333, 0);
       // avg days: (10 + 15 + 30 + 20) / 4 = 18.75
       expect(result.avgDaysToResolve).toBeCloseTo(18.75, 1);
     });

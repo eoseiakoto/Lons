@@ -61,8 +61,8 @@ describe('NetworkAnalysisService', () => {
   });
 
   it('should generate different customer IDs based on input', async () => {
-    const candidatesA = await service.findGuarantorCandidates('tenant-1', 'customer-aaa');
-    const candidatesB = await service.findGuarantorCandidates('tenant-1', 'customer-bbb');
+    const candidatesA = await service.findGuarantorCandidates('tenant-1', 'aaa-cust');
+    const candidatesB = await service.findGuarantorCandidates('tenant-1', 'bbb-cust');
 
     expect(candidatesA[0].customerId).not.toBe(candidatesB[0].customerId);
   });

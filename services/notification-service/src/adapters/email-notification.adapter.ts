@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService, NotificationChannel, NotificationStatus } from '@lons/database';
+import { maskEmail } from '@lons/common';
 
 @Injectable()
 export class EmailNotificationAdapter {
@@ -15,7 +16,12 @@ export class EmailNotificationAdapter {
     content: string;
     subject?: string;
   }) {
-    this.logger.log(`[EMAIL SANDBOX] To: ${params.recipient} | Subject: ${params.subject || params.eventType} | ${params.content}`);
+    // P1-003 fix: subject is templated and may include the customer name
+    // ("Welcome, Akua"), so we log only the event type and content size.
+    // Recipient email is masked.
+    this.logger.log(
+      `[EMAIL SANDBOX] To: ${maskEmail(params.recipient)} | event=${params.eventType} customer=${params.customerId.slice(0, 8)}… contentBytes=${params.content.length}`,
+    );
 
     return this.prisma.notification.create({
       data: {

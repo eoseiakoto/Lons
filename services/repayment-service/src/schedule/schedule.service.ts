@@ -48,17 +48,18 @@ export class ScheduleService {
         entries = generateEMISchedule(params);
     }
 
+    // Money preserved as strings — Prisma Decimal accepts strings directly.
     await this.prisma.repaymentScheduleEntry.createMany({
       data: entries.map((e) => ({
         tenantId,
         contractId,
         installmentNumber: e.installmentNumber,
         dueDate: e.dueDate,
-        principalAmount: Number(e.principalAmount),
-        interestAmount: Number(e.interestAmount),
-        feeAmount: Number(e.feeAmount),
-        totalAmount: Number(e.totalAmount),
-        paidAmount: 0,
+        principalAmount: e.principalAmount,
+        interestAmount: e.interestAmount,
+        feeAmount: e.feeAmount,
+        totalAmount: e.totalAmount,
+        paidAmount: '0',
         status: 'pending',
       })),
     });

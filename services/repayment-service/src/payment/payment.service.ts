@@ -14,7 +14,7 @@ export class PaymentService {
 
   async processPayment(tenantId: string, input: {
     contractId: string;
-    amount: number;
+    amount: string;
     currency: string;
     method: string;
     source?: string;
@@ -38,8 +38,10 @@ export class PaymentService {
       currentPrincipal: String(contract.outstandingPrincipal || 0),
     };
 
-    const allocation = allocatePayment(String(input.amount), outstanding);
+    const allocation = allocatePayment(input.amount, outstanding);
 
+    // Prisma's Decimal columns accept string values directly — no Number() cast.
+    // Casting to Number() loses precision past ~15 significant digits.
     const repayment = await this.prisma.repayment.create({
       data: {
         tenantId,
@@ -48,10 +50,10 @@ export class PaymentService {
         method: input.method as RepaymentMethodType,
         source: input.source,
         externalRef: input.externalRef,
-        allocatedPrincipal: Number(allocation.allocatedPrincipal),
-        allocatedInterest: Number(allocation.allocatedInterest),
-        allocatedFees: Number(allocation.allocatedFees),
-        allocatedPenalties: Number(allocation.allocatedPenalties),
+        allocatedPrincipal: allocation.allocatedPrincipal,
+        allocatedInterest: allocation.allocatedInterest,
+        allocatedFees: allocation.allocatedFees,
+        allocatedPenalties: allocation.allocatedPenalties,
         status: RepaymentStatus.completed,
         completedAt: new Date(),
         contract: { connect: { id: input.contractId } },
@@ -65,19 +67,19 @@ export class PaymentService {
     const newOutstandingFees = bankersRound(subtract(String(contract.outstandingFees || 0), allocation.allocatedFees), 4);
     const newOutstandingPenalties = bankersRound(subtract(String(contract.outstandingPenalties || 0), allocation.allocatedPenalties), 4);
     const newTotalOutstanding = add(add(newOutstandingPrincipal, newOutstandingInterest), add(newOutstandingFees, newOutstandingPenalties));
-    const newTotalPaid = add(String(contract.totalPaid || 0), String(input.amount));
+    const newTotalPaid = add(String(contract.totalPaid || 0), input.amount);
 
     const isSettled = compare(newTotalOutstanding, '0') <= 0;
 
     await this.prisma.contract.update({
       where: { id: input.contractId },
       data: {
-        outstandingPrincipal: Number(newOutstandingPrincipal),
-        outstandingInterest: Number(newOutstandingInterest),
-        outstandingFees: Number(newOutstandingFees),
-        outstandingPenalties: Number(newOutstandingPenalties),
-        totalOutstanding: Number(newTotalOutstanding),
-        totalPaid: Number(newTotalPaid),
+        outstandingPrincipal: newOutstandingPrincipal,
+        outstandingInterest: newOutstandingInterest,
+        outstandingFees: newOutstandingFees,
+        outstandingPenalties: newOutstandingPenalties,
+        totalOutstanding: newTotalOutstanding,
+        totalPaid: newTotalPaid,
         ...(isSettled ? { status: ContractStatus.settled, settledAt: new Date() } : {}),
       },
     });
@@ -90,7 +92,7 @@ export class PaymentService {
         debitCredit: 'credit',
         amount: input.amount,
         currency: input.currency,
-        runningBalance: Number(newTotalOutstanding),
+        runningBalance: newTotalOutstanding,
         effectiveDate: new Date(),
         valueDate: new Date(),
         description: `Repayment of ${input.amount} ${input.currency}`,
@@ -103,7 +105,7 @@ export class PaymentService {
     this.eventBus.emitAndBuild(EventType.REPAYMENT_RECEIVED, tenantId, {
       repaymentId: repayment.id,
       contractId: input.contractId,
-      amount: String(input.amount),
+      amount: input.amount,
       allocatedPrincipal: allocation.allocatedPrincipal,
       allocatedInterest: allocation.allocatedInterest,
       allocatedFees: allocation.allocatedFees,

@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService, NotificationChannel, NotificationStatus } from '@lons/database';
+import { maskPhone } from '@lons/common';
 
 @Injectable()
 export class SmsNotificationAdapter {
@@ -14,8 +15,12 @@ export class SmsNotificationAdapter {
     recipient: string;
     content: string;
   }) {
-    // Sandbox mode: log instead of calling real SMS API
-    this.logger.log(`[SMS SANDBOX] To: ${params.recipient} | ${params.content}`);
+    // P1-003 fix: sandbox logs the masked phone and message size only — never
+    // the cleartext number or message body, which can include amounts, names,
+    // and contract identifiers.
+    this.logger.log(
+      `[SMS SANDBOX] To: ${maskPhone(params.recipient)} | event=${params.eventType} customer=${params.customerId.slice(0, 8)}… contentBytes=${params.content.length}`,
+    );
 
     return this.prisma.notification.create({
       data: {

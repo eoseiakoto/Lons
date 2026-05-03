@@ -6,7 +6,8 @@ import { EventType } from '@lons/event-contracts';
 interface InternalTransaction {
   id: string;
   type: 'disbursement' | 'repayment';
-  amount: number;
+  /** Decimal string — never `number`. Reconciliation depends on byte-exact matches. */
+  amount: string;
   externalRef: string | null;
   date: Date;
   contractId: string;
@@ -36,11 +37,13 @@ export class ReconciliationService {
       where: { tenantId, status: RepaymentStatus.completed, completedAt: { gte: startOfDay, lte: endOfDay } },
     });
 
+    // Money preserved as Decimal strings. Reconciliation matches transactions
+    // byte-exact, so float coercion would create false mismatches.
     const internalTxns: InternalTransaction[] = [
       ...disbursements.map((d) => ({
         id: d.id,
         type: 'disbursement' as const,
-        amount: Number(d.amount),
+        amount: String(d.amount),
         externalRef: d.externalRef,
         date: d.completedAt!,
         contractId: d.contractId,
@@ -48,7 +51,7 @@ export class ReconciliationService {
       ...repayments.map((r) => ({
         id: r.id,
         type: 'repayment' as const,
-        amount: Number(r.amount),
+        amount: String(r.amount),
         externalRef: r.externalRef,
         date: r.completedAt!,
         contractId: r.contractId,

@@ -236,7 +236,8 @@ const LOAN_REQUEST_ID = 'loan-request-integ-001';
 const PRINCIPAL = '1000.0000';
 const ANNUAL_RATE = '12.0000'; // 12% annual
 const CURRENCY = 'GHS';
-const REVENUE_SHARING = { lender: 60, sp: 25, emi: 10, platform: 5 };
+const PLATFORM_FEE_PERCENT = 5; // Lōns takes 5% of interest income
+const REVENUE_SHARING = { lenderSharePercent: 60 };
 
 // ---------------------------------------------------------------------------
 // Test suite
@@ -258,6 +259,7 @@ describe('Post-Processing Integration Pipeline', () => {
       country: 'GH',
       schemaName: 'integ_test',
       status: 'active',
+      platformFeePercent: PLATFORM_FEE_PERCENT,
       settings: {},
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -354,6 +356,8 @@ describe('Post-Processing Integration Pipeline', () => {
     const tenantModel = makeModelMock(store.tenants);
     const disbursementModel = makeModelMock(store.disbursements);
 
+    const productModel = makeModelMock(store.products);
+
     prisma = {
       ledgerEntry: ledgerEntryModel,
       contract: contractModel,
@@ -361,6 +365,7 @@ describe('Post-Processing Integration Pipeline', () => {
       settlementRun: settlementRunModel,
       settlementLine: settlementLineModel,
       tenant: tenantModel,
+      product: productModel,
       disbursement: disbursementModel,
       reconciliationRun: makeModelMock(store.reconciliationRuns),
       reconciliationException: makeModelMock(store.reconciliationExceptions),
@@ -630,7 +635,7 @@ describe('Post-Processing Integration Pipeline', () => {
   // Step 4: Settlement calculation with revenue splits
   // -----------------------------------------------------------------------
   describe('Step 4: Settlement calculation', () => {
-    it('should calculate per-party splits matching product config (60/25/10/5)', async () => {
+    it('should calculate two-layer settlement: platform fee on interest + SP net revenue', async () => {
       const periodStart = new Date('2026-03-01T00:00:00Z');
       const periodEnd = new Date('2026-03-31T23:59:59Z');
       const now = new Date('2026-03-15T10:00:00Z');
@@ -665,35 +670,47 @@ describe('Post-Processing Integration Pipeline', () => {
       // Total revenue = interest + fees + penalties = 8 + 1.5 + 0.5 = 10
       expect(bankersRound(String(result.totalRevenue), 4)).toBe('10.0000');
 
-      // Verify settlement lines were created with correct splits
+      // Verify settlement lines — two-layer model
       const lines = [...store.settlementLines.values()];
-      expect(lines.length).toBe(4); // lender, sp, emi, platform
+      // Layer 1: platform + sp (always present)
+      // Layer 2: lender + sp_product (because product has revenueSharing + lenderId)
+      expect(lines.length).toBe(4); // platform, sp, lender, sp_product
 
-      const lenderLine = lines.find((l) => l.partyType === 'lender');
-      const spLine = lines.find((l) => l.partyType === 'sp');
-      const emiLine = lines.find((l) => l.partyType === 'emi');
       const platformLine = lines.find((l) => l.partyType === 'platform');
+      const spLine = lines.find((l) => l.partyType === 'sp');
+      const lenderLine = lines.find((l) => l.partyType === 'lender');
+      const spProductLine = lines.find((l) => l.partyType === 'sp_product');
 
-      expect(lenderLine).toBeDefined();
-      expect(spLine).toBeDefined();
-      expect(emiLine).toBeDefined();
       expect(platformLine).toBeDefined();
+      expect(spLine).toBeDefined();
+      expect(lenderLine).toBeDefined();
+      expect(spProductLine).toBeDefined();
 
-      // 60% of 10 = 6
-      expect(bankersRound(String(lenderLine!.shareAmount), 4)).toBe('6.0000');
-      // 25% of 10 = 2.5
-      expect(bankersRound(String(spLine!.shareAmount), 4)).toBe('2.5000');
-      // 10% of 10 = 1
-      expect(bankersRound(String(emiLine!.shareAmount), 4)).toBe('1.0000');
-      // 5% of 10 = 0.5
-      expect(bankersRound(String(platformLine!.shareAmount), 4)).toBe('0.5000');
+      // Platform fee = 5% of interest income (8) = 0.4
+      expect(bankersRound(String(platformLine!.shareAmount), 4)).toBe('0.4000');
+      // SP net revenue = total(10) - platform fee(0.4) = 9.6
+      expect(bankersRound(String(spLine!.netAmount), 4)).toBe('9.6000');
 
-      // Verify total shares sum to total revenue
-      const totalShares = add(
-        add(bankersRound(String(lenderLine!.shareAmount), 4), bankersRound(String(spLine!.shareAmount), 4)),
-        add(bankersRound(String(emiLine!.shareAmount), 4), bankersRound(String(platformLine!.shareAmount), 4)),
+      // Platform + SP = total revenue (Layer 1 sums correctly)
+      const layer1Total = add(
+        bankersRound(String(platformLine!.shareAmount), 4),
+        bankersRound(String(spLine!.netAmount), 4),
       );
-      expect(totalShares).toBe('10.0000');
+      expect(layer1Total).toBe('10.0000');
+
+      // Layer 2: Product-level splits (after deducting platform fee from product interest)
+      // Product platform fee = 5% of 8 = 0.4, product net = 10 - 0.4 = 9.6
+      // Lender share = 60% of 9.6 = 5.76
+      expect(bankersRound(String(lenderLine!.shareAmount), 4)).toBe('5.7600');
+      // SP product remainder = 9.6 - 5.76 = 3.84
+      expect(bankersRound(String(spProductLine!.netAmount), 4)).toBe('3.8400');
+
+      // Lender + SP product = SP net (Layer 2 sums to SP's share)
+      const layer2Total = add(
+        bankersRound(String(lenderLine!.shareAmount), 4),
+        bankersRound(String(spProductLine!.netAmount), 4),
+      );
+      expect(layer2Total).toBe('9.6000');
     });
 
     it('should progress through approval and execution lifecycle', async () => {
@@ -906,7 +923,7 @@ describe('Post-Processing Integration Pipeline', () => {
   // Step 8: Settlement total == sum of revenue entries
   // -----------------------------------------------------------------------
   describe('Step 8: Settlement totals match revenue entries', () => {
-    it('should have settlement line amounts summing to total revenue', async () => {
+    it('should have platform + SP lines summing to total revenue', async () => {
       const periodStart = new Date('2026-03-01T00:00:00Z');
       const periodEnd = new Date('2026-03-31T23:59:59Z');
 
@@ -937,20 +954,43 @@ describe('Post-Processing Integration Pipeline', () => {
       // Total revenue = 3 × (10 + 3 + 2) = 45
       expect(bankersRound(String(result.totalRevenue), 4)).toBe('45.0000');
 
-      // Sum of all line share amounts should equal total revenue
       const lines = [...store.settlementLines.values()];
-      let lineTotal = '0.0000';
-      for (const line of lines) {
-        lineTotal = add(lineTotal, bankersRound(String(line.shareAmount), 4));
-      }
-      expect(lineTotal).toBe('45.0000');
 
-      // Verify each party's share
-      const lenderTotal = lines
-        .filter((l) => l.partyType === 'lender')
-        .reduce((sum, l) => add(sum, bankersRound(String(l.shareAmount), 4)), '0.0000');
-      // 60% of 45 = 27
-      expect(lenderTotal).toBe('27.0000');
+      // Layer 1: platform + SP = total revenue
+      const platformLine = lines.find((l) => l.partyType === 'platform');
+      const spLine = lines.find((l) => l.partyType === 'sp');
+      expect(platformLine).toBeDefined();
+      expect(spLine).toBeDefined();
+
+      // Platform fee = 5% of total interest (30) = 1.5
+      expect(bankersRound(String(platformLine!.shareAmount), 4)).toBe('1.5000');
+      // SP net = 45 - 1.5 = 43.5
+      expect(bankersRound(String(spLine!.netAmount), 4)).toBe('43.5000');
+
+      const layer1Sum = add(
+        bankersRound(String(platformLine!.shareAmount), 4),
+        bankersRound(String(spLine!.netAmount), 4),
+      );
+      expect(layer1Sum).toBe('45.0000');
+
+      // Layer 2: lender + sp_product = SP net
+      const lenderLines = lines.filter((l) => l.partyType === 'lender');
+      const spProductLines = lines.filter((l) => l.partyType === 'sp_product');
+
+      const lenderTotal = lenderLines.reduce(
+        (sum, l) => add(sum, bankersRound(String(l.shareAmount), 4)), '0.0000',
+      );
+      const spProductTotal = spProductLines.reduce(
+        (sum, l) => add(sum, bankersRound(String(l.netAmount), 4)), '0.0000',
+      );
+
+      // Lender share = 60% of 43.5 = 26.1
+      expect(lenderTotal).toBe('26.1000');
+      // SP product = 43.5 - 26.1 = 17.4
+      expect(spProductTotal).toBe('17.4000');
+
+      // Layer 2 sums to SP net
+      expect(add(lenderTotal, spProductTotal)).toBe('43.5000');
     });
   });
 });
