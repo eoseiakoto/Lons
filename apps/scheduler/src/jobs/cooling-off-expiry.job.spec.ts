@@ -21,6 +21,12 @@ describe('CoolingOffExpiryJob', () => {
         {
           provide: PrismaService,
           useValue: {
+            // The job wraps platform-admin tenant lookup and per-tenant work
+            // in `enterTenantContext` for RLS scoping. Unit tests don't care
+            // about RLS — pass through to the inner callback.
+            enterTenantContext: jest.fn().mockImplementation(
+              async (_ctx: unknown, fn: () => Promise<unknown>) => fn(),
+            ),
             tenant: {
               findMany: jest.fn(),
             },
