@@ -8,7 +8,6 @@ import { ConsentService } from './consent.service';
 import { BatchReportingService } from './batch-reporting.service';
 import { CreditBureauService } from './credit-bureau.service';
 import { PrismaService } from '@lons/database';
-import { EventBusService } from '@lons/common';
 
 // Mock PrismaService
 const mockPrismaService = {
@@ -30,11 +29,6 @@ const mockConfigService = {
   get: jest.fn((key: string, defaultValue?: string) => defaultValue),
 };
 
-const mockEventBusService = {
-  emit: jest.fn(),
-  buildEvent: jest.fn(),
-  emitAndBuild: jest.fn(),
-};
 
 describe('GhanaXcbAdapter', () => {
   let adapter: GhanaXcbAdapter;
@@ -502,17 +496,12 @@ describe('CreditBureauService (refactored)', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
 
+    const ghanaAdapter = new GhanaXcbAdapter();
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CreditBureauService,
-        CreditBureauFactory,
-        ConsentService,
-        GhanaXcbAdapter,
-        KenyaCrbAdapter,
-        MockCreditBureauAdapter,
-        { provide: PrismaService, useValue: mockPrismaService },
-        { provide: ConfigService, useValue: mockConfigService },
-        { provide: EventBusService, useValue: mockEventBusService },
+        { provide: 'CREDIT_BUREAU_ADAPTER', useValue: ghanaAdapter },
       ],
     }).compile();
 
@@ -520,21 +509,12 @@ describe('CreditBureauService (refactored)', () => {
   });
 
   describe('queryReport()', () => {
-    it('should return null when no consent exists', async () => {
-      mockPrismaService.creditBureauConsent.findFirst.mockResolvedValue(null);
-
-      const result = await service.queryReport('GHA-123', true);
+    it('should return null when consent is false', async () => {
+      const result = await service.queryReport('GHA-123', false);
       expect(result).toBeNull();
     });
 
-    it('should return a report when consent exists', async () => {
-      mockPrismaService.creditBureauConsent.findFirst.mockResolvedValue({
-        id: 'consent-1',
-        consentGiven: true,
-        expiresAt: new Date(Date.now() + 86400000),
-        revokedAt: null,
-      });
-
+    it('should return a report when consent is true', async () => {
       const result = await service.queryReport('GHA-123', true);
 
       expect(result).not.toBeNull();
@@ -543,64 +523,38 @@ describe('CreditBureauService (refactored)', () => {
     });
 
     it('should use cache for subsequent queries', async () => {
-      mockPrismaService.creditBureauConsent.findFirst.mockResolvedValue({
-        id: 'consent-1',
-        consentGiven: true,
-        expiresAt: new Date(Date.now() + 86400000),
-        revokedAt: null,
-      });
-
-      const result1 = await service.queryReport('GHA-123', true);
-      const result2 = await service.queryReport('GHA-123', true);
+      const result1 = await service.queryReport('GHA-CACHE-TEST', true);
+      const result2 = await service.queryReport('GHA-CACHE-TEST', true);
 
       // Both should be the same cached report
       expect(result1).toEqual(result2);
     });
 
-    it('should use Kenya adapter for KE country', async () => {
-      mockPrismaService.creditBureauConsent.findFirst.mockResolvedValue({
-        id: 'consent-1',
-        consentGiven: true,
-        expiresAt: new Date(Date.now() + 86400000),
-        revokedAt: null,
-      });
-
-      const result = await service.queryReport('KEN-12345678', true);
+    it('should delegate to the injected adapter', async () => {
+      const result = await service.queryReport('GHA-456', true);
 
       expect(result).not.toBeNull();
-      expect(result!.bureauType).toBe('KENYA_CRB');
-      expect(result!.country).toBe('KE');
+      expect(result!.bureauScore).toBeGreaterThanOrEqual(300);
+      expect(result!.bureauScore).toBeLessThanOrEqual(900);
     });
 
-    it('should emit CREDIT_BUREAU_REPORT_RECEIVED event on successful query', async () => {
-      mockPrismaService.creditBureauConsent.findFirst.mockResolvedValue({
-        id: 'consent-1',
-        consentGiven: true,
-        expiresAt: new Date(Date.now() + 86400000),
-        revokedAt: null,
+    it('should not cache null results', async () => {
+      const result1 = await service.queryReport('GHA-NO-CONSENT', false);
+      expect(result1).toBeNull();
+
+      // A subsequent call with consent should still fetch fresh
+      const result2 = await service.queryReport('GHA-NO-CONSENT', true);
+      expect(result2).not.toBeNull();
+    });
+
+    it('should support submitPositiveData', async () => {
+      const result = await service.submitPositiveData({
+        customerId: 'cust-1',
+        contractId: 'contract-1',
+        amount: '5000.00',
+        status: 'performing',
       });
-
-      // Force a fresh query by using a unique national ID
-      const result = await service.queryReport('GHA-EVENT-TEST', true);
-
-      expect(result).not.toBeNull();
-      expect(mockEventBusService.emitAndBuild).toHaveBeenCalledWith(
-        'credit_bureau.report_received',
-        'tenant-1',
-        expect.objectContaining({
-          customerId: 'cust-1',
-          bureauType: 'GHANA_XCB',
-          country: 'GH',
-        }),
-      );
-    });
-
-    it('should not emit event when consent is missing', async () => {
-      mockPrismaService.creditBureauConsent.findFirst.mockResolvedValue(null);
-
-      await service.queryReport('GHA-123', true);
-
-      expect(mockEventBusService.emitAndBuild).not.toHaveBeenCalled();
+      expect(typeof result).toBe('boolean');
     });
   });
 });

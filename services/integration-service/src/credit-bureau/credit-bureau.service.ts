@@ -1,4 +1,6 @@
 import { Injectable, Inject, Logger } from '@nestjs/common';
+import { maskNationalId } from '@lons/common';
+
 import { CREDIT_BUREAU_ADAPTER, ICreditBureauAdapter, CreditReport } from './credit-bureau.interface';
 
 @Injectable()
@@ -15,7 +17,8 @@ export class CreditBureauService {
     // Check cache
     const cached = this.cache.get(nationalId);
     if (cached && Date.now() - cached.cachedAt < this.CACHE_TTL) {
-      this.logger.log(`Cache hit for credit report: ${nationalId}`);
+      // P1-003: national ID is PII and never logged in cleartext.
+      this.logger.log(`Cache hit for credit report: ${maskNationalId(nationalId)}`);
       return cached.report;
     }
 

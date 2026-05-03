@@ -1,4 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { maskNationalId } from '@lons/common';
+
 import { ICreditBureauAdapter, CreditReport } from './credit-bureau.interface';
 
 @Injectable()
@@ -7,11 +9,12 @@ export class MockCreditBureauAdapter implements ICreditBureauAdapter {
 
   async queryReport(nationalId: string, consent: boolean): Promise<CreditReport | null> {
     if (!consent) {
-      this.logger.warn(`Credit bureau query rejected: no consent for ${nationalId}`);
+      // P1-003: national IDs are PII and never logged in cleartext.
+      this.logger.warn(`Credit bureau query rejected: no consent for ${maskNationalId(nationalId)}`);
       return null;
     }
 
-    this.logger.log(`[SANDBOX] Credit bureau query for ${nationalId}`);
+    this.logger.log(`[SANDBOX] Credit bureau query for ${maskNationalId(nationalId)}`);
     return {
       customerId: nationalId,
       bureauScore: 650 + Math.floor(Math.random() * 200),

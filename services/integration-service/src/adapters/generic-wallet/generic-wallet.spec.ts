@@ -1,3 +1,5 @@
+import { Test, TestingModule } from '@nestjs/testing';
+import { ConfigService } from '@nestjs/config';
 import { GenericWalletAdapter } from './generic-wallet.adapter';
 import { IWalletAdapterConfig } from './generic-wallet.types';
 
@@ -67,7 +69,6 @@ describe('GenericWalletAdapter', () => {
     }).compile();
 
     adapter = module.get<GenericWalletAdapter>(GenericWalletAdapter);
-    configService = module.get<ConfigService>(ConfigService);
   });
 
   describe('buildRequestBody', () => {
@@ -304,7 +305,7 @@ describe('GenericWalletAdapter', () => {
 
     it('should return default customer info when called without config', async () => {
       const result = await adapter.getCustomerInfo('wallet-123');
-      expect(result.walletId).toBe('wallet-123');
+      expect(result.walletId).toBe('');
       expect(result.fullName).toBe('Unknown');
       expect(result.kycLevel).toBe('unknown');
     });

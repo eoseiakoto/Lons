@@ -9,9 +9,10 @@ import { CreditBureauService } from './credit-bureau/credit-bureau.service';
 import { MockCreditBureauAdapter } from './credit-bureau/mock-credit-bureau.adapter';
 import { CREDIT_BUREAU_ADAPTER } from './credit-bureau/credit-bureau.interface';
 import { WebhookService } from './webhook/webhook.service';
+import { ScreeningModule } from './screening/screening.module';
 
 @Module({
-  imports: [PrismaModule, EventBusModule, ObservabilityModule],
+  imports: [PrismaModule, EventBusModule, ObservabilityModule, ScreeningModule],
   providers: [
     MtnMomoAdapter,
     MpesaAdapter,
@@ -20,6 +21,6 @@ import { WebhookService } from './webhook/webhook.service';
     { provide: CREDIT_BUREAU_ADAPTER, useClass: MockCreditBureauAdapter },
     WebhookService,
   ],
-  exports: [MtnMomoAdapter, MpesaAdapter, WalletAdapterResolver, CreditBureauService, WebhookService],
+  exports: [MtnMomoAdapter, MpesaAdapter, WalletAdapterResolver, CreditBureauService, WebhookService, ScreeningModule],
 })
 export class IntegrationServiceModule {}

@@ -107,7 +107,7 @@ describe('ApiLogService', () => {
   let apiLogService: ApiLogService;
   let mockPrisma: any;
 
-  beforeEach(async () => {
+  beforeEach(() => {
     mockPrisma = {
       integrationApiLog: {
         create: jest.fn(),
@@ -118,14 +118,6 @@ describe('ApiLogService', () => {
       },
     };
 
-    await Test.createTestingModule({
-      providers: [
-        ApiLogService,
-        { provide: 'PrismaService', useValue: mockPrisma },
-      ],
-    }).compile();
-
-    // Manually inject because PrismaService token may differ
     apiLogService = new ApiLogService(mockPrisma);
   });
 
