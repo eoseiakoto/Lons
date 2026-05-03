@@ -197,7 +197,7 @@ const TENANTS: TenantConfig[] = [
         repaymentMethod: 'auto_deduction', gracePeriodDays: 0,
         penaltyConfig: { type: 'percentage', rate: 2.0, cap: 25.0, compound: false },
         approvalWorkflow: 'auto', eligibilityRules: { minKycLevel: 'tier_1', minTransactionHistory: 30 },
-        revenueSharing: { lender: 60, sp: 25, emi: 10, platform: 5 }, maxActiveLoans: 1, status: 'active',
+        revenueSharing: { lenderSharePercent: 60 }, maxActiveLoans: 1, status: 'active',
       },
       {
         code: 'ML-GHS-001', name: 'Quick Micro-Loan',
@@ -209,7 +209,7 @@ const TENANTS: TenantConfig[] = [
         penaltyConfig: { type: 'percentage', rate: 1.5, cap: 30.0, compound: false },
         approvalWorkflow: 'semi_auto', approvalThresholds: { autoApproveBelow: 1000 },
         eligibilityRules: { minKycLevel: 'tier_1', minAccountAge: 60 },
-        revenueSharing: { lender: 55, sp: 30, emi: 10, platform: 5 }, maxActiveLoans: 2, status: 'active',
+        revenueSharing: { lenderSharePercent: 55 }, maxActiveLoans: 2, status: 'active',
       },
       {
         code: 'BNPL-GHS-001', name: 'Pay Later at Checkout',
@@ -220,7 +220,7 @@ const TENANTS: TenantConfig[] = [
         repaymentMethod: 'equal_installments', gracePeriodDays: 0,
         penaltyConfig: { type: 'flat', rate: 5.0, cap: 50.0, compound: false },
         approvalWorkflow: 'auto', eligibilityRules: { minKycLevel: 'tier_1', minCreditScore: 500 },
-        revenueSharing: { lender: 50, sp: 30, emi: 10, platform: 10 }, maxActiveLoans: 3, status: 'active',
+        revenueSharing: { lenderSharePercent: 50 }, maxActiveLoans: 3, status: 'active',
       },
       {
         code: 'IF-GHS-001', name: 'Invoice Advance',
@@ -231,7 +231,7 @@ const TENANTS: TenantConfig[] = [
         repaymentMethod: 'lump_sum', gracePeriodDays: 5,
         penaltyConfig: { type: 'percentage', rate: 2.5, cap: 30.0, compound: false },
         approvalWorkflow: 'semi_auto', eligibilityRules: { minKycLevel: 'tier_2', minAccountAge: 180 },
-        revenueSharing: { lender: 55, sp: 25, emi: 10, platform: 10 }, maxActiveLoans: 2, status: 'draft',
+        revenueSharing: { lenderSharePercent: 55 }, maxActiveLoans: 2, status: 'draft',
       },
     ],
     customers: [
@@ -295,7 +295,7 @@ const TENANTS: TenantConfig[] = [
         repaymentMethod: 'auto_deduction', gracePeriodDays: 0,
         penaltyConfig: { type: 'percentage', rate: 2.0, cap: 25.0, compound: false },
         approvalWorkflow: 'auto', eligibilityRules: { minKycLevel: 'tier_1', minTransactionHistory: 30 },
-        revenueSharing: { lender: 60, sp: 25, emi: 10, platform: 5 }, maxActiveLoans: 1, status: 'active',
+        revenueSharing: { lenderSharePercent: 60 }, maxActiveLoans: 1, status: 'active',
       },
       {
         code: 'ML-KES-001', name: 'Safari Micro-Loan',
@@ -307,7 +307,7 @@ const TENANTS: TenantConfig[] = [
         penaltyConfig: { type: 'percentage', rate: 1.5, cap: 30.0, compound: false },
         approvalWorkflow: 'semi_auto', approvalThresholds: { autoApproveBelow: 10000 },
         eligibilityRules: { minKycLevel: 'tier_1', minAccountAge: 60 },
-        revenueSharing: { lender: 55, sp: 30, emi: 10, platform: 5 }, maxActiveLoans: 2, status: 'active',
+        revenueSharing: { lenderSharePercent: 55 }, maxActiveLoans: 2, status: 'active',
       },
       {
         code: 'BNPL-KES-001', name: 'Lipa Pole Pole',
@@ -318,7 +318,7 @@ const TENANTS: TenantConfig[] = [
         repaymentMethod: 'equal_installments', gracePeriodDays: 0,
         penaltyConfig: { type: 'flat', rate: 50.0, cap: 500.0, compound: false },
         approvalWorkflow: 'auto', eligibilityRules: { minKycLevel: 'tier_1', minCreditScore: 500 },
-        revenueSharing: { lender: 50, sp: 30, emi: 10, platform: 10 }, maxActiveLoans: 3, status: 'active',
+        revenueSharing: { lenderSharePercent: 50 }, maxActiveLoans: 3, status: 'active',
       },
       {
         code: 'IF-KES-001', name: 'Invoice Express',
@@ -329,7 +329,7 @@ const TENANTS: TenantConfig[] = [
         repaymentMethod: 'lump_sum', gracePeriodDays: 5,
         penaltyConfig: { type: 'percentage', rate: 2.5, cap: 30.0, compound: false },
         approvalWorkflow: 'semi_auto', eligibilityRules: { minKycLevel: 'tier_2', minAccountAge: 180 },
-        revenueSharing: { lender: 55, sp: 25, emi: 10, platform: 10 }, maxActiveLoans: 2, status: 'suspended',
+        revenueSharing: { lenderSharePercent: 55 }, maxActiveLoans: 2, status: 'suspended',
       },
     ],
     customers: [
@@ -393,7 +393,7 @@ const TENANTS: TenantConfig[] = [
         repaymentMethod: 'auto_deduction', gracePeriodDays: 0,
         penaltyConfig: { type: 'percentage', rate: 2.0, cap: 25.0, compound: false },
         approvalWorkflow: 'auto', eligibilityRules: { minKycLevel: 'tier_1', minTransactionHistory: 30 },
-        revenueSharing: { lender: 60, sp: 25, emi: 10, platform: 5 }, maxActiveLoans: 1, status: 'active',
+        revenueSharing: { lenderSharePercent: 60 }, maxActiveLoans: 1, status: 'active',
       },
       {
         code: 'ML-NGN-001', name: 'Quick Naira Loan',
@@ -405,7 +405,7 @@ const TENANTS: TenantConfig[] = [
         penaltyConfig: { type: 'percentage', rate: 2.0, cap: 30.0, compound: false },
         approvalWorkflow: 'semi_auto', approvalThresholds: { autoApproveBelow: 200000 },
         eligibilityRules: { minKycLevel: 'tier_1', minAccountAge: 60 },
-        revenueSharing: { lender: 55, sp: 30, emi: 10, platform: 5 }, maxActiveLoans: 2, status: 'active',
+        revenueSharing: { lenderSharePercent: 55 }, maxActiveLoans: 2, status: 'active',
       },
       {
         code: 'BNPL-NGN-001', name: 'Buy Now Naija',
@@ -416,7 +416,7 @@ const TENANTS: TenantConfig[] = [
         repaymentMethod: 'equal_installments', gracePeriodDays: 0,
         penaltyConfig: { type: 'flat', rate: 500.0, cap: 5000.0, compound: false },
         approvalWorkflow: 'auto', eligibilityRules: { minKycLevel: 'tier_1', minCreditScore: 500 },
-        revenueSharing: { lender: 50, sp: 30, emi: 10, platform: 10 }, maxActiveLoans: 3, status: 'draft',
+        revenueSharing: { lenderSharePercent: 50 }, maxActiveLoans: 3, status: 'draft',
       },
       {
         code: 'IF-NGN-001', name: 'Naira Invoice Finance',
@@ -427,7 +427,7 @@ const TENANTS: TenantConfig[] = [
         repaymentMethod: 'lump_sum', gracePeriodDays: 5,
         penaltyConfig: { type: 'percentage', rate: 3.0, cap: 30.0, compound: false },
         approvalWorkflow: 'semi_auto', eligibilityRules: { minKycLevel: 'tier_2', minAccountAge: 180 },
-        revenueSharing: { lender: 55, sp: 25, emi: 10, platform: 10 }, maxActiveLoans: 2, status: 'draft',
+        revenueSharing: { lenderSharePercent: 55 }, maxActiveLoans: 2, status: 'draft',
       },
     ],
     customers: [
@@ -475,6 +475,13 @@ async function main() {
   console.log('============================================================');
   console.log('  Seeding Lons platform with multi-country data');
   console.log('============================================================\n');
+
+  // RLS context: seed runs as a platform admin so it can write across tenants.
+  // Without this, every insert into a tenant-scoped table would be rejected
+  // by the RLS policies created in 20260430120000_enable_rls_tenant_isolation.
+  // We use a session-scoped SET (not LOCAL) because the seed performs many
+  // independent autocommit statements via the singleton client.
+  await prisma.$executeRaw`SELECT set_config('app.is_platform_admin', 'true', false)`;
 
   // -----------------------------------------------------------------------
   // 1. Platform admin (shared across all tenants)
@@ -596,6 +603,23 @@ async function main() {
     });
     console.log(`  Lender: ${lender.name} (${lender.id})`);
 
+    // Create Self-Funded lender (system-managed, for products without external lenders)
+    const existingSelfFunded = await prisma.lender.findFirst({
+      where: { tenantId: tenant.id, name: 'Self-Funded', deletedAt: null },
+    });
+    if (!existingSelfFunded) {
+      const selfFunded = await prisma.lender.create({
+        data: {
+          tenantId: tenant.id,
+          name: 'Self-Funded',
+          status: 'active',
+        },
+      });
+      console.log(`  Self-Funded Lender: ${selfFunded.id}`);
+    } else {
+      console.log(`  Self-Funded Lender: ${existingSelfFunded.id} (existing)`);
+    }
+
     // ---------------------------------------------------------------------
     // 6. Create products (4 per tenant)
     // ---------------------------------------------------------------------
@@ -708,6 +732,129 @@ async function main() {
       customerRecords.push({ id: customer.id, idx: i, fullName: c.fullName });
     }
     console.log(`  Created ${customerRecords.length} customers with consents`);
+
+    // ---------------------------------------------------------------------
+    // Screening results (for AML review queue)
+    // ---------------------------------------------------------------------
+    console.log('  Seeding screening results...');
+    const existingScreenings = await prisma.screeningResult.count({ where: { tenantId: tenant.id } });
+    if (existingScreenings === 0) {
+      const screeningSeeds = [
+        // POTENTIAL_MATCH — PEP (unreviewed, will appear in review queue)
+        {
+          tenantId: tenant.id,
+          customerId: customerRecords[2].id,
+          externalId: `mock-pep-${tenant.id.slice(0, 8)}-001`,
+          provider: 'mock',
+          status: 'POTENTIAL_MATCH' as const,
+          riskLevel: 'HIGH' as const,
+          matchCount: 1,
+          matchDetails: [
+            { matchId: 'match-pep-001', matchType: 'PEP', entityName: customerRecords[2].fullName, matchScore: 78, source: 'World PEP Database', details: { remarks: 'Mock PEP match for testing' } },
+          ],
+          screenedAt: daysAgo(3),
+          expiresAt: daysAgo(-21),
+        },
+        // POTENTIAL_MATCH — PEP (unreviewed)
+        {
+          tenantId: tenant.id,
+          customerId: customerRecords[5].id,
+          externalId: `mock-pep-${tenant.id.slice(0, 8)}-002`,
+          provider: 'mock',
+          status: 'POTENTIAL_MATCH' as const,
+          riskLevel: 'HIGH' as const,
+          matchCount: 1,
+          matchDetails: [
+            { matchId: 'match-pep-002', matchType: 'PEP', entityName: customerRecords[5].fullName, matchScore: 72, source: 'World PEP Database', details: { remarks: 'Mock PEP match for testing' } },
+          ],
+          screenedAt: daysAgo(2),
+          expiresAt: daysAgo(-22),
+        },
+        // POTENTIAL_MATCH — ADVERSE_MEDIA (unreviewed)
+        {
+          tenantId: tenant.id,
+          customerId: customerRecords[8].id,
+          externalId: `mock-adverse-${tenant.id.slice(0, 8)}-001`,
+          provider: 'mock',
+          status: 'POTENTIAL_MATCH' as const,
+          riskLevel: 'MEDIUM' as const,
+          matchCount: 1,
+          matchDetails: [
+            { matchId: 'match-adverse-001', matchType: 'ADVERSE_MEDIA', entityName: customerRecords[8].fullName, matchScore: 65, source: 'Global Adverse Media DB', details: { remarks: 'Mock adverse media match for testing' } },
+          ],
+          screenedAt: daysAgo(1),
+          expiresAt: daysAgo(-23),
+        },
+        // POTENTIAL_MATCH — ADVERSE_MEDIA (unreviewed)
+        {
+          tenantId: tenant.id,
+          customerId: customerRecords[11].id,
+          externalId: `mock-adverse-${tenant.id.slice(0, 8)}-002`,
+          provider: 'mock',
+          status: 'POTENTIAL_MATCH' as const,
+          riskLevel: 'MEDIUM' as const,
+          matchCount: 1,
+          matchDetails: [
+            { matchId: 'match-adverse-002', matchType: 'ADVERSE_MEDIA', entityName: customerRecords[11].fullName, matchScore: 58, source: 'Global Adverse Media DB', details: { remarks: 'Mock adverse media match for testing' } },
+          ],
+          screenedAt: daysAgo(1),
+          expiresAt: daysAgo(-23),
+        },
+        // POTENTIAL_MATCH — SANCTIONS (unreviewed, urgent)
+        {
+          tenantId: tenant.id,
+          customerId: customerRecords[14].id,
+          externalId: `mock-sanctions-${tenant.id.slice(0, 8)}-001`,
+          provider: 'mock',
+          status: 'POTENTIAL_MATCH' as const,
+          riskLevel: 'CRITICAL' as const,
+          matchCount: 1,
+          matchDetails: [
+            { matchId: 'match-sanctions-001', matchType: 'SANCTIONS', entityName: customerRecords[14].fullName, matchScore: 85, source: 'OFAC SDN List', details: { remarks: 'Mock sanctions match for testing' } },
+          ],
+          screenedAt: daysAgo(0),
+          expiresAt: daysAgo(-24),
+        },
+        // CLEAR — already resolved (should NOT appear in review queue)
+        {
+          tenantId: tenant.id,
+          customerId: customerRecords[0].id,
+          externalId: `mock-clear-${tenant.id.slice(0, 8)}-001`,
+          provider: 'mock',
+          status: 'CLEAR' as const,
+          riskLevel: 'LOW' as const,
+          matchCount: 0,
+          matchDetails: [],
+          screenedAt: daysAgo(10),
+          expiresAt: daysAgo(-14),
+        },
+        // POTENTIAL_MATCH — already reviewed (should NOT appear in review queue)
+        {
+          tenantId: tenant.id,
+          customerId: customerRecords[3].id,
+          externalId: `mock-reviewed-${tenant.id.slice(0, 8)}-001`,
+          provider: 'mock',
+          status: 'POTENTIAL_MATCH' as const,
+          riskLevel: 'HIGH' as const,
+          matchCount: 1,
+          matchDetails: [
+            { matchId: 'match-reviewed-001', matchType: 'PEP', entityName: customerRecords[3].fullName, matchScore: 70, source: 'World PEP Database', details: { remarks: 'Mock PEP match — already reviewed' } },
+          ],
+          screenedAt: daysAgo(15),
+          expiresAt: daysAgo(-9),
+          reviewedBy: spAdminId || null,
+          reviewedAt: daysAgo(14),
+          reviewDecision: 'APPROVE',
+        },
+      ];
+
+      for (const s of screeningSeeds) {
+        await prisma.screeningResult.create({ data: s as any });
+      }
+      console.log(`  Created ${screeningSeeds.length} screening results (${screeningSeeds.filter(s => s.status === 'POTENTIAL_MATCH' && !('reviewedAt' in s)).length} pending review)`);
+    } else {
+      console.log(`  Screening results already exist (${existingScreenings}), skipping`);
+    }
 
     // Only non-blacklisted customers participate in loans
     const eligibleCustomers = customerRecords.filter((c) => c.idx < 18);
@@ -1330,7 +1477,7 @@ async function seedStagingData(p: PrismaClient) {
       penaltyConfig: { type: 'percentage', rate: 2.0, cap: 25.0, compound: false },
       approvalWorkflow: 'auto',
       eligibilityRules: { minKycLevel: 'tier_1', minTransactionHistory: 30 },
-      revenueSharing: { lender: 60, sp: 25, emi: 10, platform: 5 },
+      revenueSharing: { lenderSharePercent: 60 },
       maxActiveLoans: 1,
     },
     micro_loan: {
@@ -1349,7 +1496,7 @@ async function seedStagingData(p: PrismaClient) {
       penaltyConfig: { type: 'percentage', rate: 1.5, cap: 30.0, compound: false },
       approvalWorkflow: 'semi_auto',
       eligibilityRules: { minKycLevel: 'tier_1', minAccountAge: 60 },
-      revenueSharing: { lender: 55, sp: 30, emi: 10, platform: 5 },
+      revenueSharing: { lenderSharePercent: 55 },
       maxActiveLoans: 2,
     },
     bnpl: {
@@ -1368,7 +1515,7 @@ async function seedStagingData(p: PrismaClient) {
       penaltyConfig: { type: 'flat', rate: 5.0, cap: 50.0, compound: false },
       approvalWorkflow: 'auto',
       eligibilityRules: { minKycLevel: 'tier_1', minCreditScore: 500 },
-      revenueSharing: { lender: 50, sp: 30, emi: 10, platform: 10 },
+      revenueSharing: { lenderSharePercent: 50 },
       maxActiveLoans: 3,
     },
     invoice_financing: {
@@ -1387,7 +1534,7 @@ async function seedStagingData(p: PrismaClient) {
       penaltyConfig: { type: 'percentage', rate: 2.5, cap: 30.0, compound: false },
       approvalWorkflow: 'semi_auto',
       eligibilityRules: { minKycLevel: 'tier_2', minAccountAge: 180 },
-      revenueSharing: { lender: 55, sp: 25, emi: 10, platform: 10 },
+      revenueSharing: { lenderSharePercent: 55 },
       maxActiveLoans: 2,
     },
   };
@@ -1673,6 +1820,23 @@ async function seedStagingData(p: PrismaClient) {
     });
     console.log(`  Lender: ${lender.name}`);
 
+    // Create Self-Funded lender (system-managed, for products without external lenders)
+    const existingSelfFunded = await p.lender.findFirst({
+      where: { tenantId: tenant.id, name: 'Self-Funded', deletedAt: null },
+    });
+    if (!existingSelfFunded) {
+      const selfFunded = await p.lender.create({
+        data: {
+          tenantId: tenant.id,
+          name: 'Self-Funded',
+          status: 'active',
+        },
+      });
+      console.log(`  Self-Funded Lender: ${selfFunded.id}`);
+    } else {
+      console.log(`  Self-Funded Lender: ${existingSelfFunded.id} (existing)`);
+    }
+
     // -----------------------------------------------------------------
     // 6. Products — active products + suspended/discontinued/draft extras
     // -----------------------------------------------------------------
@@ -1752,7 +1916,7 @@ async function seedStagingData(p: PrismaClient) {
           penaltyConfig: { type: 'percentage', rate: 1.5, cap: 30.0, compound: false } as Prisma.InputJsonValue,
           approvalWorkflow: 'semi_auto',
           eligibilityRules: { minKycLevel: 'tier_1' } as Prisma.InputJsonValue,
-          revenueSharing: { lender: 55, sp: 30, emi: 10, platform: 5 } as Prisma.InputJsonValue,
+          revenueSharing: { lenderSharePercent: 55 } as Prisma.InputJsonValue,
           maxActiveLoans: 2,
           status: extra.status,
           createdBy: spAdminId || undefined,
@@ -2368,12 +2532,14 @@ async function seedStagingData(p: PrismaClient) {
         },
       });
 
-      // Revenue splits: lender 55%, SP 30%, EMI 10%, Platform 5%
+      // Revenue splits: platform fee (% of interest), lender share, SP remainder
+      const platformFeePct = 5;
+      const lenderSharePct = 55;
       const splits = [
-        { partyType: 'lender', partyId: lender.id, sharePct: 55 },
-        { partyType: 'sp', partyId: tenant.id, sharePct: 30 },
-        { partyType: 'emi', partyId: tenant.id, sharePct: 10 },
-        { partyType: 'platform', partyId: tenant.id, sharePct: 5 },
+        { partyType: 'platform', partyId: 'lons-platform', sharePct: platformFeePct },
+        { partyType: 'sp', partyId: tenant.id, sharePct: 100 - platformFeePct },
+        { partyType: 'lender', partyId: lender.id, sharePct: lenderSharePct },
+        { partyType: 'sp_product', partyId: tenant.id, sharePct: 100 - lenderSharePct },
       ];
       const lineData: Prisma.SettlementLineCreateManyInput[] = splits.map((s) => ({
         tenantId: tenant.id,

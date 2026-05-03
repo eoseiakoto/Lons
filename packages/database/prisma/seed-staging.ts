@@ -42,6 +42,10 @@ async function main() {
   console.log('Starting staging database seed...');
 
   try {
+    // RLS context: bypass tenant policies so the seed can write across
+    // tenants. See seed.ts for the same pattern.
+    await prisma.$executeRaw`SELECT set_config('app.is_platform_admin', 'true', false)`;
+
     // Platform schema setup - ensure platform tenant exists
     console.log('Setting up platform tenant...');
     const platformTenant = await prisma.tenant.upsert({
