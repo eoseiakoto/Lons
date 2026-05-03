@@ -88,7 +88,7 @@ export class AuditEventInterceptor implements NestInterceptor {
     const user: RequestUser = req.user ?? {};
     const actorId = user.id ?? user.sub;
     const actorType: 'user' | 'system' | 'api_key' = user.type ?? 'system';
-    const tenantId = user.tenantId ?? 'unknown';
+    const tenantId = user.tenantId ?? null;
     const actorIp: string | undefined = (req as Record<string, unknown>)['ip'] as string | undefined;
     const correlationId: string | undefined =
       req.headers?.['x-correlation-id'] as string | undefined;
@@ -101,6 +101,11 @@ export class AuditEventInterceptor implements NestInterceptor {
 
     return next.handle().pipe(
       tap(async (responseValue: unknown) => {
+        // Skip audit logging when tenantId is missing or not a valid UUID
+        // (e.g. platform admin operations with no tenant context)
+        if (!tenantId || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tenantId)) {
+          return;
+        }
         try {
           // Handlers that want to supply a before-state can wrap their return
           // value as `{ __before: <snapshot>, ...actual }`. We peel that off

@@ -14,12 +14,26 @@ export class MetricsInterceptor implements NestInterceptor {
   constructor(private readonly metricsService: MetricsService) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
-    const httpContext = context.switchToHttp();
-    const req = httpContext.getRequest<any>();
-    const res = httpContext.getResponse<any>();
+    let method: string;
+    let route: string;
+    let res: any;
 
-    const method: string = req.method ?? 'UNKNOWN';
-    const route: string = (req.route?.path as string) ?? req.url ?? 'unknown';
+    const contextType = context.getType<string>();
+
+    if (contextType === 'graphql') {
+      // In GraphQL context, extract resolver info from the args
+      const handler = context.getHandler();
+      const className = context.getClass()?.name ?? 'GraphQL';
+      method = className;
+      route = handler?.name ?? 'unknown';
+      res = {};
+    } else {
+      const httpContext = context.switchToHttp();
+      const req = httpContext.getRequest<any>();
+      res = httpContext.getResponse<any>();
+      method = req?.method ?? 'UNKNOWN';
+      route = (req?.route?.path as string) ?? req?.url ?? 'unknown';
+    }
 
     const timerEnd = this.metricsService.httpRequestDuration
       .labels({ method, route })

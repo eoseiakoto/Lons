@@ -1,5 +1,15 @@
+/**
+ * A monetary amount serialized as a string to preserve Decimal precision
+ * across service boundaries. Never use `number` for money — float arithmetic
+ * loses precision and CLAUDE.md prohibits it. Pass these as-is into Prisma's
+ * Decimal columns; Prisma accepts strings directly.
+ *
+ * Format: a base-10 numeric string with optional decimal point (e.g. "1234.5678").
+ */
+export type MoneyString = string;
+
 export interface IMoney {
-  amount: string;
+  amount: MoneyString;
   currency: string;
 }
 

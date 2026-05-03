@@ -8,7 +8,7 @@ export interface TenantSettings {
 @Injectable()
 export class IpWhitelistGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const req = context.switchToHttp().getRequest();
+    const req = this.getRequest(context);
     const tenantSettings: TenantSettings | undefined =
       req.user?.tenantSettings ?? req.tenantSettings;
 
@@ -22,5 +22,22 @@ export class IpWhitelistGuard implements CanActivate {
       (forwardedFor ? forwardedFor.split(',')[0].trim() : undefined) ?? req.ip ?? '';
 
     return tenantSettings.ipWhitelist.includes(clientIp);
+  }
+
+  /**
+   * Extract the request object from either HTTP or GraphQL execution contexts.
+   *
+   * We avoid importing @nestjs/graphql (not a dependency of this package) and
+   * instead manually extract `req` from the GraphQL context argument, which is
+   * the third element in the resolver args array: [root, args, context, info].
+   */
+  private getRequest(context: ExecutionContext): any {
+    const contextType = context.getType<string>();
+    if (contextType === 'graphql') {
+      const gqlArgs = context.getArgs();
+      const ctx = gqlArgs[2]; // [root, args, context, info]
+      return ctx?.req ?? {};
+    }
+    return context.switchToHttp().getRequest();
   }
 }

@@ -3,6 +3,8 @@ import {
   ThrottlerGuard,
   ThrottlerModuleOptions,
   ThrottlerStorage,
+  InjectThrottlerOptions,
+  InjectThrottlerStorage,
 } from '@nestjs/throttler';
 import type { ThrottlerLimitDetail } from '@nestjs/throttler/dist/throttler.guard.interface';
 import { Reflector } from '@nestjs/core';
@@ -43,11 +45,43 @@ const DEFAULT_LIMITS: Record<RateCategory, { ttl: number; limit: number }> = {
 @Injectable()
 export class TenantThrottlerGuard extends ThrottlerGuard {
   constructor(
-    options: ThrottlerModuleOptions,
-    storageService: ThrottlerStorage,
+    @InjectThrottlerOptions() options: ThrottlerModuleOptions,
+    @InjectThrottlerStorage() storageService: ThrottlerStorage,
     reflector: Reflector,
   ) {
     super(options, storageService, reflector);
+  }
+
+  /**
+   * Override getRequestResponse to handle GraphQL execution contexts.
+   * The default ThrottlerGuard only handles HTTP contexts; in GraphQL
+   * the request/response live inside the GqlExecutionContext.
+   *
+   * We avoid importing @nestjs/graphql directly (not a dependency of this
+   * package) and instead extract req/res from the GraphQL context manually.
+   */
+  protected getRequestResponse(context: ExecutionContext) {
+    const contextType = context.getType<string>();
+    if (contextType === 'graphql') {
+      // In GraphQL, the 3rd arg of the resolver is the context object
+      // which contains { req, res } as set up by Apollo/NestJS.
+      const gqlArgs = context.getArgs();
+      const ctx = gqlArgs[2]; // [root, args, context, info]
+
+      // Provide a no-op stub for res if it's missing, so the parent
+      // ThrottlerGuard doesn't crash when trying to set headers.
+      const noopRes = {
+        header: () => noopRes,
+        setHeader: () => noopRes,
+        status: () => noopRes,
+      };
+
+      return {
+        req: ctx?.req ?? ({} as any),
+        res: ctx?.res ?? (noopRes as any),
+      };
+    }
+    return super.getRequestResponse(context);
   }
 
   /**
@@ -72,6 +106,10 @@ export class TenantThrottlerGuard extends ThrottlerGuard {
    * behind a NAT).  Falls back to the IP address for unauthenticated requests.
    */
   protected async getTracker(req: Record<string, any>): Promise<string> {
+    // In GraphQL context, req may be undefined — guard against it.
+    if (!req) {
+      return 'anonymous';
+    }
     const userId: string | undefined = req.user?.sub ?? req.user?.id;
     if (userId) {
       return userId;

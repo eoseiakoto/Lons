@@ -31,6 +31,7 @@ export enum AuditResourceType {
   LENDER = 'lender',
   SETTLEMENT = 'settlement',
   WEBHOOK = 'webhook',
+  PLATFORM_USER = 'platform_user',
 }
 
 export enum AuditAccessType {

@@ -24,7 +24,7 @@ describe('AuditEventInterceptor', () => {
 
     const interceptor = new AuditEventInterceptor(reflector, auditService);
 
-    const user = { id: 'user-1', tenantId: 'tenant-1', type: 'user' };
+    const user = { id: 'user-1', tenantId: '00000000-0000-0000-0000-000000000001', type: 'user' };
     const req = { user, headers: { 'x-correlation-id': 'corr-123' }, ip: '10.0.0.1' };
     const context = {
       getHandler: () => ({}),
@@ -47,7 +47,7 @@ describe('AuditEventInterceptor', () => {
           expect(callArg.action).toBe('create');
           expect(callArg.resourceType).toBe('customer');
           expect(callArg.actorId).toBe('user-1');
-          expect(callArg.tenantId).toBe('tenant-1');
+          expect(callArg.tenantId).toBe('00000000-0000-0000-0000-000000000001');
           expect(callArg.correlationId).toBe('corr-123');
           done();
         });
@@ -109,7 +109,7 @@ describe('AuditEventInterceptor', () => {
 
     const interceptor = new AuditEventInterceptor(reflector, auditService);
 
-    const req = { user: { id: 'u1', tenantId: 't1' }, headers: {}, ip: '127.0.0.1' };
+    const req = { user: { id: 'u1', tenantId: '00000000-0000-0000-0000-000000000002' }, headers: {}, ip: '127.0.0.1' };
     const context = {
       getHandler: () => ({}),
       getType: () => 'http',
