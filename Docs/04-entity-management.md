@@ -43,7 +43,17 @@ A Service Provider (SP) is the primary tenant in Lōns — typically a lending i
 |---|---|---|
 | FR-SP-004.1 | Within each tenant, the system SHALL support one or more lender configurations representing the actual funding entities. | Must |
 | FR-SP-004.2 | Each lender configuration SHALL include: lender name, license number, funding capacity, interest rate bounds (min/max), revenue sharing rules, settlement account details, and risk appetite parameters. | Must |
-| FR-SP-004.3 | Loan products SHALL be linked to a specific lender configuration. | Must |
+| FR-SP-004.3 | Loan products SHALL be linked to a specific lender configuration. The system provides a default "Self-Funded" lender per tenant for SPs that fund from their own balance sheet. This system lender is auto-created on first use, cannot be deleted, and carries 0% lender share in revenue calculations. | Must |
+
+#### FR-SP-005: Self-Funded Lender Record
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-SP-005.1 | Each tenant SHALL have a system-managed "Self-Funded" lender record that is auto-created when the first self-funded product is created (or at tenant onboarding). | Must |
+| FR-SP-005.2 | The Self-Funded lender SHALL have status `active` and cannot be deactivated or deleted by tenant admins. | Must |
+| FR-SP-005.3 | The Self-Funded lender SHALL carry no funding capacity constraints, no interest rate constraints, and no settlement account. | Must |
+| FR-SP-005.4 | The Self-Funded lender SHALL be visually distinguished in the admin portal lender list with a "System" badge and excluded from the external lender selection dropdown (appears only as the "Self-Funded" option in the product funding source step). | Must |
+| FR-SP-005.5 | When a product uses the Self-Funded lender, revenue sharing SHALL default to 0% lender share and 100% SP share (minus platform fee). The settlement engine SHALL process self-funded products identically to lender-backed products — the SP receives the lender disbursement. | Must |
 
 ---
 
@@ -68,7 +78,7 @@ Loan products are the configurable templates that define the terms, rules, and b
 
 | ID | Requirement | Priority |
 |---|---|---|
-| FR-LP-002.1 | Every loan product SHALL define the following common parameters: product code (unique within tenant), product name and description, product type (overdraft, micro-loan, BNPL, invoice-financing), currency, minimum and maximum loan amount, tenor options (min/max days, or fixed options), interest rate model and rate(s), fee structure (origination, service, insurance, etc.), repayment method (lump-sum, installments, auto-deduction), grace period, penalty configuration, approval workflow (auto/semi-auto/manual), linked lender configuration, linked scoring model, eligibility rules (pre-qualification criteria), notification templates, and revenue sharing rules. | Must |
+| FR-LP-002.1 | Every loan product SHALL define the following common parameters: product code (unique within tenant), product name and description, product type (overdraft, micro-loan, BNPL, invoice-financing), currency, minimum and maximum loan amount, tenor options (min/max days, or fixed options), interest rate model and rate(s), fee structure (origination, service, insurance, etc.), repayment method (lump-sum, installments, auto-deduction), grace period, penalty configuration, approval workflow (auto/semi-auto/manual), linked lender configuration (for self-funded products where the SP uses its own balance sheet, a system-managed "Self-Funded" lender record is auto-created per tenant; all products maintain a lender linkage), linked scoring model, eligibility rules (pre-qualification criteria), notification templates, and revenue sharing rules. | Must |
 | FR-LP-002.2 | Product-type-specific parameters SHALL also be configurable (see 01-loan-portfolio.md for details per type). | Must |
 
 #### FR-LP-003: Product Versioning
