@@ -31,14 +31,20 @@ export class MonitoringJob {
   async handleMonitoringRun() {
     this.logger.log('Starting daily monitoring risk assessment run');
 
-    const tenants = await this.prisma.tenant.findMany({
-      where: { status: 'active' },
-      select: { id: true },
-    });
+    // Sprint 10B Task 0: scheduler runs outside HTTP request scope. Wrap
+    // tenant lookup in platform-admin context and per-tenant work in tenant
+    // context so RLS admits the rows.
+    const tenants = await this.prisma.enterTenantContext(
+      { isPlatformAdmin: true },
+      () => this.prisma.tenant.findMany({ where: { status: 'active' }, select: { id: true } }),
+    );
 
     for (const tenant of tenants) {
       try {
-        await this.processTenant(tenant.id);
+        await this.prisma.enterTenantContext(
+          { tenantId: tenant.id },
+          () => this.processTenant(tenant.id),
+        );
       } catch (error) {
         this.logger.error(
           `Monitoring run failed for tenant ${tenant.id}: ${error instanceof Error ? error.message : error}`,

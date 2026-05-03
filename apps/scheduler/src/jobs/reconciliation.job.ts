@@ -19,13 +19,20 @@ export class ReconciliationJob {
     yesterday.setDate(yesterday.getDate() - 1);
     yesterday.setHours(0, 0, 0, 0);
 
-    const tenants = await this.prisma.tenant.findMany({
-      where: { status: 'active', deletedAt: null },
-    });
+    // Sprint 10B Task 0: scheduler runs outside HTTP request scope. Wrap the
+    // tenant lookup in platform-admin context and each per-tenant call in
+    // tenant context so RLS policies admit the correct rows.
+    const tenants = await this.prisma.enterTenantContext(
+      { isPlatformAdmin: true },
+      () => this.prisma.tenant.findMany({ where: { status: 'active', deletedAt: null } }),
+    );
 
     for (const tenant of tenants) {
       try {
-        const result = await this.reconciliationService.runDailyReconciliation(tenant.id, yesterday);
+        const result = await this.prisma.enterTenantContext(
+          { tenantId: tenant.id },
+          () => this.reconciliationService.runDailyReconciliation(tenant.id, yesterday),
+        );
         this.logger.log(`Tenant ${tenant.name}: ${result.totalTxns} txns, ${result.matchedTxns} matched, ${result.exceptionCount} exceptions`);
       } catch (error) {
         this.logger.error(`Reconciliation failed for tenant ${tenant.name}: ${error}`);

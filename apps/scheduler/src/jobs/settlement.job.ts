@@ -14,7 +14,13 @@ export class SettlementJob {
 
   @Cron('0 3 * * *') // 3:00 AM daily
   async handleSettlementRun() {
-    const tenants = await this.prisma.tenant.findMany({ where: { status: 'active' } });
+    // Sprint 10B Task 0: scheduler runs outside HTTP request scope. Look up
+    // tenants under platform-admin context, then re-enter per-tenant for the
+    // settlement calculation so RLS admits the correct rows.
+    const tenants = await this.prisma.enterTenantContext(
+      { isPlatformAdmin: true },
+      () => this.prisma.tenant.findMany({ where: { status: 'active' } }),
+    );
     for (const tenant of tenants) {
       try {
         const settings = (tenant.settings as any) || {};
@@ -47,7 +53,10 @@ export class SettlementJob {
           continue; // Skip -- not the right day for this frequency
         }
 
-        await this.settlementService.calculateSettlement(tenant.id, periodStart, periodEnd);
+        await this.prisma.enterTenantContext(
+          { tenantId: tenant.id },
+          () => this.settlementService.calculateSettlement(tenant.id, periodStart, periodEnd),
+        );
         this.logger.log(`Settlement calculated for tenant ${tenant.id}`);
       } catch (error) {
         this.logger.error(`Settlement failed for tenant ${tenant.id}: ${error instanceof Error ? error.message : error}`);
