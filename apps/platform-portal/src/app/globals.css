@@ -2,28 +2,1064 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
-  -webkit-font-smoothing: antialiased;
+/* ─── Design Tokens ────────────────────────────────────────────────────── */
+
+:root {
+  /* ──────────────────────────────────────────────────────────────────
+     Light theme — "Mission Control · Daylight"
+     Cool, airy neutrals with the same emerald brand accent as dark
+     mode so brand identity survives across modes. Surfaces carry a
+     near-imperceptible emerald undertone (≈1% chroma) to bind the
+     palette, similar to how dark mode uses a teal tint on black.
+     ────────────────────────────────────────────────────────────────── */
+  --bg-page:      #F6FAF8;       /* cool off-white with faint emerald undertone */
+  --bg-card:      #FFFFFF;       /* pure white cards pop slightly against the page */
+  --bg-sidebar:   #F2F7F4;
+  --bg-elevated:  #FFFFFF;
+  --bg-muted:     #ECF2EE;       /* cool neutral for muted bgs */
+  --bg-hover:     rgba(16, 122, 78, 0.06);   /* emerald-tinted hover */
+  --bg-tinted:    #ECFBF3;       /* subtle emerald wash for hero treatments */
+
+  /* Borders — subtly cool so they don't fight the page */
+  --border-subtle:  rgba(20, 100, 70, 0.06);
+  --border-default: rgba(20, 100, 70, 0.12);
+  --border-strong:  rgba(20, 100, 70, 0.18);
+
+  /* Text — cool neutral grays (not warm) so they pair with emerald */
+  --text-primary:    #0E1F19;   /* near-black with the faintest cool tint */
+  --text-secondary:  #546A60;   /* cool mid-gray */
+  --text-tertiary:   #8FA399;   /* cool light-gray */
+  --text-on-accent:  #FFFFFF;
+
+  /* Accent — emerald brand, calibrated for white bg readability */
+  --accent-primary:       #10B97D;   /* deeper emerald, AA on white for buttons */
+  --accent-primary-rgb:   16, 185, 125;
+  --accent-primary-hover: #0FA46F;
+  --accent-primary-soft:  rgba(16, 185, 125, 0.10);
+  --accent-primary-ring:  rgba(16, 185, 125, 0.28);
+  --accent-primary-deep:  #0B7A52;   /* readable emerald for text on light bg */
+  --accent-secondary:     #2AB8D9;   /* cyan companion */
+  --accent-tertiary:      #0E8B5F;   /* deeper emerald for gradients */
+
+  /* Status — semantic palette retained, tuned for cool light bg */
+  --status-success:       #1FA464;
+  --status-success-soft:  rgba(31, 164, 100, 0.10);
+  --status-success-text:  #0E6B3F;
+  --status-warning:       #D97706;
+  --status-warning-soft:  rgba(217, 119, 6, 0.10);
+  --status-warning-text:  #8A4A02;
+  --status-error:         #DC2626;
+  --status-error-soft:    rgba(220, 38, 38, 0.10);
+  --status-error-text:    #991B1B;
+  --status-info:          #2563EB;
+  --status-info-soft:     rgba(37, 99, 235, 0.10);
+  --status-info-text:     #1E40AF;
+
+  /* Charts — emerald-forward */
+  --chart-1:    #10B97D;
+  --chart-2:    #2AB8D9;
+  --chart-3:    #7DF9B5;
+  --chart-4:    #D97706;
+  --chart-grid: rgba(20, 100, 70, 0.06);
+
+  /* ──────────────────────────────────────────────────────────────────
+     Radius scale — varies with element size so the UI has rhythm
+     instead of every corner being the same 12px.
+     ────────────────────────────────────────────────────────────────── */
+  --radius-xs: 4px;    /* tiny indicators, dots */
+  --radius-sm: 6px;    /* pills, small badges */
+  --radius-md: 10px;   /* inputs, buttons */
+  --radius-lg: 14px;   /* standard cards */
+  --radius-xl: 20px;   /* feature containers, hero surfaces */
+  --radius-2xl: 28px;  /* marketing / splash surfaces */
+
+  /* ──────────────────────────────────────────────────────────────────
+     Shadows — emerald-tinted. Faint cool/green hue rather than warm
+     brown so the brand color subtly bleeds into elevation cues.
+     ────────────────────────────────────────────────────────────────── */
+  --shadow-card:     0 1px 2px rgba(15, 80, 55, 0.04), 0 1px 3px rgba(15, 80, 55, 0.03);
+  --shadow-elevated: 0 2px 4px rgba(15, 80, 55, 0.05), 0 8px 20px rgba(15, 80, 55, 0.08);
+  --shadow-floating: 0 4px 10px rgba(15, 80, 55, 0.08), 0 20px 40px rgba(15, 80, 55, 0.14);
+  --shadow-focus:    0 0 0 3px var(--accent-primary-ring);
+
+  /* Glass morphism — refractive panels with inner border highlight */
+  --glass-bg:            rgba(255, 255, 255, 0.55);
+  --glass-border:        rgba(20, 100, 70, 0.08);
+  --glass-highlight:     rgba(255, 255, 255, 0.70);
+  --glass-shadow:        0 30px 80px -20px rgba(15, 80, 55, 0.16), 0 18px 36px -18px rgba(15, 80, 55, 0.10);
+
+  /* Skyline silhouette — emerald-tinted buildings */
+  --skyline-fill-top:    rgba(20, 80, 60, 0.40);
+  --skyline-fill-bottom: rgba(10, 50, 35, 0.55);
+  --skyline-edge:        rgba(255, 255, 255, 0.18);
+  --skyline-window:      #7DF9B5;
+  --skyline-window-soft: rgba(125, 249, 181, 0.32);
+
+  /* ──────────────────────────────────────────────────────────────────
+     Motion — strong easing curves (not Material default)
+     Emil Kowalski's recommended curves for snappy, tactile feedback.
+     ────────────────────────────────────────────────────────────────── */
+  --ease-out:        cubic-bezier(0.23, 1, 0.32, 1);       /* strong UI ease-out */
+  --ease-in-out:     cubic-bezier(0.77, 0, 0.175, 1);      /* strong movement */
+  --ease-drawer:     cubic-bezier(0.32, 0.72, 0, 1);       /* iOS-like drawer */
+  --ease-spring:     cubic-bezier(0.34, 1.56, 0.64, 1);    /* gentle overshoot */
+
+  /* Back-compat aliases (existing code references --ease-standard/emphasized) */
+  --ease-standard:    var(--ease-out);
+  --ease-emphasized:  var(--ease-in-out);
+
+  color-scheme: light;
 }
 
+/* ──────────────────────────────────────────────────────────────────
+   Dark theme — "Mission Control"
+   Near-black with subtle teal-green tint. Neon emerald accent
+   (#7DF9B5 → #1FE08A) reads as live, energetic, operator-grade.
+   Status colors retain semantic meaning (red = error, amber = warn).
+   ────────────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg-page:      #060A0F;       /* deep black with a faint teal undertone */
+  --bg-card:      #0D1419;       /* card surface, slight cool shift */
+  --bg-sidebar:   #060A0F;
+  --bg-elevated:  #11181E;
+  --bg-muted:     #131C24;
+  --bg-hover:     rgba(125, 249, 181, 0.06);   /* accent-tinted hover */
+  --bg-tinted:    #0A1816;       /* deep emerald wash for hero surfaces */
+
+  /* Borders — slight emerald tint so they glow rather than feel dead */
+  --border-subtle:  rgba(125, 249, 181, 0.06);
+  --border-default: rgba(125, 249, 181, 0.12);
+  --border-strong:  rgba(125, 249, 181, 0.22);
+
+  --text-primary:    #E6EDE9;    /* off-white with cool tint */
+  --text-secondary:  rgba(230, 237, 233, 0.62);
+  --text-tertiary:   rgba(230, 237, 233, 0.38);
+  --text-on-accent:  #051410;    /* dark text on neon accent */
+
+  /* Accent — neon emerald → mint */
+  --accent-primary:       #1FE08A;
+  --accent-primary-rgb:   31, 224, 138;
+  --accent-primary-hover: #34EE9C;
+  --accent-primary-soft:  rgba(31, 224, 138, 0.14);
+  --accent-primary-ring:  rgba(31, 224, 138, 0.32);
+  --accent-primary-deep:  #7DF9B5;
+  --accent-secondary:     #6BD9F2;   /* cyan companion */
+  --accent-tertiary:      #14B47A;   /* deeper emerald for gradients */
+
+  /* Status — kept semantic, tuned for dark bg */
+  --status-success:       #30D158;
+  --status-success-soft:  rgba(48, 209, 88, 0.16);
+  --status-success-text:  #6EE99A;
+  --status-warning:       #FFB340;
+  --status-warning-soft:  rgba(255, 179, 64, 0.16);
+  --status-warning-text:  #FFCB73;
+  --status-error:         #FF5060;
+  --status-error-soft:    rgba(255, 80, 96, 0.16);
+  --status-error-text:    #FF8693;
+  --status-info:          #4DA3FF;
+  --status-info-soft:     rgba(77, 163, 255, 0.16);
+  --status-info-text:     #7DBCFF;
+
+  /* Charts — emerald-forward with cyan + amber companions */
+  --chart-1:    #1FE08A;
+  --chart-2:    #6BD9F2;
+  --chart-3:    #B8FFD8;
+  --chart-4:    #FFB340;
+  --chart-grid: rgba(125, 249, 181, 0.06);
+
+  /* Dark shadows — deep with a faint emerald tint */
+  --shadow-card:     0 1px 3px rgba(0, 0, 0, 0.4), 0 1px 2px rgba(31, 224, 138, 0.04);
+  --shadow-elevated: 0 4px 16px rgba(0, 0, 0, 0.5), 0 2px 6px rgba(31, 224, 138, 0.06);
+  --shadow-floating: 0 12px 32px rgba(0, 0, 0, 0.6), 0 6px 16px rgba(31, 224, 138, 0.10);
+  --shadow-glow:     0 0 0 1px rgba(125, 249, 181, 0.10), 0 8px 32px -4px rgba(31, 224, 138, 0.18);
+  --shadow-glow-strong: 0 0 0 1px rgba(125, 249, 181, 0.20), 0 12px 48px -8px rgba(31, 224, 138, 0.32);
+
+  /* Glass — emerald-tinted refraction */
+  --glass-bg:            rgba(125, 249, 181, 0.025);
+  --glass-border:        rgba(125, 249, 181, 0.10);
+  --glass-highlight:     rgba(125, 249, 181, 0.14);
+  --glass-shadow:        0 30px 80px -20px rgba(0, 0, 0, 0.65), 0 18px 36px -18px rgba(31, 224, 138, 0.10);
+
+  /* Skyline — kept for any legacy callers; muted */
+  --skyline-fill-top:    #0E1A1A;
+  --skyline-fill-bottom: #060C0C;
+  --skyline-edge:        rgba(125, 249, 181, 0.08);
+  --skyline-window:      #7DF9B5;
+  --skyline-window-soft: rgba(125, 249, 181, 0.30);
+
+  color-scheme: dark;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   Light-theme glow shadows — emerald-tinted to match brand.
+   ────────────────────────────────────────────────────────────────── */
+:root {
+  --shadow-glow:        0 0 0 1px var(--accent-primary-soft), 0 8px 24px -6px rgba(16, 185, 125, 0.18);
+  --shadow-glow-strong: 0 0 0 1px var(--accent-primary-ring), 0 14px 36px -8px rgba(16, 185, 125, 0.28);
+}
+
+/* ─── Base ─────────────────────────────────────────────────────────────── */
+
+html,
+body {
+  font-family: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-page);
+  color: var(--text-primary);
+  letter-spacing: -0.005em;
+}
+
+html { transition: background-color 0.24s var(--ease-out), color 0.24s var(--ease-out); }
+body { transition: background-color 0.24s var(--ease-out), color 0.24s var(--ease-out); }
+
+*, *::before, *::after { border-color: var(--border-default); }
+
+/* Tabular figures globally for financial readability */
+.tabular-nums { font-variant-numeric: tabular-nums; }
+
+/* Scrollbar — restrained, warm-tinted */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border-default);
+  border-radius: 8px;
+  border: 2px solid var(--bg-page);
+}
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+
+/* Focus ring for all focusable non-input elements */
+button:focus-visible,
+a:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
+  box-shadow: var(--shadow-focus);
+  border-radius: var(--radius-sm);
+}
+
+/* ─── Keyframes ────────────────────────────────────────────────────────── */
+
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes shimmerSweep {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* Starlight twinkle — gentle opacity + micro-scale breathing */
+@keyframes twinkle {
+  0%, 100% { opacity: 0.05; transform: scale(0.9); }
+  50%      { opacity: 0.9;  transform: scale(1.05); }
+}
+
+/* City window blink — warm amber flicker at irregular beats */
+@keyframes windowBlink {
+  0%, 100% { opacity: 0; }
+  8%, 16%  { opacity: 0.55; }
+  22%      { opacity: 0.15; }
+  48%, 72% { opacity: 0.85; }
+  88%      { opacity: 0.3; }
+}
+
+/* Hero KPI corner glow — gentle breathing pulse */
+@keyframes kpiGlowBreath {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50%      { opacity: 0.95; transform: scale(1.08); }
+}
+
+/* Edge sweep — subtle highlight traversing the top of glow cards */
+@keyframes edgeSweep {
+  0%   { transform: translateX(-110%); opacity: 0; }
+  20%  { opacity: 1; }
+  80%  { opacity: 1; }
+  100% { transform: translateX(110%); opacity: 0; }
+}
+
+/* Gauge sweep — for arc reveal */
+@keyframes gaugeSweep {
+  from { stroke-dashoffset: var(--gauge-circumference, 251); }
+  to   { stroke-dashoffset: var(--gauge-target, 0); }
+}
+
+/* Live dot — fast pulse for "active" indicators */
+@keyframes liveDot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(31, 224, 138, 0.55); }
+  50%      { opacity: 0.7; box-shadow: 0 0 0 6px rgba(31, 224, 138, 0); }
+}
+
+/* Live status pulse + expanding ring */
+@keyframes livePulse {
+  0%, 100% { opacity: 0.9; transform: scale(1); }
+  50%      { opacity: 1;   transform: scale(1.15); }
+}
+@keyframes liveRing {
+  0%   { opacity: 0.55; transform: scale(1); }
+  80%  { opacity: 0;    transform: scale(2.6); }
+  100% { opacity: 0;    transform: scale(2.6); }
+}
+
+/* Staggered entry — visible by default; animation layers on top when tab is
+   actively focused. */
+.stagger-enter {
+  animation: staggerReveal 720ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@keyframes staggerReveal {
+  0%   { opacity: 0; transform: translateY(14px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stagger-enter { animation: none; }
+}
+
+/* Subtle row-by-row entry for data tables. Set animation-delay inline per
+   row (capped to top N rows for perf). */
+.table-row-enter {
+  animation: tableRowReveal 420ms cubic-bezier(0.23, 1, 0.32, 1);
+}
+@keyframes tableRowReveal {
+  0%   { opacity: 0; transform: translateY(4px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .table-row-enter { animation: none; }
+}
+
+/* ─── Component Layer ──────────────────────────────────────────────────── */
+
 @layer components {
+  /* --- Cards — THREE variants, not one generic .card for everything --- */
+
+  /* Standard card: bordered surface, subtle shadow. Use for discrete content that
+     genuinely needs a container (a detail panel, a dialog body, a settings group). */
+  .card {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+  }
+
+  /* Flush variant: NO border, NO shadow, just a subtle background tint to
+     define the area without "boxing" the content. Use for table wrappers,
+     form sections, and places where a full card feels heavy. */
+  .card-flush {
+    background-color: var(--bg-card);
+    border-radius: var(--radius-lg);
+  }
+
+  /* Feature variant: the hero card. Larger radius, deeper shadow, more padding.
+     Use sparingly — for the primary KPI, a featured alert, or a call-to-action. */
+  .card-feature {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-elevated);
+  }
+
+  /* Tinted feature: subtle coral wash, used for the hero KPI to inject brand color
+     without being garish. */
+  .card-tinted {
+    background-color: var(--bg-tinted);
+    border: 1px solid var(--accent-primary-soft);
+    border-radius: var(--radius-xl);
+    box-shadow: var(--shadow-elevated);
+  }
+
+  /* Mission-control glow card — emerald-bordered surface with inner refraction
+     highlight and an external glow halo. The dominant container in the
+     dark-theme dashboard rebuild. */
+  .card-glow {
+    position: relative;
+    background:
+      linear-gradient(180deg, rgba(125, 249, 181, 0.04) 0%, transparent 32%),
+      var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+    box-shadow:
+      inset 0 1px 0 rgba(125, 249, 181, 0.10),
+      0 1px 2px rgba(0, 0, 0, 0.40),
+      0 12px 32px -12px rgba(31, 224, 138, 0.12);
+    transition:
+      border-color 220ms var(--ease-out),
+      box-shadow 220ms var(--ease-out);
+  }
+  .card-glow::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(
+      140deg,
+      rgba(125, 249, 181, 0.30) 0%,
+      rgba(125, 249, 181, 0.04) 30%,
+      transparent 60%,
+      rgba(107, 217, 242, 0.18) 100%
+    );
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask-composite: exclude;
+    pointer-events: none;
+    opacity: 0.7;
+    transition: opacity 240ms var(--ease-out);
+  }
+  .card-glow:hover {
+    border-color: var(--border-default);
+    box-shadow:
+      inset 0 1px 0 rgba(125, 249, 181, 0.16),
+      0 1px 2px rgba(0, 0, 0, 0.40),
+      0 16px 48px -12px rgba(31, 224, 138, 0.22);
+  }
+  .card-glow:hover::before { opacity: 1; }
+  /* Light-mode keeps the same emerald-glow language as dark, just gentler. */
+  :root:not([data-theme="dark"]) .card-glow {
+    background: var(--bg-card);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.6),
+      0 1px 2px rgba(15, 80, 55, 0.04),
+      0 8px 24px -8px rgba(16, 185, 125, 0.12);
+  }
+  :root:not([data-theme="dark"]) .card-glow::before {
+    background: linear-gradient(
+      140deg,
+      rgba(16, 185, 125, 0.20) 0%,
+      transparent 55%,
+      rgba(42, 184, 217, 0.10) 100%
+    );
+  }
+
+  /* Hero glow card — same as card-glow but more dramatic, for the primary KPI. */
+  .card-glow-hero {
+    position: relative;
+    background:
+      radial-gradient(ellipse at top right, rgba(31, 224, 138, 0.12) 0%, transparent 55%),
+      linear-gradient(180deg, rgba(125, 249, 181, 0.06) 0%, transparent 40%),
+      var(--bg-tinted);
+    border: 1px solid rgba(125, 249, 181, 0.18);
+    border-radius: var(--radius-xl);
+    box-shadow:
+      inset 0 1px 0 rgba(125, 249, 181, 0.18),
+      0 1px 2px rgba(0, 0, 0, 0.40),
+      0 24px 64px -16px rgba(31, 224, 138, 0.28);
+    overflow: hidden;
+  }
+  :root:not([data-theme="dark"]) .card-glow-hero {
+    background:
+      radial-gradient(ellipse at top right, rgba(16, 185, 125, 0.14) 0%, transparent 60%),
+      var(--bg-tinted);
+    border: 1px solid var(--accent-primary-soft);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.7),
+      0 1px 2px rgba(15, 80, 55, 0.04),
+      0 12px 36px -8px rgba(16, 185, 125, 0.20);
+  }
+
+  /* Edge sweep highlight — applied to top edge of glow cards on mount */
+  .card-glow-sweep {
+    position: relative;
+    overflow: hidden;
+  }
+  .card-glow-sweep::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--accent-primary-deep) 50%, transparent 100%);
+    animation: edgeSweep 2400ms var(--ease-out) 200ms both;
+    pointer-events: none;
+  }
+
+  /* Live dot — perpetual breathing accent indicator */
+  .live-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 999px;
+    background-color: var(--accent-primary);
+    animation: liveDot 1800ms ease-in-out infinite;
+    flex-shrink: 0;
+  }
+
+  .card-elevated {
+    background-color: var(--bg-elevated);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-elevated);
+  }
+
+  .card-interactive {
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    transition:
+      border-color 180ms var(--ease-out),
+      box-shadow 180ms var(--ease-out),
+      transform 180ms var(--ease-out);
+  }
+  .card-interactive:hover {
+    border-color: var(--border-default);
+    box-shadow: var(--shadow-elevated);
+  }
+  .card-interactive:active {
+    transform: scale(0.99);
+  }
+
+  /* --- Inputs --- */
+  .input-field {
+    width: 100%;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    color: var(--text-primary);
+    font-size: 14px;
+    line-height: 1.4;
+    transition: border-color 180ms var(--ease-out), box-shadow 180ms var(--ease-out), background-color 180ms var(--ease-out);
+  }
+  .input-field:hover:not(:focus):not(:disabled) { border-color: var(--border-strong); }
+  .input-field:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: var(--shadow-focus);
+  }
+  .input-field::placeholder { color: var(--text-tertiary); }
+  .input-field:disabled {
+    background-color: var(--bg-muted);
+    color: var(--text-tertiary);
+    cursor: not-allowed;
+  }
+
+  /* --- Buttons — strong easing, tactile active press --- */
+  .btn-primary {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background-color: var(--accent-primary);
+    color: var(--text-on-accent);
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 1;
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    box-shadow:
+      0 1px 2px rgba(15, 80, 55, 0.10),
+      inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    transition:
+      background-color 180ms var(--ease-out),
+      transform 140ms var(--ease-spring),
+      box-shadow 220ms var(--ease-out);
+  }
+  .btn-primary:hover:not(:disabled) {
+    background-color: var(--accent-primary-hover);
+    transform: translateY(-1px);
+    box-shadow:
+      0 6px 18px -6px rgba(16, 185, 125, 0.45),
+      0 2px 6px rgba(15, 80, 55, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  }
+  .btn-primary:active:not(:disabled) {
+    transform: translateY(0) scale(0.97);
+    box-shadow:
+      0 1px 2px rgba(15, 80, 55, 0.10),
+      inset 0 1px 0 rgba(255, 255, 255, 0.10);
+    transition-duration: 60ms;
+  }
+  .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-secondary {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 1;
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-default);
+    transition:
+      background-color 180ms var(--ease-out),
+      border-color 180ms var(--ease-out),
+      transform 140ms var(--ease-spring),
+      box-shadow 220ms var(--ease-out);
+  }
+  .btn-secondary:hover:not(:disabled) {
+    background-color: var(--bg-hover);
+    border-color: var(--border-strong);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px -4px rgba(15, 80, 55, 0.10);
+  }
+  .btn-secondary:active:not(:disabled) {
+    transform: translateY(0) scale(0.97);
+    transition-duration: 60ms;
+  }
+  .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background-color: transparent;
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 14px;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    transition: background-color 180ms var(--ease-out), color 180ms var(--ease-out);
+  }
+  .btn-ghost:hover:not(:disabled) {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .btn-ghost:active:not(:disabled) { transform: scale(0.97); }
+
+  .btn-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background-color: var(--status-error);
+    color: #FFFFFF;
+    font-weight: 500;
+    font-size: 14px;
+    padding: 10px 18px;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    transition: filter 180ms var(--ease-out), transform 80ms var(--ease-out);
+  }
+  .btn-danger:hover:not(:disabled) { filter: brightness(1.05); }
+  .btn-danger:active:not(:disabled) { transform: scale(0.97); }
+
+  /* --- Status pills — small radius, coral-tinted neutral --- */
+  .pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 2px 10px;
+    border-radius: var(--radius-sm);
+    font-size: 12px;
+    font-weight: 500;
+    line-height: 1.6;
+    letter-spacing: 0.01em;
+  }
+  .pill-success { background-color: var(--status-success-soft); color: var(--status-success-text); }
+  .pill-warning { background-color: var(--status-warning-soft); color: var(--status-warning-text); }
+  .pill-error   { background-color: var(--status-error-soft);   color: var(--status-error-text); }
+  .pill-info    { background-color: var(--status-info-soft);    color: var(--status-info-text); }
+  .pill-accent  { background-color: var(--accent-primary-soft); color: var(--accent-primary-deep); }
+  .pill-neutral { background-color: var(--bg-muted);             color: var(--text-secondary); }
+
+  /* --- Nav item with coral dot indicator (NOT side-stripe) --- */
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: var(--radius-md);
+    color: var(--text-secondary);
+    font-size: 14px;
+    font-weight: 500;
+    transition: background-color 180ms var(--ease-out), color 180ms var(--ease-out);
+    position: relative;
+  }
+  .nav-item:hover {
+    background-color: var(--bg-hover);
+    color: var(--text-primary);
+  }
+  .nav-item-active {
+    background-color: var(--accent-primary-soft);
+    color: var(--accent-primary-deep);
+    font-weight: 600;
+  }
+  .nav-item-active:hover {
+    background-color: var(--accent-primary-soft);
+    color: var(--accent-primary-deep);
+  }
+  /* A compact left-side dot indicator (replaces banned side-stripe border) */
+  .nav-item-active::before {
+    content: '';
+    position: absolute;
+    left: -6px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 3px;
+    height: 18px;
+    border-radius: 999px;
+    background-color: var(--accent-primary);
+  }
+
+  /* --- Tables — no outer card, just horizontal rules --- */
+  .table-clean thead th {
+    padding: 10px 16px;
+    text-align: left;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    border-bottom: 1px solid var(--border-subtle);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  .table-clean tbody td {
+    padding: 14px 16px;
+    font-size: 14px;
+    color: var(--text-primary);
+    border-bottom: 1px solid var(--border-subtle);
+  }
+  .table-clean tbody tr {
+    transition: background-color 150ms var(--ease-out);
+  }
+  .table-clean tbody tr:hover { background-color: var(--bg-hover); }
+  .table-clean tbody tr:last-child td { border-bottom: none; }
+  .table-clean tbody tr:active {
+    transform: scale(0.998);
+    transition: transform 80ms var(--ease-out);
+  }
+
+  /* --- Section label — sentence case, NOT uppercase tracking --- */
+  .section-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0;
+    text-transform: none;
+    margin-bottom: 12px;
+  }
+
+  /* --- Hero KPI — oversized, coral-deep tint on the value --- */
+  .kpi-hero-value {
+    font-size: 64px;
+    font-weight: 600;
+    letter-spacing: -0.038em;
+    line-height: 1;
+    color: var(--accent-primary-deep);
+    font-variant-numeric: tabular-nums;
+  }
+  .kpi-hero-label {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--text-secondary);
+    letter-spacing: 0;
+    margin-bottom: 10px;
+  }
+  .kpi-value {
+    font-size: 34px;
+    font-weight: 600;
+    letter-spacing: -0.022em;
+    line-height: 1;
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* --- Entry animations --- */
+  .animate-enter {
+    animation: fadeUp 420ms var(--ease-out) both;
+  }
+
+  /* Stagger children on first mount */
+  .stagger-children > * {
+    animation: fadeUp 420ms var(--ease-out) both;
+  }
+  .stagger-children > *:nth-child(1)  { animation-delay: 0ms;   }
+  .stagger-children > *:nth-child(2)  { animation-delay: 60ms;  }
+  .stagger-children > *:nth-child(3)  { animation-delay: 120ms; }
+  .stagger-children > *:nth-child(4)  { animation-delay: 180ms; }
+  .stagger-children > *:nth-child(5)  { animation-delay: 240ms; }
+  .stagger-children > *:nth-child(6)  { animation-delay: 300ms; }
+  .stagger-children > *:nth-child(7)  { animation-delay: 360ms; }
+  .stagger-children > *:nth-child(8)  { animation-delay: 420ms; }
+  .stagger-children > *:nth-child(9)  { animation-delay: 480ms; }
+  .stagger-children > *:nth-child(10) { animation-delay: 540ms; }
+  .stagger-children > *:nth-child(11) { animation-delay: 600ms; }
+  .stagger-children > *:nth-child(12) { animation-delay: 660ms; }
+
+  /* Respect users who prefer reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    .animate-enter,
+    .stagger-children > * {
+      animation: none !important;
+    }
+  }
+
+  .fade-in {
+    animation: fadeIn 240ms var(--ease-out);
+  }
+
+  .shimmer {
+    position: relative;
+    overflow: hidden;
+    background-color: var(--bg-muted);
+  }
+  .shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent, var(--bg-hover), transparent);
+    animation: shimmerSweep 1.5s infinite;
+  }
+
+  /* --- Legacy `.glass-*` compat shims --- */
   .glass {
-    @apply bg-white/5 backdrop-blur-xl border border-white/10 rounded-2xl;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
   }
   .glass-sm {
-    @apply bg-white/5 backdrop-blur-md border border-white/10 rounded-xl;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-card);
   }
   .glass-hover {
-    @apply hover:bg-white/10 transition-all duration-200;
+    transition: background-color 180ms var(--ease-out), border-color 180ms var(--ease-out);
+  }
+  .glass-hover:hover {
+    background-color: var(--bg-hover);
+    border-color: var(--border-default);
   }
   .glass-input {
-    @apply bg-white/5 border border-white/10 rounded-lg px-4 py-2.5 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-400/30 transition-all;
+    display: block;
+    width: 100%;
+    background-color: var(--bg-card);
+    border: 1px solid var(--border-default);
+    border-radius: var(--radius-md);
+    padding: 10px 14px;
+    color: var(--text-primary);
+    font-size: 14px;
+    transition: border-color 180ms var(--ease-out), box-shadow 180ms var(--ease-out);
+  }
+  .glass-input::placeholder { color: var(--text-tertiary); }
+  .glass-input:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+    box-shadow: var(--shadow-focus);
   }
   .glass-button {
-    @apply bg-white/10 backdrop-blur-sm border border-white/10 rounded-lg px-4 py-2.5 text-white font-medium hover:bg-white/20 transition-all duration-200;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background-color: var(--bg-card);
+    color: var(--text-primary);
+    font-weight: 500;
+    font-size: 14px;
+    padding: 9px 16px;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--border-default);
+    transition: background-color 180ms var(--ease-out), border-color 180ms var(--ease-out), transform 80ms var(--ease-out);
   }
+  .glass-button:hover:not(:disabled) {
+    background-color: var(--bg-hover);
+    border-color: var(--border-strong);
+  }
+  .glass-button:active:not(:disabled) { transform: scale(0.97); }
   .glass-button-primary {
-    @apply bg-blue-500/80 backdrop-blur-sm border border-blue-400/30 rounded-lg px-4 py-2.5 text-white font-medium hover:bg-blue-500/90 transition-all duration-200;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background-color: var(--accent-primary);
+    color: #FFFFFF;
+    font-weight: 500;
+    font-size: 14px;
+    padding: 9px 16px;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    box-shadow: 0 1px 2px rgba(15, 80, 55, 0.08);
+    transition: background-color 180ms var(--ease-out), transform 80ms var(--ease-out);
+  }
+  .glass-button-primary:hover:not(:disabled) { background-color: var(--accent-primary-hover); }
+  .glass-button-primary:active:not(:disabled) { transform: scale(0.97); }
+  .glass-button-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+/* ─── Legacy Tailwind class remaps ────────────────────────────────────── */
+
+/* Text */
+.text-white        { color: var(--text-primary) !important; }
+.text-white\/90    { color: var(--text-primary) !important; }
+.text-white\/80    { color: var(--text-primary) !important; }
+.text-white\/70    { color: var(--text-secondary) !important; }
+.text-white\/60    { color: var(--text-secondary) !important; }
+.text-white\/50    { color: var(--text-secondary) !important; }
+.text-white\/40    { color: var(--text-tertiary) !important; }
+.text-white\/30    { color: var(--text-tertiary) !important; }
+.text-white\/20    { color: var(--text-tertiary) !important; }
+.placeholder-white\/30::placeholder { color: var(--text-tertiary) !important; }
+.placeholder-white\/40::placeholder { color: var(--text-tertiary) !important; }
+
+/* Surfaces */
+.bg-white\/5       { background-color: var(--bg-card) !important; }
+.bg-white\/10      { background-color: var(--bg-muted) !important; }
+.bg-white\/15      { background-color: var(--bg-muted) !important; }
+.bg-white\/20      { background-color: var(--bg-muted) !important; }
+
+/* Borders */
+.border-white\/5   { border-color: var(--border-subtle) !important; }
+.border-white\/10  { border-color: var(--border-subtle) !important; }
+.border-white\/15  { border-color: var(--border-default) !important; }
+.border-white\/20  { border-color: var(--border-default) !important; }
+.border-white\/30  { border-color: var(--border-strong) !important; }
+
+/* Dark gradient page backgrounds used by some pages — flatten */
+.bg-gradient-to-br.from-slate-950,
+.bg-gradient-to-br.from-slate-900 {
+  background: var(--bg-page) !important;
+}
+
+/* ─── Dark-mode re-enable the original dark palette for legacy classes ── */
+[data-theme="dark"] .text-white        { color: var(--text-primary) !important; }
+[data-theme="dark"] .text-white\/90    { color: rgba(243,239,234,0.90) !important; }
+[data-theme="dark"] .text-white\/80    { color: rgba(243,239,234,0.80) !important; }
+[data-theme="dark"] .text-white\/70    { color: rgba(243,239,234,0.70) !important; }
+[data-theme="dark"] .text-white\/60    { color: rgba(243,239,234,0.60) !important; }
+[data-theme="dark"] .text-white\/50    { color: rgba(243,239,234,0.50) !important; }
+[data-theme="dark"] .text-white\/40    { color: rgba(243,239,234,0.40) !important; }
+[data-theme="dark"] .text-white\/30    { color: rgba(243,239,234,0.30) !important; }
+[data-theme="dark"] .text-white\/20    { color: rgba(243,239,234,0.20) !important; }
+
+[data-theme="dark"] .bg-white\/5       { background-color: rgba(255,245,230,0.05) !important; }
+[data-theme="dark"] .bg-white\/10      { background-color: rgba(255,245,230,0.10) !important; }
+[data-theme="dark"] .bg-white\/15      { background-color: rgba(255,245,230,0.15) !important; }
+[data-theme="dark"] .bg-white\/20      { background-color: rgba(255,245,230,0.20) !important; }
+
+[data-theme="dark"] .border-white\/5   { border-color: rgba(255,245,230,0.05) !important; }
+[data-theme="dark"] .border-white\/10  { border-color: rgba(255,245,230,0.10) !important; }
+[data-theme="dark"] .border-white\/15  { border-color: rgba(255,245,230,0.15) !important; }
+[data-theme="dark"] .border-white\/20  { border-color: rgba(255,245,230,0.20) !important; }
+[data-theme="dark"] .border-white\/30  { border-color: rgba(255,245,230,0.30) !important; }
+
+[data-theme="dark"] .bg-gradient-to-br.from-slate-950,
+[data-theme="dark"] .bg-gradient-to-br.from-slate-900 {
+  background: linear-gradient(to bottom right, #020617, #0F172A, #020617) !important;
+}
+
+/* ─── Blue palette → accent coral (new primary color in light mode) ───── */
+:root:not([data-theme="dark"]) .text-blue-400  { color: var(--accent-primary-deep) !important; }
+:root:not([data-theme="dark"]) .text-blue-500  { color: var(--accent-primary-deep) !important; }
+:root:not([data-theme="dark"]) .text-blue-600  { color: var(--accent-primary-hover) !important; }
+:root:not([data-theme="dark"]) .bg-blue-400    { background-color: var(--accent-primary) !important; }
+:root:not([data-theme="dark"]) .bg-blue-500    { background-color: var(--accent-primary) !important; }
+:root:not([data-theme="dark"]) .bg-blue-500\/80 { background-color: var(--accent-primary) !important; }
+:root:not([data-theme="dark"]) .bg-blue-500\/20 { background-color: var(--accent-primary-soft) !important; }
+:root:not([data-theme="dark"]) .bg-blue-500\/30 { background-color: var(--accent-primary-soft) !important; }
+:root:not([data-theme="dark"]) .border-blue-400 { border-color: var(--accent-primary) !important; }
+:root:not([data-theme="dark"]) .border-blue-500 { border-color: var(--accent-primary) !important; }
+:root:not([data-theme="dark"]) .border-blue-400\/30 { border-color: var(--accent-primary) !important; }
+:root:not([data-theme="dark"]) .ring-blue-400 { --tw-ring-color: var(--accent-primary) !important; }
+:root:not([data-theme="dark"]) .ring-blue-500 { --tw-ring-color: var(--accent-primary) !important; }
+
+/* Semantic status mappings for legacy hex colors in light mode */
+:root:not([data-theme="dark"]) .text-emerald-400 { color: var(--status-success-text) !important; }
+:root:not([data-theme="dark"]) .text-green-400   { color: var(--status-success-text) !important; }
+:root:not([data-theme="dark"]) .bg-emerald-500\/20 { background-color: var(--status-success-soft) !important; }
+:root:not([data-theme="dark"]) .border-emerald-500\/30 { border-color: var(--status-success) !important; }
+
+:root:not([data-theme="dark"]) .text-red-400    { color: var(--status-error-text) !important; }
+:root:not([data-theme="dark"]) .bg-red-500\/20  { background-color: var(--status-error-soft) !important; }
+:root:not([data-theme="dark"]) .border-red-500\/30 { border-color: var(--status-error) !important; }
+
+:root:not([data-theme="dark"]) .text-amber-400  { color: var(--status-warning-text) !important; }
+:root:not([data-theme="dark"]) .text-yellow-400 { color: var(--status-warning-text) !important; }
+:root:not([data-theme="dark"]) .bg-amber-500\/20 { background-color: var(--status-warning-soft) !important; }
+:root:not([data-theme="dark"]) .bg-yellow-500\/20 { background-color: var(--status-warning-soft) !important; }
+:root:not([data-theme="dark"]) .border-amber-500\/30 { border-color: var(--status-warning) !important; }
+
+:root:not([data-theme="dark"]) .text-orange-400 { color: var(--accent-tertiary) !important; }
+:root:not([data-theme="dark"]) .bg-orange-500\/20 { background-color: var(--accent-primary-soft) !important; }
+:root:not([data-theme="dark"]) .border-orange-500\/30 { border-color: var(--accent-primary) !important; }
+
+:root:not([data-theme="dark"]) .text-purple-400 { color: #8E44C8 !important; }
+:root:not([data-theme="dark"]) .bg-purple-500\/20 { background-color: rgba(142, 68, 200, 0.10) !important; }
+:root:not([data-theme="dark"]) .border-purple-500\/30 { border-color: rgba(142, 68, 200, 0.35) !important; }
+
+/* ──────────────────────────────────────────────────────────────────
+   Print stylesheet — flatten dark theme to high-contrast B/W so
+   reports and detail pages print legibly. Strips orbs, glow halos,
+   gradient borders, sidebars, and nav chrome.
+   ────────────────────────────────────────────────────────────────── */
+@media print {
+  :root,
+  [data-theme="dark"] {
+    --bg-page: #FFFFFF !important;
+    --bg-card: #FFFFFF !important;
+    --bg-sidebar: #FFFFFF !important;
+    --bg-elevated: #FFFFFF !important;
+    --bg-muted: #F4F4F4 !important;
+    --bg-hover: transparent !important;
+    --bg-tinted: #FAFAFA !important;
+    --border-subtle: rgba(0, 0, 0, 0.10) !important;
+    --border-default: rgba(0, 0, 0, 0.20) !important;
+    --border-strong: rgba(0, 0, 0, 0.40) !important;
+    --text-primary: #000000 !important;
+    --text-secondary: #333333 !important;
+    --text-tertiary: #666666 !important;
+    --text-on-accent: #000000 !important;
+    --accent-primary: #000000 !important;
+    --accent-primary-deep: #000000 !important;
+    --accent-primary-soft: rgba(0, 0, 0, 0.06) !important;
+    --shadow-card: none !important;
+    --shadow-elevated: none !important;
+    --shadow-floating: none !important;
+    --shadow-glow: none !important;
+    --shadow-glow-strong: none !important;
+    color-scheme: light !important;
+  }
+
+  body { background: #FFFFFF !important; color: #000000 !important; }
+
+  /* Hide chrome */
+  aside, header, [role="navigation"], .live-dot { display: none !important; }
+
+  /* Strip the ambient backdrop and any glow rings */
+  .pointer-events-none.fixed { display: none !important; }
+  .card-glow::before,
+  .card-glow-hero::before,
+  .card-glow-sweep::after { display: none !important; }
+  .card-glow,
+  .card-glow-hero {
+    background: #FFFFFF !important;
+    border: 1px solid rgba(0, 0, 0, 0.15) !important;
+    box-shadow: none !important;
+  }
+
+  /* Tables & main content take full width on paper */
+  main, main > div { padding: 0 !important; max-width: none !important; }
+
+  /* Avoid awkward page breaks inside a card or row */
+  .card, .card-glow, .card-glow-hero, tr { break-inside: avoid; page-break-inside: avoid; }
+
+  /* No infinite animations on paper */
+  *, *::before, *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }

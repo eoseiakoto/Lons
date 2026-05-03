@@ -9,6 +9,8 @@ interface User {
   userId: string;
   role: string;
   type: string;
+  email?: string;
+  name?: string;
 }
 
 interface AuthContextType {
@@ -53,11 +55,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const token = localStorage.getItem('accessToken');
     if (token) {
       const payload = parseJwt(token);
-      if (payload && Number(payload.exp) * 1000 > Date.now()) {
+      // P0-003 fix: never default the role to `platform_admin`. Previously, a
+      // token without a `role` claim was silently elevated, which means a
+      // mis-issued token could grant cross-tenant admin. Now we reject the
+      // session entirely and force a fresh login.
+      if (
+        payload &&
+        Number(payload.exp) * 1000 > Date.now() &&
+        typeof payload.role === 'string' &&
+        payload.role.length > 0
+      ) {
         setUser({
           userId: payload.sub,
-          role: payload.role || 'platform_admin',
+          role: payload.role,
           type: payload.type || 'platform',
+          email: payload.email,
+          name: payload.name,
         });
       } else {
         localStorage.removeItem('accessToken');
@@ -74,14 +87,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     const { accessToken, refreshToken } = data.loginPlatformUser;
+    const payload = parseJwt(accessToken);
+    // P0-003 fix: refuse a token that lacks a role claim. The login mutation
+    // is supposed to issue role-bearing tokens; if it doesn't, that's a
+    // platform bug and we'd rather the user see a login error than be
+    // silently granted admin.
+    if (!payload?.role || typeof payload.role !== 'string') {
+      throw new Error('Server returned a token without a role claim. Please contact support.');
+    }
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('refreshToken', refreshToken);
 
-    const payload = parseJwt(accessToken);
     setUser({
       userId: payload.sub,
-      role: payload.role || 'platform_admin',
+      role: payload.role,
       type: payload.type || 'platform',
+      email: payload.email,
+      name: payload.name,
     });
 
     router.push('/dashboard');

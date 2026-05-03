@@ -18,22 +18,44 @@ export function formatDateTime(date: string | Date): string {
   return new Date(date).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
+export function downloadCSV(filename: string, headers: string[], rows: string[][]): void {
+  const escape = (v: string) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const csv = [headers.map(escape).join(','), ...rows.map((r) => r.map(escape).join(','))].join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export function statusColor(status: string): string {
-  const colors: Record<string, string> = {
-    active: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-    performing: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-    approved: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30',
-    draft: 'bg-white/10 text-white/60 border-white/10',
-    suspended: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-    due: 'bg-amber-500/20 text-amber-400 border-amber-500/30',
-    overdue: 'bg-orange-500/20 text-orange-400 border-orange-500/30',
-    delinquent: 'bg-red-500/20 text-red-400 border-red-500/30',
-    default_status: 'bg-red-500/20 text-red-400 border-red-500/30',
-    rejected: 'bg-red-500/20 text-red-400 border-red-500/30',
-    blacklisted: 'bg-red-500/20 text-red-400 border-red-500/30',
-    settled: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-    discontinued: 'bg-white/10 text-white/40 border-white/10',
-    cancelled: 'bg-white/10 text-white/40 border-white/10',
+  const map: Record<string, string> = {
+    active: 'pill pill-success',
+    performing: 'pill pill-success',
+    approved: 'pill pill-success',
+    completed: 'pill pill-success',
+
+    draft: 'pill pill-neutral',
+    suspended: 'pill pill-warning',
+    cooling_off: 'pill pill-warning',
+    due: 'pill pill-warning',
+    pending: 'pill pill-warning',
+
+    overdue: 'pill pill-error',
+    delinquent: 'pill pill-error',
+    default_status: 'pill pill-error',
+    rejected: 'pill pill-error',
+    blacklisted: 'pill pill-error',
+
+    settled: 'pill pill-info',
+    accepted: 'pill pill-info',
+
+    discontinued: 'pill pill-neutral',
+    deactivated: 'pill pill-neutral',
+    inactive: 'pill pill-neutral',
+    cancelled: 'pill pill-neutral',
   };
-  return colors[status] || 'bg-white/10 text-white/60 border-white/10';
+  return map[status] || 'pill pill-neutral';
 }

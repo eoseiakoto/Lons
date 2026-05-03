@@ -2,11 +2,12 @@ import { statusColor } from '@/lib/utils';
 
 interface StatusBadgeProps {
   status: string;
+  className?: string;
 }
 
-export function StatusBadge({ status }: StatusBadgeProps) {
+export function StatusBadge({ status, className }: StatusBadgeProps) {
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium border ${statusColor(status)}`}>
+    <span className={`${statusColor(status)} capitalize${className ? ' ' + className : ''}`}>
       {status.replace(/_/g, ' ')}
     </span>
   );
