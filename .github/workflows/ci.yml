@@ -65,6 +65,22 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Run database migrations
+        run: pnpm --filter database exec prisma migrate deploy
+        env:
+          DATABASE_URL: postgresql://lons:lons@localhost:5432/lons
+
+      - name: GraphQL Health Check
+        run: |
+          chmod +x scripts/graphql-health-check.sh
+          bash scripts/graphql-health-check.sh
+        env:
+          DATABASE_URL: postgresql://lons:lons@localhost:5432/lons
+          REDIS_URL: redis://localhost:6379
+          GRAPHQL_PORT: '3000'
+          GRAPHQL_HEALTH_TIMEOUT: '60'
+          NODE_ENV: development
+
       - name: Security Audit
         run: pnpm audit --audit-level=critical || true
 

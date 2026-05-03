@@ -18,6 +18,7 @@
     "db:studio": "pnpm --filter @lons/database db:studio",
     "db:generate": "pnpm --filter @lons/database db:generate",
     "encrypt-pii": "tsx scripts/encrypt-existing-pii.ts",
+    "verify:synced": "bash scripts/verify-synced-files.sh",
     "test:regression": "jest --config tests/regression/jest.config.ts --runInBand",
     "test:staging": "jest --config tests/staging/jest.config.ts --runInBand",
     "clean": "turbo clean && rm -rf node_modules"

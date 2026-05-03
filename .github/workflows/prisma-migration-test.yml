@@ -1,0 +1,52 @@
+name: Prisma Migration Test
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/database/prisma/**'
+
+jobs:
+  prisma-migration-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: lons
+          POSTGRES_PASSWORD: lons
+          POSTGRES_DB: lons
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://lons:lons@localhost:5432/lons
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm --filter database exec prisma generate
+
+      - name: Reset database (fresh state)
+        run: pnpm --filter database exec prisma migrate reset --force
+
+      - name: Apply all migrations
+        run: pnpm --filter database exec prisma migrate deploy
+
+      - name: Seed database
+        run: pnpm --filter database db:seed
