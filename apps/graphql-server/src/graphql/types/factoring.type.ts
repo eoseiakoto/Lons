@@ -131,6 +131,8 @@ export class InvoiceType {
   @Field({ nullable: true }) verifiedAt?: Date;
   @Field({ nullable: true }) verificationNotes?: string;
   @Field(() => RecourseTypeGql) recourseType!: RecourseTypeGql;
+  /** F-IF-1: when the generated factoring offer expires; null until generateOffer runs. */
+  @Field({ nullable: true }) offerExpiresAt?: Date;
   @Field({ nullable: true }) debtorNotifiedAt?: Date;
   @Field({ nullable: true }) debtorPaymentRef?: string;
   /** Decimal-as-string. */

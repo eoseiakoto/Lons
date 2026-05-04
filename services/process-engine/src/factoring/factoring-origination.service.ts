@@ -43,6 +43,10 @@ const DEFAULT_MAX_ADVANCE_RATE = '95.00';
 const DEFAULT_DISCOUNT_RATE_ANNUAL = '12.00';
 const DEFAULT_SERVICE_FEE_FLAT = '500.00';
 const DEFAULT_RECOURSE_TYPE: RecourseType = RecourseType.with_recourse;
+/** F-IF-1 (pre-S13): default offer validity window in hours. */
+const DEFAULT_OFFER_VALIDITY_HOURS = 48;
+const MIN_OFFER_VALIDITY_HOURS = 1;
+const MAX_OFFER_VALIDITY_HOURS = 720; // 30 days
 
 const DEFAULT_NON_RECOURSE_ELIGIBILITY = {
   minDebtorRiskScore: 70,
@@ -86,12 +90,25 @@ interface FactoringConfig {
   discountRateAnnual: string;
   serviceFeeFlat: string;
   defaultRecourseType: RecourseType;
+  /** F-IF-1: how long a generated offer remains acceptable, in hours. */
+  offerValidityHours: number;
   nonRecourseEligibility: {
     minDebtorRiskScore: number;
     minDebtorPaymentHistory: number;
     maxInvoiceTenorDays: number;
     feeMultiplier: string;
   };
+}
+
+/**
+ * F-IF-1 helper: coerce arbitrary JSON config value into a valid hours
+ * count, clamped to the supported range. Falls back to the default for
+ * missing / invalid input.
+ */
+function clampOfferValidityHours(raw: unknown): number {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return DEFAULT_OFFER_VALIDITY_HOURS;
+  return Math.min(MAX_OFFER_VALIDITY_HOURS, Math.max(MIN_OFFER_VALIDITY_HOURS, Math.floor(n)));
 }
 
 /** UTC midnight for "today" — used for tenor calculations. */
@@ -139,6 +156,7 @@ function readFactoringConfig(
     defaultRecourseType:
       ((cfg.defaultRecourseType as RecourseType | undefined) ??
         DEFAULT_RECOURSE_TYPE) as RecourseType,
+    offerValidityHours: clampOfferValidityHours(cfg.offerValidityHours),
     nonRecourseEligibility: {
       minDebtorRiskScore:
         (elig.minDebtorRiskScore as number | undefined) ??
@@ -343,6 +361,13 @@ export class FactoringOriginationService {
       4,
     );
 
+    // F-IF-1: compute offer expiry from product config and persist it on
+    // the invoice so acceptOffer can validate, the seller-facing UI/API
+    // can display the deadline, and the InvoiceOfferExpiryJob can sweep
+    // stale offers.
+    const offerValidityMs = config.offerValidityHours * 60 * 60 * 1000;
+    const offerExpiresAt = new Date(Date.now() + offerValidityMs);
+
     // ── Persist the offer terms back onto the Invoice ──
     const updated = await this.prisma.invoice.update({
       where: { id: invoiceId },
@@ -354,12 +379,10 @@ export class FactoringOriginationService {
         serviceFee,
         netDisbursement,
         recourseType,
+        offerExpiresAt,
         status: InvoiceStatus.offer_generated,
       },
     });
-
-    // ── Emit + return ──
-    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 
     this.eventBus.emitAndBuild(EventType.INVOICE_OFFER_GENERATED, tenantId, {
       invoiceId,
@@ -373,7 +396,7 @@ export class FactoringOriginationService {
     });
 
     this.logger.log(
-      `Offer generated for invoice ${invoiceId}: rate=${advanceRatePercent}% advanced=${advancedAmount} net=${netDisbursement} ${invoice.currency} (${recourseType})`,
+      `Offer generated for invoice ${invoiceId}: rate=${advanceRatePercent}% advanced=${advancedAmount} net=${netDisbursement} ${invoice.currency} (${recourseType}) expires=${offerExpiresAt.toISOString()}`,
     );
 
     return {
@@ -388,7 +411,7 @@ export class FactoringOriginationService {
       recourseType,
       dueDate: updated.dueDate.toISOString().slice(0, 10),
       currency: invoice.currency,
-      expiresAt,
+      expiresAt: updated.offerExpiresAt!.toISOString(),
     };
   }
 
@@ -413,6 +436,27 @@ export class FactoringOriginationService {
     if (invoice.status !== InvoiceStatus.offer_generated) {
       throw new ValidationError(
         `Invoice ${invoiceId} is ${invoice.status}, not offer_generated — cannot accept offer`,
+      );
+    }
+
+    // F-IF-1: refuse acceptance of stale offers. We auto-cancel here so
+    // the invoice transitions out of `offer_generated` and into a
+    // terminal state, mirroring what InvoiceOfferExpiryJob would do —
+    // the seller must request a fresh offer if they still want financing.
+    if (invoice.offerExpiresAt && invoice.offerExpiresAt < new Date()) {
+      await this.prisma.invoice.update({
+        where: { id: invoiceId },
+        data: { status: InvoiceStatus.cancelled },
+      });
+      this.eventBus.emitAndBuild(EventType.INVOICE_CANCELLED, tenantId, {
+        invoiceId,
+        reason: 'offer_expired',
+      });
+      this.logger.warn(
+        `acceptOffer: invoice ${invoiceId} offer expired at ${invoice.offerExpiresAt.toISOString()} — auto-cancelled`,
+      );
+      throw new ValidationError(
+        `Offer for invoice ${invoiceId} expired at ${invoice.offerExpiresAt.toISOString()} — invoice has been cancelled`,
       );
     }
 

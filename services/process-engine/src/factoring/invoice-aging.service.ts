@@ -19,10 +19,12 @@ import {
 
 /**
  * Statuses considered "active" for aging — an invoice has been funded and
- * the debtor still owes (in part or in whole). Invoices in
- * `payment_received` are kept in scope because partial payments still age
- * against the unpaid balance until the reserve releases or settlement
- * completes.
+ * the debtor still owes (in part or in whole). `funded` is included
+ * because an invoice between funding and debtor notification can still
+ * age past due — without this status the aging scan would silently miss
+ * those invoices (F-IF-6, pre-S13 fix). `payment_received` is kept in
+ * scope because partial payments still age against the unpaid balance
+ * until the reserve releases or settlement completes.
  *
  * Statuses explicitly EXCLUDED from aging:
  *   - submitted / under_review / verified / offer_* — pre-funding, no debt yet
@@ -32,6 +34,7 @@ import {
  *   - cancelled / rejected — never funded
  */
 const ACTIVE_INVOICE_STATUSES: InvoiceStatus[] = [
+  InvoiceStatus.funded,
   InvoiceStatus.debtor_notified,
   InvoiceStatus.payment_received,
 ];

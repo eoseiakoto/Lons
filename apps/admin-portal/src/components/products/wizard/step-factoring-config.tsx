@@ -11,6 +11,8 @@ export interface FactoringConfigData {
   discountRateAnnual: string;
   serviceFeeFlat: string;
   defaultRecourseType: 'with_recourse' | 'without_recourse';
+  /** F-IF-1: how many hours a generated offer remains acceptable. */
+  offerValidityHours: string;
   nonRecourseEligibility: {
     minDebtorRiskScore: string;
     minDebtorPaymentHistory: string;
@@ -193,6 +195,30 @@ export function StepFactoringConfig({
           <option value="with_recourse">{t('products.wizard.factoring.recourse.withRecourse')}</option>
           <option value="without_recourse">{t('products.wizard.factoring.recourse.withoutRecourse')}</option>
         </select>
+      </div>
+
+      {/* Offer validity (F-IF-1) */}
+      <div className="card p-4 space-y-3">
+        <h4 className="section-label">{t('products.wizard.factoring.offerValidity')}</h4>
+        <p className="text-xs text-[color:var(--text-tertiary)]">
+          {t('products.wizard.factoring.offerValidityHelp')}
+        </p>
+        <div>
+          <label className={labelCls}>
+            {t('products.wizard.factoring.offerValidityHours')}
+          </label>
+          <input
+            type="number"
+            min="1"
+            max="720"
+            step="1"
+            className={`w-full glass-input ${errFor('factoringConfig.offerValidityHours') ? errorInputCls : ''}`}
+            value={data.offerValidityHours}
+            onChange={(e) => onChange({ offerValidityHours: e.target.value })}
+            placeholder={t('products.wizard.factoring.placeholder.offerValidityHours')}
+          />
+          <FieldErrorMessage message={errFor('factoringConfig.offerValidityHours')} />
+        </div>
       </div>
 
       {/* Non-recourse eligibility */}

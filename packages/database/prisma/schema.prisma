@@ -1818,6 +1818,7 @@ model Invoice {
   verifiedAt         DateTime?          @map("verified_at") @db.Timestamptz(6)
   verificationNotes  String?            @map("verification_notes") @db.Text
   recourseType       RecourseType       @default(with_recourse) @map("recourse_type")
+  offerExpiresAt     DateTime?          @map("offer_expires_at") @db.Timestamptz(6)
   debtorNotifiedAt   DateTime?          @map("debtor_notified_at") @db.Timestamptz(6)
   debtorPaymentRef   String?            @map("debtor_payment_ref") @db.VarChar(255)
   amountReceived     Decimal?           @default(0) @map("amount_received") @db.Decimal(19, 4)

@@ -95,6 +95,8 @@ const DEFAULT_FACTORING_CONFIG: FactoringConfigData = {
   discountRateAnnual: '',
   serviceFeeFlat: '',
   defaultRecourseType: 'with_recourse',
+  // F-IF-1: default offer validity matches the service-side default (48h).
+  offerValidityHours: '48',
   nonRecourseEligibility: {
     minDebtorRiskScore: '',
     minDebtorPaymentHistory: '',
@@ -275,6 +277,8 @@ function buildMutationInput(form: ProductFormState, mode: 'create' | 'edit' = 'c
       // Decimal-as-string for monetary amounts
       serviceFeeFlat: strOrNull(fc.serviceFeeFlat),
       defaultRecourseType: fc.defaultRecourseType,
+      // F-IF-1: persisted as int hours so the service can multiply by 60*60*1000.
+      offerValidityHours: numOrNull(fc.offerValidityHours),
       nonRecourseEligibility: {
         minDebtorRiskScore: numOrNull(fc.nonRecourseEligibility.minDebtorRiskScore),
         minDebtorPaymentHistory: numOrNull(fc.nonRecourseEligibility.minDebtorPaymentHistory),

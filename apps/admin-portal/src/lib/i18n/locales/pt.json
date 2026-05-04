@@ -435,6 +435,9 @@
           "withRecourse": "With Recourse — collect from seller on default",
           "withoutRecourse": "Without Recourse — lender absorbs default loss"
         },
+        "offerValidity": "Offer Validity",
+        "offerValidityHelp": "How long a generated factoring offer remains acceptable. Stale offers are auto-cancelled by the hourly scheduler.",
+        "offerValidityHours": "Offer validity (hours)",
         "nonRecourseEligibility": "Non-Recourse Eligibility",
         "nonRecourseEligibilityHelp": "Thresholds an invoice must meet for non-recourse funding.",
         "minDebtorRiskScore": "Minimum Debtor Risk Score",
@@ -469,6 +472,7 @@
           "advanceRateDefault": "e.g. 80",
           "discountRate": "e.g. 12.5",
           "serviceFeeFlat": "e.g. 500.00",
+          "offerValidityHours": "e.g. 48",
           "minDebtorRiskScore": "e.g. 70",
           "minDebtorPaymentHistory": "e.g. 6",
           "maxInvoiceTenorDays": "e.g. 90",

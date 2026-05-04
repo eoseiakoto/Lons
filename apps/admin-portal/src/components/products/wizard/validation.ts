@@ -355,6 +355,11 @@ export function validateFactoringConfig(
     required: false, min: 0,
   });
 
+  // F-IF-1: offer validity in hours, clamped server-side to [1, 720].
+  pushNumberError(errors, 'factoringConfig.offerValidityHours', fc.offerValidityHours, {
+    required: true, min: 1, max: 720, integer: true,
+  });
+
   // Non-recourse eligibility
   pushNumberError(
     errors,

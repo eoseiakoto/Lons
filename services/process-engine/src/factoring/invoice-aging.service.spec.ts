@@ -275,7 +275,10 @@ describe('InvoiceAgingService.processAging — config overrides', () => {
 describe('InvoiceAgingService.processAging — status filtering', () => {
   it('skips already-defaulted, settled, cancelled, rejected invoices', async () => {
     // The service filters by status in the Prisma query; verify the
-    // `where.status.in` predicate excludes terminal statuses.
+    // `where.status.in` predicate excludes terminal statuses and
+    // includes the three active statuses (funded was added by F-IF-6
+    // pre-S13 fix so the gap between funding and debtor notification
+    // doesn't silently miss aging).
     const { prisma } = buildPrismaMock([]);
     const service = new InvoiceAgingService(prisma, buildEventBusMock(), { enforceDefault: jest.fn() } as any);
 
@@ -286,9 +289,37 @@ describe('InvoiceAgingService.processAging — status filtering', () => {
         where: expect.objectContaining({
           tenantId: TENANT,
           status: {
-            in: [InvoiceStatus.debtor_notified, InvoiceStatus.payment_received],
+            in: [
+              InvoiceStatus.funded,
+              InvoiceStatus.debtor_notified,
+              InvoiceStatus.payment_received,
+            ],
           },
         }),
+      }),
+    );
+  });
+
+  // F-IF-6: funded invoices (pre-debtor-notification) must be included
+  // in the aging scan so the pre-due → Approaching → Due transitions
+  // happen for them too.
+  it('includes funded invoices in aging scan', async () => {
+    const inv = makeInvoice({
+      status: InvoiceStatus.funded,
+      dueDateOffsetDays: 5, // future-dated → Approaching bucket
+    });
+    const { prisma } = buildPrismaMock([inv]);
+    const service = new InvoiceAgingService(prisma, buildEventBusMock(), { enforceDefault: jest.fn() } as any);
+
+    const result = await service.processAging(TENANT);
+
+    expect(result.totalScanned).toBe(1);
+    expect(result.byBucket.Approaching).toBe(1);
+    // Status is left untouched — aging never mutates invoice.status.
+    expect(prisma.invoice.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: inv.id },
+        data: expect.not.objectContaining({ status: expect.anything() }),
       }),
     );
   });

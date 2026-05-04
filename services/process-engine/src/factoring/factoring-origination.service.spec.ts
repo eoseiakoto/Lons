@@ -467,6 +467,39 @@ describe('FactoringOriginationService.generateOffer', () => {
     );
     expect(offer.discountFee).toBe(baseDiscount);
   });
+
+  // F-IF-1: persist offerExpiresAt based on factoringConfig.offerValidityHours.
+  it('persists offerExpiresAt based on config.offerValidityHours', async () => {
+    const invoice = makeInvoice({ dueDate: futureDate(60) });
+    const { prisma, eventBus, debtorService, invoiceUpdate } = makeMocks({
+      invoice,
+      product: makeProduct({
+        factoringConfig: {
+          // 72-hour validity (overrides the 48h default).
+          offerValidityHours: 72,
+        },
+      }),
+    });
+    const service = newService(prisma, eventBus, debtorService);
+
+    const before = Date.now();
+    const offer = await service.generateOffer(TENANT, INVOICE_ID);
+    const after = Date.now();
+
+    // The persisted invoice update must include an offerExpiresAt ~72h out.
+    const updateCall = invoiceUpdate.mock.calls[0][0];
+    expect(updateCall.data.offerExpiresAt).toBeInstanceOf(Date);
+    const persistedMs = (updateCall.data.offerExpiresAt as Date).getTime();
+    const expectedMin = before + 72 * 60 * 60 * 1000 - 100;
+    const expectedMax = after + 72 * 60 * 60 * 1000 + 100;
+    expect(persistedMs).toBeGreaterThanOrEqual(expectedMin);
+    expect(persistedMs).toBeLessThanOrEqual(expectedMax);
+
+    // The returned offer mirrors the persisted timestamp.
+    expect(offer.expiresAt).toBe(
+      (updateCall.data.offerExpiresAt as Date).toISOString(),
+    );
+  });
 });
 
 // ─── acceptOffer ─────────────────────────────────────────────────────────
@@ -512,6 +545,62 @@ describe('FactoringOriginationService.acceptOffer', () => {
     await expect(
       service.acceptOffer(TENANT, INVOICE_ID, 'idem-1'),
     ).rejects.toThrow(/not offer_generated/);
+  });
+
+  // F-IF-1: stale offers are auto-cancelled and rejected.
+  it('rejects expired offers and auto-cancels the invoice', async () => {
+    const invoice = makeInvoice({
+      status: InvoiceStatus.offer_generated,
+      offerExpiresAt: new Date(Date.now() - 60 * 1000), // expired 1 minute ago
+    });
+    const { prisma, eventBus, debtorService, invoiceUpdate } = makeMocks({
+      invoice,
+    });
+    const service = newService(prisma, eventBus, debtorService);
+
+    await expect(
+      service.acceptOffer(TENANT, INVOICE_ID, 'idem-stale'),
+    ).rejects.toThrow(/expired/);
+
+    // The auto-cancel update must have run.
+    expect(invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: INVOICE_ID },
+        data: { status: InvoiceStatus.cancelled },
+      }),
+    );
+
+    // INVOICE_CANCELLED emitted with reason: 'offer_expired'; no
+    // INVOICE_OFFER_ACCEPTED event.
+    const cancelled = eventBus.emitAndBuild.mock.calls.find(
+      (c: any) => c[0] === EventType.INVOICE_CANCELLED,
+    );
+    expect(cancelled?.[2]).toMatchObject({
+      invoiceId: INVOICE_ID,
+      reason: 'offer_expired',
+    });
+    const accepted = eventBus.emitAndBuild.mock.calls.filter(
+      (c: any) => c[0] === EventType.INVOICE_OFFER_ACCEPTED,
+    );
+    expect(accepted.length).toBe(0);
+  });
+
+  // F-IF-1: future-dated offers are accepted normally.
+  it('accepts non-expired offers (offerExpiresAt in the future)', async () => {
+    const invoice = makeInvoice({
+      status: InvoiceStatus.offer_generated,
+      offerExpiresAt: new Date(Date.now() + 60 * 60 * 1000), // 1h in the future
+    });
+    const { prisma, eventBus, debtorService } = makeMocks({ invoice });
+    const service = newService(prisma, eventBus, debtorService);
+
+    const result = await service.acceptOffer(TENANT, INVOICE_ID, 'idem-fresh');
+
+    expect(result.status).toBe(InvoiceStatus.offer_accepted);
+    const accepted = eventBus.emitAndBuild.mock.calls.find(
+      (c: any) => c[0] === EventType.INVOICE_OFFER_ACCEPTED,
+    );
+    expect(accepted).toBeDefined();
   });
 });
 
