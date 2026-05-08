@@ -123,6 +123,27 @@ export interface IInvoicePaymentPartialEvent {
   isPartial: true;
 }
 
+/** Inbound debtor-payment webhook successfully matched to an invoice. */
+export interface IDebtorPaymentMatchedEvent {
+  invoiceId: string;
+  /** Decimal-as-string. */
+  amount: string;
+  currency: string;
+  /** Provider's transaction ref. */
+  transactionRef: string;
+  matchStrategy: 'invoice_number' | 'debtor_ref' | 'fifo';
+}
+
+/** Inbound debtor-payment webhook could not be matched to an invoice. */
+export interface IDebtorPaymentUnmatchedEvent {
+  /** Provider's transaction ref. */
+  transactionRef: string;
+  /** Decimal-as-string. */
+  amount: string;
+  currency: string;
+  reason: 'no_matching_invoice' | 'currency_mismatch' | 'invoice_not_active';
+}
+
 /** Reserve held back at funding time was released to the seller. */
 export interface IInvoiceReserveReleasedEvent {
   invoiceId: string;

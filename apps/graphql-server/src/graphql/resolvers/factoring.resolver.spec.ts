@@ -25,6 +25,9 @@ function makeResolver(overrides: Partial<any> = {}) {
       findMany: jest.fn().mockResolvedValue([]),
       count: jest.fn().mockResolvedValue(0),
     },
+    customer: {
+      findFirst: jest.fn().mockResolvedValue({ id: SELLER_ID }),
+    },
     ...overrides.prisma,
   };
   const debtorService = {
@@ -481,5 +484,68 @@ describe('FactoringResolver — invoice mutations', () => {
       'goods_undelivered',
       USER.userId,
     );
+  });
+});
+
+// ─── ResolveField (S13-4) ───────────────────────────────────────────────
+
+describe('FactoringResolver — ResolveField (S13-4)', () => {
+  it('resolveDebtor() returns the debtor when debtorId is set', async () => {
+    const debtorRow = {
+      id: DEBTOR_ID,
+      companyName: 'Acme Trading Co',
+      country: 'GHA',
+    };
+    const { resolver, prisma } = makeResolver({
+      prisma: {
+        debtor: {
+          findFirst: jest.fn().mockResolvedValue(debtorRow),
+          findMany: jest.fn(),
+          count: jest.fn(),
+        },
+      },
+    });
+    const parent = { debtorId: DEBTOR_ID } as any;
+    const out = await resolver.resolveDebtor(parent);
+    expect(out).toEqual(debtorRow);
+    expect(prisma.debtor.findFirst).toHaveBeenCalledWith({
+      where: { id: DEBTOR_ID, deletedAt: null },
+    });
+  });
+
+  it('resolveSeller() returns the customer when sellerId is set', async () => {
+    const customerRow = {
+      id: SELLER_ID,
+      fullName: 'Kwame Owusu Trading',
+      country: 'GHA',
+    };
+    const { resolver, prisma } = makeResolver({
+      prisma: {
+        customer: {
+          findFirst: jest.fn().mockResolvedValue(customerRow),
+        },
+      },
+    });
+    const parent = { sellerId: SELLER_ID } as any;
+    const out = await resolver.resolveSeller(parent);
+    expect(out).toEqual(customerRow);
+    expect(prisma.customer.findFirst).toHaveBeenCalledWith({
+      where: { id: SELLER_ID, deletedAt: null },
+    });
+  });
+
+  it('resolveDebtor() / resolveSeller() return null when the corresponding ID is missing', async () => {
+    const { resolver, prisma } = makeResolver();
+    const debtorOut = await resolver.resolveDebtor({
+      debtorId: undefined,
+    } as any);
+    const sellerOut = await resolver.resolveSeller({
+      sellerId: null,
+    } as any);
+    expect(debtorOut).toBeNull();
+    expect(sellerOut).toBeNull();
+    // No DB hit when the id is nullish.
+    expect(prisma.debtor.findFirst).not.toHaveBeenCalled();
+    expect(prisma.customer.findFirst).not.toHaveBeenCalled();
   });
 });

@@ -1,4 +1,13 @@
-import { Args, ID, Int, Mutation, Query, Resolver } from '@nestjs/graphql';
+import {
+  Args,
+  ID,
+  Int,
+  Mutation,
+  Parent,
+  Query,
+  ResolveField,
+  Resolver,
+} from '@nestjs/graphql';
 
 import {
   AuditAction,
@@ -29,6 +38,7 @@ import {
   ReserveService,
 } from '@lons/process-engine';
 
+import { CustomerType } from '../types/customer.type';
 import {
   ConcentrationSummaryType,
   DebtorConnectionType,
@@ -545,6 +555,44 @@ export class FactoringResolver {
       reason,
       user.userId,
     )) as unknown as InvoiceType;
+  }
+
+  // ────── ResolveField (InvoiceType nested entities) ─────────────────────
+
+  /**
+   * S13-4: nested debtor resolver so the admin portal can render the debtor's
+   * company name without an extra round-trip. N+1 is acceptable for v1 — the
+   * invoices list is paginated to ≤ 20 items per page; DataLoader is a future
+   * optimization.
+   *
+   * The TS method is named `resolveDebtor` to avoid colliding with the
+   * top-level `debtor(debtorId)` query above; the GraphQL field is `debtor`
+   * via the decorator's first argument (name).
+   */
+  @ResolveField('debtor', () => DebtorType, { nullable: true })
+  async resolveDebtor(
+    @Parent() invoice: InvoiceType,
+  ): Promise<DebtorType | null> {
+    if (!invoice.debtorId) return null;
+    const debtor = await this.prisma.debtor.findFirst({
+      where: { id: invoice.debtorId, deletedAt: null },
+    });
+    return (debtor as unknown as DebtorType) ?? null;
+  }
+
+  /**
+   * S13-4: nested seller resolver. The seller on a factoring invoice is the
+   * Customer entity submitting the invoice (the SP's onboarded business).
+   */
+  @ResolveField('seller', () => CustomerType, { nullable: true })
+  async resolveSeller(
+    @Parent() invoice: InvoiceType,
+  ): Promise<CustomerType | null> {
+    if (!invoice.sellerId) return null;
+    const customer = await this.prisma.customer.findFirst({
+      where: { id: invoice.sellerId, deletedAt: null },
+    });
+    return (customer as unknown as CustomerType) ?? null;
   }
 
   // ────── Internals ──────────────────────────────────────────────────────

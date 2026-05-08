@@ -21,6 +21,33 @@ import {
   type IDebtor,
 } from '@/lib/graphql/factoring';
 
+/**
+ * Sprint 13 S13-1 — Webhook activity events for an invoice.
+ *
+ * Sourced from the audit log / event history filtered by event types
+ * `DEBTOR_PAYMENT_MATCHED` / `DEBTOR_PAYMENT_UNMATCHED`. The dedicated
+ * GraphQL surface for "events for this invoice" does not exist yet —
+ * TODO(S14): wire to a real `invoiceWebhookEvents` query once the
+ * backend resolver is added. For now, this is always an empty array so
+ * the section is hidden in current production data; integration tests
+ * cover the matching + event-emission paths end-to-end.
+ */
+interface IWebhookEvent {
+  id: string;
+  occurredAt: string;
+  transactionRef: string;
+  amount: string;
+  currency: string;
+  matchStrategy: 'invoice_number' | 'debtor_ref' | 'fifo';
+}
+
+function useInvoiceWebhookEvents(_invoiceId: string): IWebhookEvent[] {
+  // TODO(S14): replace with `useQuery(INVOICE_WEBHOOK_EVENTS_QUERY, …)`
+  // once the GraphQL resolver lands. Returning an empty array here keeps
+  // the section hidden until then.
+  return [];
+}
+
 interface CardRowProps {
   label: string;
   value: React.ReactNode;
@@ -107,6 +134,22 @@ export default function InvoiceDetailPage() {
     compare(reserveAmount, '0') > 0
       ? subtract(reserveAmount, reserveReleased)
       : '0';
+
+  // S13-1: webhook events for this invoice (currently always empty until
+  // the backend GraphQL resolver lands — see useInvoiceWebhookEvents).
+  const webhookEvents = useInvoiceWebhookEvents(invoice.id);
+  const matchStrategyLabel = (
+    s: 'invoice_number' | 'debtor_ref' | 'fifo',
+  ): string => {
+    switch (s) {
+      case 'invoice_number':
+        return t('factoring.webhookActivity.strategyInvoiceNumber');
+      case 'debtor_ref':
+        return t('factoring.webhookActivity.strategyDebtorRef');
+      case 'fifo':
+        return t('factoring.webhookActivity.strategyFifo');
+    }
+  };
 
   return (
     <div className="relative space-y-6 animate-enter">
@@ -220,18 +263,29 @@ export default function InvoiceDetailPage() {
             <dl className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <CardRow
                 label={t('debtors.form.companyName')}
-                value={
-                  debtor ? (
-                    <Link
-                      href={`/debtors/${debtor.id}`}
-                      className="text-[color:var(--accent-primary-deep)] hover:opacity-80 transition-colors"
-                    >
-                      {debtor.companyName}
-                    </Link>
-                  ) : (
-                    <span className="font-mono text-xs">{invoice.debtorId.slice(0, 12)}…</span>
-                  )
-                }
+                value={(() => {
+                  // S13-4: prefer the nested resolver (one round-trip via the
+                  // invoice query) and fall back to the dedicated DEBTOR_QUERY
+                  // result (kept for `country` and other detail fields).
+                  const companyName =
+                    invoice.debtor?.companyName ?? debtor?.companyName;
+                  const debtorId = invoice.debtor?.id ?? debtor?.id;
+                  if (companyName && debtorId) {
+                    return (
+                      <Link
+                        href={`/debtors/${debtorId}`}
+                        className="text-[color:var(--accent-primary-deep)] hover:opacity-80 transition-colors"
+                      >
+                        {companyName}
+                      </Link>
+                    );
+                  }
+                  return (
+                    <span className="font-mono text-xs">
+                      {invoice.debtorId.slice(0, 12)}…
+                    </span>
+                  );
+                })()}
               />
               <CardRow
                 label={t('debtors.form.country')}
@@ -333,6 +387,61 @@ export default function InvoiceDetailPage() {
               />
             )}
           </section>
+
+          {/* S13-1: webhook activity (only rendered if events exist). */}
+          {webhookEvents.length > 0 && (
+            <section className="card-glow p-6 space-y-4">
+              <div>
+                <h3 className="text-[16px] font-semibold tracking-tight text-[color:var(--text-primary)]">
+                  {t('factoring.webhookActivity.title')}
+                </h3>
+                <p className="text-[12px] text-[color:var(--text-tertiary)] mt-1">
+                  {t('factoring.webhookActivity.subtitle')}
+                </p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-[12px] uppercase tracking-wider text-[color:var(--text-tertiary)] border-b border-[color:var(--border-subtle)]">
+                      <th className="py-2 pr-4 font-normal">
+                        {t('factoring.webhookActivity.headerTimestamp')}
+                      </th>
+                      <th className="py-2 pr-4 font-normal">
+                        {t('factoring.webhookActivity.headerTransactionRef')}
+                      </th>
+                      <th className="py-2 pr-4 font-normal text-right">
+                        {t('factoring.webhookActivity.headerAmount')}
+                      </th>
+                      <th className="py-2 pr-4 font-normal">
+                        {t('factoring.webhookActivity.headerStrategy')}
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {webhookEvents.map((evt) => (
+                      <tr
+                        key={evt.id}
+                        className="border-b border-[color:var(--border-subtle)] last:border-b-0"
+                      >
+                        <td className="py-2 pr-4 text-[color:var(--text-secondary)] tabular-nums">
+                          {formatDateTime(evt.occurredAt)}
+                        </td>
+                        <td className="py-2 pr-4 font-mono text-xs text-[color:var(--text-secondary)]">
+                          {evt.transactionRef}
+                        </td>
+                        <td className="py-2 pr-4 text-right tabular-nums text-[color:var(--text-primary)]">
+                          {formatMoney(evt.amount, evt.currency)}
+                        </td>
+                        <td className="py-2 pr-4 text-[color:var(--text-secondary)]">
+                          {matchStrategyLabel(evt.matchStrategy)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
         </div>
       </div>
     </div>

@@ -451,6 +451,7 @@ export class DebtorService {
         id: true,
         status: true,
         dueDate: true,
+        debtorPaidAt: true,
         updatedAt: true,
       },
     });
@@ -466,11 +467,12 @@ export class DebtorService {
     let onTimeCount = 0;
     let totalDaysLate = 0;
     for (const inv of paid) {
-      // v1 LIMITATION: we use `updatedAt` as the actual payment date
-      // because `amountReceived first hit faceValue` isn't tracked
-      // separately yet. Callers should treat this as approximate until
-      // the invoice payment-event timeline lands (Phase 3D / future).
-      const actualPaymentDate = inv.updatedAt;
+      // S13-2: prefer `debtorPaidAt` (set on the first payment event in
+      // ReserveService.recordDebtorPayment) over `updatedAt` so spurious
+      // mutations (e.g., metadata edits, reserve releases) don't skew
+      // the payment-delay calculation. Invoices paid before this field
+      // existed fall back to `updatedAt`.
+      const actualPaymentDate = inv.debtorPaidAt ?? inv.updatedAt;
       const daysLate = daysBetweenUtc(inv.dueDate, actualPaymentDate);
       totalDaysLate += daysLate;
       if (daysLate <= 0) onTimeCount += 1;

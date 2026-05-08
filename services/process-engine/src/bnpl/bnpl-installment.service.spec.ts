@@ -763,6 +763,223 @@ describe('BnplInstallmentService.earlySettlement', () => {
     expect(evtNames).not.toContain('bnpl.early_settlement');
     expect(evtNames).not.toContain('bnpl.purchase.completed');
   });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // Sprint 13 S13-5 — discount must apply to actual unpaid balance.
+  // ───────────────────────────────────────────────────────────────────────
+
+  it('applies discount to actual remaining balance, not gross installment amounts (S13-5 fix)', async () => {
+    const installments = [
+      {
+        id: 'inst-1',
+        installmentNumber: 1,
+        amount: '1000',
+        paidAmount: '0',
+        status: InstallmentStatus.pending,
+        dueDate: new Date('2026-05-15'),
+      },
+      {
+        id: 'inst-2',
+        installmentNumber: 2,
+        amount: '1000',
+        paidAmount: '400',
+        status: InstallmentStatus.pending,
+        dueDate: new Date('2026-06-15'),
+      },
+      {
+        id: 'inst-3',
+        installmentNumber: 3,
+        amount: '1000',
+        paidAmount: '0',
+        status: InstallmentStatus.pending,
+        dueDate: new Date('2026-07-15'),
+      },
+    ];
+    const tx = makeTransaction({
+      product: {
+        bnplConfig: {
+          earlySettlementAllowed: true,
+          earlySettlementDiscountPercent: '0',
+          advancePaymentAllowed: true,
+        },
+        overdraftConfig: null,
+      },
+      installments,
+    });
+    const prisma = makePrismaForTx(tx);
+    const eventBus = { emitAndBuild: jest.fn() };
+    const adapter = makeMockAdapter(true);
+    const service = new BnplInstallmentService(
+      prisma as any,
+      eventBus as any,
+      adapter as any,
+    );
+
+    const result = await service.earlySettlement(TENANT, {
+      transactionId: TX_ID,
+      idempotencyKey: 'key-s13-5-a',
+    });
+
+    // Actual remaining = 1000 + (1000 - 400) + 1000 = 2600, NOT 3000.
+    expect(result.settlementAmount).toBe('2600.0000');
+    expect(result.discountApplied).toBe('0.0000');
+    expect(result.installmentsClosed).toBe(3);
+    expect(adapter.collect).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: '2600.0000' }),
+    );
+  });
+
+  it('preserves prior behavior when no installments are partially paid', async () => {
+    const installments = [
+      {
+        id: 'inst-1',
+        installmentNumber: 1,
+        amount: '1000',
+        paidAmount: '0',
+        status: InstallmentStatus.pending,
+        dueDate: new Date('2026-05-15'),
+      },
+      {
+        id: 'inst-2',
+        installmentNumber: 2,
+        amount: '1000',
+        paidAmount: '0',
+        status: InstallmentStatus.pending,
+        dueDate: new Date('2026-06-15'),
+      },
+      {
+        id: 'inst-3',
+        installmentNumber: 3,
+        amount: '1000',
+        paidAmount: '0',
+        status: InstallmentStatus.pending,
+        dueDate: new Date('2026-07-15'),
+      },
+    ];
+    const tx = makeTransaction({
+      product: {
+        bnplConfig: {
+          earlySettlementAllowed: true,
+          earlySettlementDiscountPercent: '2.00',
+          advancePaymentAllowed: true,
+        },
+        overdraftConfig: null,
+      },
+      installments,
+    });
+    const prisma = makePrismaForTx(tx);
+    const eventBus = { emitAndBuild: jest.fn() };
+    const adapter = makeMockAdapter(true);
+    const service = new BnplInstallmentService(
+      prisma as any,
+      eventBus as any,
+      adapter as any,
+    );
+
+    const result = await service.earlySettlement(TENANT, {
+      transactionId: TX_ID,
+      idempotencyKey: 'key-s13-5-b',
+    });
+
+    // totalRemaining = 3000; discount = 60; settlement = 2940.
+    expect(result.settlementAmount).toBe('2940.0000');
+    expect(result.discountApplied).toBe('60.0000');
+    expect(result.installmentsClosed).toBe(3);
+    expect(adapter.collect).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: '2940.0000' }),
+    );
+  });
+
+  it('applies discount to actual remaining when multiple installments partially paid', async () => {
+    const installments = [
+      {
+        id: 'inst-1',
+        installmentNumber: 1,
+        amount: '1000',
+        paidAmount: '250',
+        status: InstallmentStatus.pending,
+        dueDate: new Date('2026-05-15'),
+      },
+      {
+        id: 'inst-2',
+        installmentNumber: 2,
+        amount: '1000',
+        paidAmount: '750',
+        status: InstallmentStatus.pending,
+        dueDate: new Date('2026-06-15'),
+      },
+    ];
+
+    // 0% discount → totalRemaining = 750 + 250 = 1000 → settlement = 1000.
+    {
+      const tx = makeTransaction({
+        product: {
+          bnplConfig: {
+            earlySettlementAllowed: true,
+            earlySettlementDiscountPercent: '0',
+            advancePaymentAllowed: true,
+          },
+          overdraftConfig: null,
+        },
+        installments,
+      });
+      const prisma = makePrismaForTx(tx);
+      const eventBus = { emitAndBuild: jest.fn() };
+      const adapter = makeMockAdapter(true);
+      const service = new BnplInstallmentService(
+        prisma as any,
+        eventBus as any,
+        adapter as any,
+      );
+
+      const result = await service.earlySettlement(TENANT, {
+        transactionId: TX_ID,
+        idempotencyKey: 'key-s13-5-c-0pct',
+      });
+
+      expect(result.settlementAmount).toBe('1000.0000');
+      expect(result.discountApplied).toBe('0.0000');
+      expect(result.installmentsClosed).toBe(2);
+      expect(adapter.collect).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: '1000.0000' }),
+      );
+    }
+
+    // 5% discount → discount = 50, settlement = 950.
+    {
+      const tx = makeTransaction({
+        product: {
+          bnplConfig: {
+            earlySettlementAllowed: true,
+            earlySettlementDiscountPercent: '5.00',
+            advancePaymentAllowed: true,
+          },
+          overdraftConfig: null,
+        },
+        installments,
+      });
+      const prisma = makePrismaForTx(tx);
+      const eventBus = { emitAndBuild: jest.fn() };
+      const adapter = makeMockAdapter(true);
+      const service = new BnplInstallmentService(
+        prisma as any,
+        eventBus as any,
+        adapter as any,
+      );
+
+      const result = await service.earlySettlement(TENANT, {
+        transactionId: TX_ID,
+        idempotencyKey: 'key-s13-5-c-5pct',
+      });
+
+      expect(result.settlementAmount).toBe('950.0000');
+      expect(result.discountApplied).toBe('50.0000');
+      expect(result.installmentsClosed).toBe(2);
+      expect(adapter.collect).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: '950.0000' }),
+      );
+    }
+  });
 });
 
 describe('BnplInstallmentService.advancePayment', () => {

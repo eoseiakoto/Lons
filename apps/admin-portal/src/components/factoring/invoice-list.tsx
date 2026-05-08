@@ -81,17 +81,21 @@ export function InvoiceList({
                 <Td>
                   <Link
                     href={`/customers/${inv.sellerId}`}
-                    className="text-[color:var(--text-secondary)] hover:text-[color:var(--accent-primary)] transition-colors text-[12px] font-mono"
+                    className={`text-[color:var(--text-secondary)] hover:text-[color:var(--accent-primary)] transition-colors text-[12px] ${
+                      inv.seller?.fullName ? '' : 'font-mono'
+                    }`}
                   >
-                    {shortenId(inv.sellerId)}
+                    {inv.seller?.fullName ?? shortenId(inv.sellerId)}
                   </Link>
                 </Td>
                 <Td>
                   <Link
                     href={`/debtors/${inv.debtorId}`}
-                    className="text-[color:var(--text-secondary)] hover:text-[color:var(--accent-primary)] transition-colors text-[12px] font-mono"
+                    className={`text-[color:var(--text-secondary)] hover:text-[color:var(--accent-primary)] transition-colors text-[12px] ${
+                      inv.debtor?.companyName ? '' : 'font-mono'
+                    }`}
                   >
-                    {shortenId(inv.debtorId)}
+                    {inv.debtor?.companyName ?? shortenId(inv.debtorId)}
                   </Link>
                 </Td>
                 <Td>

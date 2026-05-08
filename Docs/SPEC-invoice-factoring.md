@@ -115,6 +115,16 @@ Stored as product configuration (extend the Product model's `eligibilityRules` J
 
 Checked at invoice submission time. If funding the invoice would breach a concentration limit, the invoice is declined with a specific reason.
 
+**Enforcement timing (v1):** Concentration limits are evaluated only at submission. If a debtor's exposure later decreases (e.g., an invoice is settled or cancelled), previously declined invoices are **not** automatically re-evaluated or retried. The seller must resubmit the invoice. This is a deliberate design choice — automatic retry introduces re-queue ordering complexity and potential race conditions when multiple invoices compete for freed capacity. A future enhancement (Phase 5+) may add an optional notification to the seller when debtor headroom reopens.
+
+#### Multi-Currency Concentration Calculation
+
+**v1 approach: per-currency limits.** Each concentration limit (debtor %, debtor absolute, industry %, seller-debtor %) is evaluated independently within each currency. A debtor's GHS exposure and USD exposure are tracked and capped separately. This avoids injecting FX rate volatility into a risk calculation — if debtor X has GHS 400,000 exposure and USD 50,000 exposure, each is assessed against its own currency's thresholds, not converted and summed.
+
+**Implication:** The `maxDebtorExposureAmount` in the product config applies per currency. If set to `500000`, a debtor can hold up to 500,000 GHS *and* 500,000 USD of active invoices simultaneously. Tenants operating in a single currency (the common case for v1 African-market deployments) are unaffected.
+
+**Phase 5+ enhancement:** Cross-currency aggregation with real-time FX conversion for tenants that require a single unified exposure cap across all currencies. This introduces dependencies on an FX rate feed and adds complexity around rate-staleness tolerances.
+
 ---
 
 ## 3. Invoice Entity Model
@@ -147,6 +157,7 @@ model Invoice {
   verifiedAt         DateTime?           @map("verified_at") @db.Timestamptz(6)
   verificationNotes  String?             @map("verification_notes") @db.Text
   recourseType       RecourseType        @default(with_recourse) @map("recourse_type")
+  offerExpiresAt     DateTime?           @map("offer_expires_at") @db.Timestamptz(6)
   debtorNotifiedAt   DateTime?           @map("debtor_notified_at") @db.Timestamptz(6)
   debtorPaymentRef   String?             @map("debtor_payment_ref") @db.VarChar(255)
   amountReceived     Decimal?            @default(0) @map("amount_received") @db.Decimal(19, 4)
@@ -293,6 +304,12 @@ Calculate financing offer:
   serviceFee = flat fee per product config (if applicable)
   netDisbursement = advancedAmount - discountFee - serviceFee
 
+Offer expiry is computed from the product's `offerValidityHours` config:
+  offerExpiresAt = now() + offerValidityHours (default 48h, range 1–720h)
+
+`offerValidityHours` is stored in the product's `factoringConfig` JSONB field.
+It is configurable per product via the admin portal product wizard (IF step).
+
 Return offer to seller:
 {
   "invoiceId": "uuid",
@@ -308,11 +325,23 @@ Return offer to seller:
   "expiresAt": "2026-04-15T23:59:59Z"
 }
 
+`expiresAt` in the response is derived from the persisted `offerExpiresAt` field
+on the Invoice record — it is not a throwaway calculation. This ensures the
+scheduler and acceptOffer validation share the same source of truth.
+
 Status: verified → offer_generated
 
 Step 4: SELLER ACCEPTS OFFER
 ─────────────────────────────
 POST /v1/invoices/{invoiceId}/accept
+
+Validation:
+  a. Invoice status must be offer_generated
+  b. offerExpiresAt must not have passed (now < offerExpiresAt)
+     - If expired: invoice is auto-cancelled (status → cancelled),
+       event INVOICE_CANCELLED emitted with reason: 'offer_expired',
+       and a ValidationError is returned to the seller.
+       The seller must request a new offer via resubmission.
 
 Status: offer_generated → offer_accepted
 
@@ -380,14 +409,42 @@ The advance rate is the percentage of invoice face value disbursed to the seller
 **Formula:**
 ```
 baseRate = product.advanceRatePercent (e.g., 85%)
-debtorAdjustment = f(debtor.internalRiskScore)  // -10% to +5%
-tenorAdjustment = f(daysToDueDate)               // -2% for > 90 days
-sellerAdjustment = f(sellerTrackRecord)          // +0% to +3%
+debtorAdjustment = f(debtor.internalRiskScore)  // see brackets below
+tenorAdjustment = f(daysToDueDate)               // see brackets below
+sellerAdjustment = f(sellerTrackRecord)          // see brackets below
 
 effectiveAdvanceRate = clamp(baseRate + debtorAdjustment + tenorAdjustment + sellerAdjustment, 60%, 95%)
 ```
 
 The minimum (60%) and maximum (95%) are configurable per product.
+
+#### Debtor Risk Score Adjustment
+
+| Internal Risk Score | Adjustment (pp) |
+|---|---|
+| ≥ 80 | +5 |
+| 70 – 79 | +2 |
+| 50 – 69 | 0 |
+| 30 – 49 | −5 |
+| < 30 | −10 |
+| No score (new debtor) | 0 |
+
+#### Tenor Adjustment
+
+| Days to Due Date | Adjustment (pp) |
+|---|---|
+| ≤ 60 | 0 |
+| 61 – 90 | −1 |
+| > 90 | −2 |
+
+#### Seller Track-Record Adjustment
+
+| Prior Settled Invoices | Adjustment (pp) |
+|---|---|
+| 0 (new seller) | 0 |
+| 1 – 4 | +1 |
+| 5 – 9 | +2 |
+| ≥ 10 | +3 |
 
 ---
 
@@ -399,11 +456,11 @@ If the debtor fails to pay within the tolerance window (configurable, e.g., 30 d
 
 1. Invoice transitions to `defaulted`
 2. The seller becomes responsible for repaying the advanced amount
-3. System initiates collection from seller:
-   - Deduct from seller's wallet balance
-   - Deduct from seller's pending reserve releases on other invoices
-   - If insufficient, treat as a standard delinquent contract → collections workflow
-4. The seller can still pursue the debtor independently
+3. A configurable grace period applies (`recourseGracePeriodDays`, default 7 days) before enforcement begins
+4. System initiates collection from seller:
+   - **v1:** Routes directly to the standard collections workflow (same queue as delinquent loans). A daily scheduler job scans for defaulted with-recourse invoices past their grace end date and triggers enforcement.
+   - **Phase 5+ enhancement:** Sweep seller's pending reserve releases on other active invoices and deduct from seller's wallet balance before escalating to collections. This cross-invoice netting requires ledger integration and concurrent-release locking that is out of scope for v1.
+5. The seller can still pursue the debtor independently
 
 ### 5.2 Without Recourse
 
@@ -503,6 +560,21 @@ The system tracks debtor payment behavior across all invoices (not just the curr
 - Payment reliability score (% of invoices paid on time)
 - Number of disputed invoices
 - This data feeds back into the debtor risk score and future advance rate calculations
+
+### 7.3 Offer Expiry Scheduler
+
+**InvoiceOfferExpiryJob** — a scheduler cron (`0 * * * *`, hourly on the hour) that prevents stale offers from lingering indefinitely.
+
+**Scope:** Invoices with `status: offer_generated` and `offerExpiresAt <= now()`.
+
+**Behavior:**
+1. Iterates all active tenants via `enterTenantContext` (per-tenant fan-out, RLS-scoped)
+2. For each tenant, queries expired offer-generated invoices
+3. Transitions each to `cancelled`
+4. Emits `INVOICE_CANCELLED` with `reason: 'offer_expired'` for each
+5. Per-tenant error isolation: one tenant's failure does not block others
+
+**Rationale:** The `acceptOffer` endpoint also validates expiry (§4.1 Step 4), but the scheduler provides a safety net — it proactively cancels stale offers so they don't accumulate in the pipeline. Without this sweep, an invoice with an expired offer would remain in `offer_generated` indefinitely until the seller attempted to accept it. In African markets with volatile FX, clearing stale offers promptly is a risk control.
 
 ---
 

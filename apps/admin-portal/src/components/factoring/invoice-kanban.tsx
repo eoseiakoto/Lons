@@ -104,6 +104,11 @@ export function InvoiceKanban({ invoices, loading }: InvoiceKanbanProps) {
                       <p className="text-[13px] tabular-nums text-[color:var(--text-primary)] font-semibold mt-1.5">
                         {formatMoney(inv.faceValue, inv.currency)}
                       </p>
+                      {inv.debtor?.companyName && (
+                        <p className="text-[11px] text-[color:var(--text-secondary)] mt-0.5 truncate">
+                          {inv.debtor.companyName}
+                        </p>
+                      )}
                       <p className="text-[11px] text-[color:var(--text-tertiary)] tabular-nums mt-0.5">
                         {t('factoring.kanban.dueOn', {
                           date: formatDate(inv.dueDate),

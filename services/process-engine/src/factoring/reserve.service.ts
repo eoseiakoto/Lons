@@ -135,6 +135,13 @@ export class ReserveService {
     const faceValue = String(invoice.faceValue);
     const fullyPaid = compare(newAmountReceived, faceValue) >= 0;
 
+    // S13-2: stamp the actual payment date on the FIRST payment event so
+    // debtor.service.assessRisk can compute payment-delay accurately
+    // instead of leaning on `updatedAt` (which advances on any mutation).
+    // Subsequent partial payments leave debtorPaidAt unchanged — it
+    // marks when the debtor first started paying, not the final payment.
+    const isFirstPayment = compare(previousReceived, '0') === 0;
+
     // 6) Append-only ledger entry. The repayment-service convention (see
     //    services/repayment-service/src/payment/payment.service.ts) is
     //    `entryType: repayment, debitCredit: credit` with the running
@@ -183,6 +190,7 @@ export class ReserveService {
       data: {
         amountReceived: newAmountReceived,
         debtorPaymentRef: input.paymentRef,
+        ...(isFirstPayment ? { debtorPaidAt: now } : {}),
         ...(fullyPaid
           ? { status: InvoiceStatus.payment_received }
           : {}),

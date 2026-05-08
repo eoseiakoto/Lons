@@ -205,6 +205,8 @@ export enum EventType {
   INVOICE_DEBTOR_NOTIFIED = 'invoice.debtor.notified',
   INVOICE_PAYMENT_RECEIVED = 'invoice.payment.received',
   INVOICE_PAYMENT_PARTIAL = 'invoice.payment.partial',
+  DEBTOR_PAYMENT_MATCHED = 'invoice.debtor_payment.matched',
+  DEBTOR_PAYMENT_UNMATCHED = 'invoice.debtor_payment.unmatched',
   INVOICE_RESERVE_RELEASED = 'invoice.reserve.released',
   INVOICE_SETTLED = 'invoice.settled',
   INVOICE_DISPUTED = 'invoice.disputed',

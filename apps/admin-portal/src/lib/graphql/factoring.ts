@@ -76,6 +76,15 @@ export const INVOICE_FIELDS_FRAGMENT = gql`
     defaultedAt
     createdAt
     updatedAt
+    # S13-4: nested resolvers — render company / customer name instead of UUIDs.
+    debtor {
+      id
+      companyName
+    }
+    seller {
+      id
+      fullName
+    }
   }
 `;
 
@@ -513,6 +522,10 @@ export interface IInvoice {
   defaultedAt?: string | null;
   createdAt: string;
   updatedAt: string;
+  /** S13-4: resolved by GraphQL @ResolveField — nullable until requested. */
+  debtor?: { id: string; companyName: string } | null;
+  /** S13-4: resolved by GraphQL @ResolveField — the seller is a Customer. */
+  seller?: { id: string; fullName?: string | null } | null;
 }
 
 export interface IInvoiceOffer {

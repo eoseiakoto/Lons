@@ -42,6 +42,7 @@ import { FactoringOriginationService } from '../factoring-origination.service';
 import { ReserveService } from '../reserve.service';
 import { RecourseService } from '../recourse.service';
 import { InvoiceAgingService } from '../invoice-aging.service';
+import { DebtorPaymentMatchingService } from '../debtor-payment-matching.service';
 import type { SubmitInvoiceInput } from '../invoice-submission.types';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
@@ -675,6 +676,7 @@ async function buildWorld(opts: WorldOpts = {}) {
   const concentrationService = moduleRef.get(ConcentrationLimitService);
   const submissionService = moduleRef.get(InvoiceSubmissionService);
   const agingService = moduleRef.get(InvoiceAgingService);
+  const matchingService = moduleRef.get(DebtorPaymentMatchingService);
 
   const expectEventEmitted = (
     type: string,
@@ -702,6 +704,7 @@ async function buildWorld(opts: WorldOpts = {}) {
       concentration: concentrationService,
       aging: agingService,
       debtor: debtorService,
+      matching: matchingService,
     },
     state: {
       invoices,
@@ -1131,5 +1134,69 @@ describe('Invoice Factoring — concentration breach blocks submission', () => {
       if (inv.idempotencyKey === 'IDEM-CONC-1') invoiceCountForKey += 1;
     }
     expect(invoiceCountForKey).toBe(0);
+  });
+});
+
+describe('Invoice Factoring — webhook-driven settlement (Sprint 13 S13-1)', () => {
+  it('inbound debtor payment via matchingService auto-matches, releases reserve, and settles', async () => {
+    const world = await buildWorld();
+
+    // Submit + offer + accept + fund + notify (same lifecycle prefix as
+    // the happy-path test). After notify the invoice is in `debtor_notified`
+    // and ready for an inbound payment.
+    const submitted = await world.services.submission.submit(
+      TENANT,
+      baseSubmitInput({ idempotencyKey: 'IDEM-WEBHOOK-1' }),
+    );
+    const invoiceId = submitted.id;
+
+    await world.services.origination.generateOffer(TENANT, invoiceId);
+    await world.services.origination.acceptOffer(
+      TENANT,
+      invoiceId,
+      'ACCEPT-WEBHOOK-1',
+    );
+    await world.services.origination.disburseAdvance(
+      TENANT,
+      invoiceId,
+      'DISB-WEBHOOK-1',
+    );
+    await world.services.origination.notifyDebtor(TENANT, invoiceId);
+
+    const inv = world.state.invoices.get(invoiceId)!;
+    expect(inv.status).toBe(InvoiceStatus.debtor_notified);
+
+    // Inbound payment via the matching waterfall — this is what the webhook
+    // controller does after HMAC validation.
+    const result = await world.services.matching.matchAndApply(TENANT, {
+      transactionRef: 'WEBHOOK-TX-1',
+      amount: inv.faceValue,
+      currency: inv.currency,
+      invoiceNumber: inv.invoiceNumber,
+    });
+    expect(result).toEqual({
+      matched: true,
+      invoiceId,
+      matchStrategy: 'invoice_number',
+    });
+    world.expectEventEmitted(
+      EventType.DEBTOR_PAYMENT_MATCHED,
+      (p) =>
+        p.invoiceId === invoiceId &&
+        p.transactionRef === 'WEBHOOK-TX-1' &&
+        p.matchStrategy === 'invoice_number',
+    );
+    world.expectEventEmitted(EventType.INVOICE_PAYMENT_RECEIVED);
+
+    // Auto-release the reserve (faceValue 10,000 < manualReleaseAbove 200,000
+    // so no operator approval needed). This drives origination.complete →
+    // status flips to settled and INVOICE_SETTLED fires.
+    await world.services.reserve.releaseReserve(TENANT, invoiceId, {
+      idempotencyKey: 'WEBHOOK-RES-1',
+    });
+    const finalRow = world.state.invoices.get(invoiceId)!;
+    expect(finalRow.status).toBe(InvoiceStatus.settled);
+    world.expectEventEmitted(EventType.INVOICE_RESERVE_RELEASED);
+    world.expectEventEmitted(EventType.INVOICE_SETTLED);
   });
 });

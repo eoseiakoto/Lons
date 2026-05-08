@@ -1,5 +1,6 @@
 import { Field, ID, Int, ObjectType, registerEnumType } from '@nestjs/graphql';
 
+import { CustomerType } from './customer.type';
 import { PageInfo } from './page-info.type';
 
 /**
@@ -135,6 +136,8 @@ export class InvoiceType {
   @Field({ nullable: true }) offerExpiresAt?: Date;
   @Field({ nullable: true }) debtorNotifiedAt?: Date;
   @Field({ nullable: true }) debtorPaymentRef?: string;
+  /** S13-2: timestamp of the first payment event from the debtor (used by risk scoring). */
+  @Field({ nullable: true }) debtorPaidAt?: Date;
   /** Decimal-as-string. */
   @Field({ nullable: true }) amountReceived?: string;
   /** Decimal-as-string. */
@@ -143,6 +146,11 @@ export class InvoiceType {
   @Field({ nullable: true }) fundedAt?: Date;
   @Field({ nullable: true }) settledAt?: Date;
   @Field({ nullable: true }) defaultedAt?: Date;
+  /** S13-4: resolved via @ResolveField in FactoringResolver. */
+  @Field(() => DebtorType, { nullable: true }) debtor?: DebtorType;
+
+  /** S13-4: the seller is a Customer (the entity submitting invoices). */
+  @Field(() => CustomerType, { nullable: true }) seller?: CustomerType;
   @Field() createdAt!: Date;
   @Field() updatedAt!: Date;
 }

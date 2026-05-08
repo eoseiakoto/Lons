@@ -68,3 +68,4 @@ export * from './factoring/concentration-limit.types';
 export * from './factoring/invoice-aging.service';
 export * from './factoring/invoice-aging.types';
 export * from './factoring/risk-tables';
+export * from './factoring/debtor-payment-matching.service';

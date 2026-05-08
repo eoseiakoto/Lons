@@ -36,6 +36,7 @@ interface InvoiceFixtureOpts {
   metadata?: Record<string, unknown> | null;
   factoringConfig?: Record<string, unknown> | null;
   contractId?: string | null;
+  debtorPaidAt?: Date | null;
 }
 
 function makeInvoice(opts: InvoiceFixtureOpts = {}): any {
@@ -56,6 +57,7 @@ function makeInvoice(opts: InvoiceFixtureOpts = {}): any {
     discountFee: opts.discountFee === null ? null : opts.discountFee ?? '0',
     serviceFee: opts.serviceFee === null ? null : opts.serviceFee ?? '0',
     status: opts.status ?? InvoiceStatus.debtor_notified,
+    debtorPaidAt: opts.debtorPaidAt === undefined ? null : opts.debtorPaidAt,
     metadata: opts.metadata === undefined ? null : opts.metadata,
     product: {
       id: PRODUCT,
@@ -383,6 +385,53 @@ describe('ReserveService.recordDebtorPayment', () => {
         idempotencyKey: 'IDEM-N',
       }),
     ).rejects.toThrow(/Invoice/);
+  });
+
+  // S13-2: debtorPaidAt is set on the FIRST payment event only.
+  it('sets debtorPaidAt on the first payment event', async () => {
+    const invoice = makeInvoice({ faceValue: '100000.00', amountReceived: '0' });
+    const { prisma, eventBus, debtorService } = makeMocks({ invoice });
+    const service = newService(prisma, eventBus, debtorService);
+
+    const before = Date.now();
+    await service.recordDebtorPayment(TENANT, INVOICE_ID, {
+      amountReceived: '40000.00',
+      paymentRef: 'PAY-FIRST',
+      operatorId: OPERATOR,
+      idempotencyKey: 'IDEM-FIRST',
+    });
+    const after = Date.now();
+
+    const updateCall = prisma.invoice.update.mock.calls[0][0];
+    expect(updateCall.data.debtorPaidAt).toBeInstanceOf(Date);
+    const stampMs = (updateCall.data.debtorPaidAt as Date).getTime();
+    expect(stampMs).toBeGreaterThanOrEqual(before - 50);
+    expect(stampMs).toBeLessThanOrEqual(after + 50);
+  });
+
+  // S13-2: subsequent partial payments do NOT overwrite debtorPaidAt.
+  it('does not overwrite debtorPaidAt on subsequent partial payments', async () => {
+    // Invoice already has 40k received and a stamped debtorPaidAt.
+    const existingPaidAt = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const invoice = makeInvoice({
+      faceValue: '100000.00',
+      amountReceived: '40000.00',
+      debtorPaidAt: existingPaidAt,
+    });
+    const { prisma, eventBus, debtorService } = makeMocks({ invoice });
+    const service = newService(prisma, eventBus, debtorService);
+
+    await service.recordDebtorPayment(TENANT, INVOICE_ID, {
+      amountReceived: '30000.00',
+      paymentRef: 'PAY-SECOND',
+      operatorId: OPERATOR,
+      idempotencyKey: 'IDEM-SECOND',
+    });
+
+    const updateCall = prisma.invoice.update.mock.calls[0][0];
+    // The update payload must NOT include debtorPaidAt — only the first
+    // payment event sets it. The existing stamp on the invoice stays put.
+    expect(updateCall.data.debtorPaidAt).toBeUndefined();
   });
 });
 

@@ -20,6 +20,11 @@ const SELLER_INVOICES_QUERY = gql`
           status
           dueDate
           recourseType
+          # S13-4: nested resolver — show the debtor's company name.
+          debtor {
+            id
+            companyName
+          }
         }
         cursor
       }
@@ -43,6 +48,7 @@ interface InvoiceNode {
   status: string;
   dueDate: string;
   recourseType: string;
+  debtor?: { id: string; companyName: string } | null;
 }
 
 /**
@@ -175,9 +181,11 @@ export function TabInvoices({ customerId }: TabInvoicesProps) {
                   <td className="py-3 px-4">
                     <Link
                       href={`/debtors/${inv.debtorId}`}
-                      className="text-[color:var(--accent-primary-deep)] hover:underline"
+                      className={`text-[color:var(--accent-primary-deep)] hover:underline ${
+                        inv.debtor?.companyName ? '' : 'font-mono text-xs'
+                      }`}
                     >
-                      {inv.debtorId.slice(0, 8)}…
+                      {inv.debtor?.companyName ?? `${inv.debtorId.slice(0, 8)}…`}
                     </Link>
                   </td>
                   <td className="py-3 px-4 text-right tabular-nums text-[color:var(--text-primary)]">

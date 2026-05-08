@@ -778,10 +778,14 @@ export class BnplInstallmentService {
       );
     }
 
-    // Total remaining = sum of pending installment amounts (not paid amounts).
+    // Total remaining = sum of (amount - paidAmount) for each pending installment.
+    // S13-5 fix: paidAmount tracks partial payments already applied; the
+    // discount must apply to the actual unpaid balance, not the gross
+    // amount of each installment.
     let totalRemaining = '0';
     for (const inst of pendingInstallments) {
-      totalRemaining = add(totalRemaining, String(inst.amount));
+      const instRemaining = subtract(String(inst.amount), String(inst.paidAmount ?? 0));
+      totalRemaining = add(totalRemaining, instRemaining);
     }
 
     // Discount percent is a percent value (e.g. '2.00' = 2%). Divide by 100

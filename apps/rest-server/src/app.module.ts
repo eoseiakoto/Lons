@@ -25,6 +25,7 @@ import { PublicModule } from './public/public.module';
 import { WalletWebhookModule } from './wallet-webhook/wallet-webhook.module';
 import { BnplRestModule } from './bnpl/bnpl.module';
 import { FactoringRestModule } from './factoring/factoring.module';
+import { DebtorPaymentWebhookModule } from './debtor-payment-webhook/debtor-payment-webhook.module';
 
 @Module({
   imports: [
@@ -49,6 +50,7 @@ import { FactoringRestModule } from './factoring/factoring.module';
     WalletWebhookModule,
     BnplRestModule,
     FactoringRestModule,
+    DebtorPaymentWebhookModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantThrottlerGuard },

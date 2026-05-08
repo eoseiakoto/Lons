@@ -495,6 +495,46 @@ describe('RecourseService.enforceGracePeriodElapsed', () => {
     expect(metadataUpdate![0].data.metadata.recourseGraceEndAt).toBe(elapsedAt);
   });
 
+  it('stamps recourseEnforcedAt while preserving recourseGraceEndAt and recourseAmount', async () => {
+    const elapsedAt = new Date(Date.now() - 86_400_000).toISOString(); // 1 day ago
+    const { prisma, eventBus, debtorService } = makeMocks({
+      invoice: makeInvoice({
+        status: InvoiceStatus.defaulted,
+        recourseType: RecourseType.with_recourse,
+        amountReceived: '10000.00',
+        metadata: {
+          recourseGraceEndAt: elapsedAt,
+          recourseAmount: '90000.0000',
+          // Unrelated key that must also survive the merge.
+          customNote: 'preserve me',
+        },
+      }),
+    });
+    const service = newService(prisma, eventBus, debtorService);
+
+    const before = Date.now();
+    await service.enforceGracePeriodElapsed(TENANT, INVOICE_ID);
+    const after = Date.now();
+
+    const metadataUpdate = prisma.invoice.update.mock.calls.find(
+      (c: any) => c[0]?.data?.metadata !== undefined,
+    );
+    expect(metadataUpdate).toBeDefined();
+    const meta = metadataUpdate![0].data.metadata;
+
+    // New stamp present and a valid recent ISO string.
+    expect(typeof meta.recourseEnforcedAt).toBe('string');
+    const stampedMs = new Date(meta.recourseEnforcedAt).getTime();
+    expect(stampedMs).toBeGreaterThanOrEqual(before - 1_000);
+    expect(stampedMs).toBeLessThanOrEqual(after + 1_000);
+
+    // The two keys the scheduler relies on must be preserved verbatim.
+    expect(meta.recourseGraceEndAt).toBe(elapsedAt);
+    expect(meta.recourseAmount).toBe('90000.0000');
+    // Unrelated metadata also preserved (not clobbered by the merge).
+    expect(meta.customNote).toBe('preserve me');
+  });
+
   it('rejects when the grace period has not yet elapsed', async () => {
     const futureGrace = new Date(Date.now() + 5 * 86_400_000).toISOString();
     const { prisma, eventBus, debtorService } = makeMocks({

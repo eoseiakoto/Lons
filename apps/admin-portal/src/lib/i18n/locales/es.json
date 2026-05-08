@@ -2279,6 +2279,18 @@
       "reserveAutoReleased": "Auto-released",
       "reserveReleasedLabel": "Reserve release"
     },
+    "webhookActivity": {
+      "title": "Webhook activity",
+      "subtitle": "Inbound payment provider events for this invoice",
+      "headerTimestamp": "Timestamp",
+      "headerTransactionRef": "Transaction ref",
+      "headerAmount": "Amount",
+      "headerStrategy": "Match strategy",
+      "strategyInvoiceNumber": "Invoice number",
+      "strategyDebtorRef": "Debtor reference",
+      "strategyFifo": "FIFO",
+      "noEvents": "No webhook events"
+    },
     "timeline": {
       "title": "Lifecycle timeline",
       "branchNotice": "Invoice deviated from the happy path: {{state}}.",

@@ -9,6 +9,7 @@ import { ReserveService } from './reserve.service';
 import { RecourseService } from './recourse.service';
 import { ConcentrationLimitService } from './concentration-limit.service';
 import { InvoiceAgingService } from './invoice-aging.service';
+import { DebtorPaymentMatchingService } from './debtor-payment-matching.service';
 
 /**
  * Sprint 12 Phase 3 — Invoice Factoring services.
@@ -43,6 +44,7 @@ import { InvoiceAgingService } from './invoice-aging.service';
     RecourseService,
     ConcentrationLimitService,
     InvoiceAgingService,
+    DebtorPaymentMatchingService,
   ],
   exports: [
     DebtorService,
@@ -52,6 +54,7 @@ import { InvoiceAgingService } from './invoice-aging.service';
     RecourseService,
     ConcentrationLimitService,
     InvoiceAgingService,
+    DebtorPaymentMatchingService,
   ],
 })
 export class ProcessEngineFactoringModule {}

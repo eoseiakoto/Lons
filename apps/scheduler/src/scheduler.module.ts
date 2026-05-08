@@ -18,6 +18,7 @@ import { BnplInstallmentJob } from './jobs/bnpl-installment.job';
 import { BnplAutoCollectJob } from './jobs/bnpl-auto-collect.job';
 import { InvoiceAgingJob } from './jobs/invoice-aging.job';
 import { InvoiceOfferExpiryJob } from './jobs/invoice-offer-expiry.job';
+import { RecourseGraceExpiryJob } from './jobs/recourse-grace-expiry.job';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { InvoiceOfferExpiryJob } from './jobs/invoice-offer-expiry.job';
     BnplAutoCollectJob,
     InvoiceAgingJob,
     InvoiceOfferExpiryJob,
+    RecourseGraceExpiryJob,
   ],
 })
 export class SchedulerModule {}

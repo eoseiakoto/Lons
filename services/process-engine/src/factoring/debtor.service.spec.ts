@@ -462,6 +462,63 @@ describe('DebtorService.assessRisk', () => {
     // 50 + 0 + 0 + 0 + 0 = 50
     expect(result.score).toBe('50.00');
   });
+
+  // S13-2: prefer debtorPaidAt (set on the first payment event) over
+  // updatedAt so spurious mutations don't skew the payment-delay metric.
+  it('prefers debtorPaidAt over updatedAt for payment-delay calculation', async () => {
+    const debtor = makeDebtor({ industrySector: 'manufacturing', country: 'GHA' });
+    const dueDate = new Date('2026-04-10T00:00:00Z');
+    // debtorPaidAt: paid 2 days late (the truth).
+    // updatedAt: 30 days after due date (skewed by a much later metadata edit).
+    const inv = {
+      id: 'paid-with-debtorPaidAt',
+      status: InvoiceStatus.settled,
+      dueDate,
+      debtorPaidAt: new Date(dueDate.getTime() + 2 * 86_400_000),
+      updatedAt: new Date(dueDate.getTime() + 30 * 86_400_000),
+    };
+    const prisma = {
+      debtor: {
+        findFirst: jest.fn().mockResolvedValue(debtor),
+        update: jest.fn().mockResolvedValue(debtor),
+      },
+      invoice: { findMany: jest.fn().mockResolvedValue([inv]) },
+    };
+    const service = new DebtorService(prisma as any, { emitAndBuild: jest.fn() } as any);
+
+    const result = await service.assessRisk(TENANT, DEBTOR_ID);
+
+    // Should be 2 days late (from debtorPaidAt), not 30 (from updatedAt).
+    expect(result.averagePaymentDays).toBe(2);
+    // 2-day-late counts as "late" → 0% on-time, paymentHistory = -50 →
+    // baseline 50 - 50 = 0 (clamped). The point of the test is the
+    // averagePaymentDays assertion.
+  });
+
+  // S13-2: invoices paid before the field existed fall back to updatedAt.
+  it('falls back to updatedAt when debtorPaidAt is null', async () => {
+    const debtor = makeDebtor({ industrySector: 'manufacturing', country: 'GHA' });
+    const dueDate = new Date('2026-04-10T00:00:00Z');
+    const inv = {
+      id: 'legacy-paid-invoice',
+      status: InvoiceStatus.settled,
+      dueDate,
+      debtorPaidAt: null,
+      updatedAt: new Date(dueDate.getTime() + 5 * 86_400_000), // 5 days late
+    };
+    const prisma = {
+      debtor: {
+        findFirst: jest.fn().mockResolvedValue(debtor),
+        update: jest.fn().mockResolvedValue(debtor),
+      },
+      invoice: { findMany: jest.fn().mockResolvedValue([inv]) },
+    };
+    const service = new DebtorService(prisma as any, { emitAndBuild: jest.fn() } as any);
+
+    const result = await service.assessRisk(TENANT, DEBTOR_ID);
+
+    expect(result.averagePaymentDays).toBe(5);
+  });
 });
 
 // ─── updateExposure ─────────────────────────────────────────────────────────

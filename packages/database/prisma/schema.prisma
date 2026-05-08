@@ -1821,6 +1821,7 @@ model Invoice {
   offerExpiresAt     DateTime?          @map("offer_expires_at") @db.Timestamptz(6)
   debtorNotifiedAt   DateTime?          @map("debtor_notified_at") @db.Timestamptz(6)
   debtorPaymentRef   String?            @map("debtor_payment_ref") @db.VarChar(255)
+  debtorPaidAt       DateTime?          @map("debtor_paid_at") @db.Timestamptz(6)
   amountReceived     Decimal?           @default(0) @map("amount_received") @db.Decimal(19, 4)
   reserveReleased    Decimal?           @default(0) @map("reserve_released") @db.Decimal(19, 4)
   disputeReason      String?            @map("dispute_reason") @db.Text
