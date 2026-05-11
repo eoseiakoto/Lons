@@ -14,6 +14,7 @@
     "@lons/database": "workspace:*",
     "@lons/shared-types": "workspace:*",
     "@lons/event-contracts": "workspace:*",
+    "@lons/entity-service": "workspace:*",
     "@lons/process-engine": "workspace:*",
     "@lons/settlement-service": "workspace:*",
     "@lons/reconciliation-service": "workspace:*",

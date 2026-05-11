@@ -50,7 +50,7 @@ interface Tenant {
 
 const PLAN_LABEL: Record<string, string> = {
   enterprise: 'Enterprise',
-  professional: 'Professional',
+  professional: 'Growth',
   starter: 'Starter',
   trial: 'Trial',
 };
@@ -193,7 +193,7 @@ export default function TenantsPage() {
           options={[
             { value: '', label: 'Any plan' },
             { value: 'enterprise', label: 'Enterprise' },
-            { value: 'professional', label: 'Professional' },
+            { value: 'growth', label: 'Growth' },
             { value: 'starter', label: 'Starter' },
             { value: 'trial', label: 'Trial' },
           ]}

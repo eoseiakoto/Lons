@@ -26,7 +26,7 @@ import {
   BnplOriginationService,
   BnplRefundService,
 } from '@lons/process-engine';
-import { NotFoundError } from '@lons/common';
+import { AuditAction, NotFoundError, RequiresPlan } from '@lons/common';
 
 import { ApiKeyGuard } from '../guards/api-key.guard';
 import {
@@ -87,8 +87,11 @@ export class BnplController {
     );
   }
 
+  // S14-10: BNPL is a growth-tier (or higher) product.
+  @RequiresPlan('growth')
   @Post('purchases')
   @HttpCode(HttpStatus.CREATED)
+  @AuditAction('initiate.bnplPurchase', 'bnpl_transaction')
   @ApiOperation({ summary: 'Initiate a BNPL purchase at checkout' })
   @ApiResponse({ status: 201, description: 'Purchase approved; schedule returned.' })
   @ApiResponse({ status: 400, description: 'Validation error (KYC, bounds, etc.).' })
@@ -134,8 +137,10 @@ export class BnplController {
     });
   }
 
+  @RequiresPlan('growth')
   @Post('installments/:id/payments')
   @HttpCode(HttpStatus.CREATED)
+  @AuditAction('record.bnplInstallmentPayment', 'bnpl_installment')
   @ApiOperation({ summary: 'Record a payment against a single installment' })
   async payInstallment(
     @Req() req: ApiKeyRequest,
@@ -148,8 +153,10 @@ export class BnplController {
     );
   }
 
+  @RequiresPlan('growth')
   @Post('purchases/:id/refunds')
   @HttpCode(HttpStatus.CREATED)
+  @AuditAction('refund.bnplPurchase', 'bnpl_transaction')
   @ApiOperation({ summary: 'Initiate a full or partial refund on a BNPL transaction' })
   async refundPurchase(
     @Req() req: ApiKeyRequest,

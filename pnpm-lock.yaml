@@ -399,6 +399,9 @@ importers:
       '@lons/database':
         specifier: workspace:*
         version: link:../../packages/database
+      '@lons/entity-service':
+        specifier: workspace:*
+        version: link:../../services/entity-service
       '@lons/event-contracts':
         specifier: workspace:*
         version: link:../../packages/event-contracts
@@ -1272,6 +1275,9 @@ importers:
       '@prisma/client':
         specifier: ^5.14.0
         version: 5.22.0(prisma@5.22.0)
+      ioredis:
+        specifier: ^5.4.0
+        version: 5.10.1
       reflect-metadata:
         specifier: ^0.2.0
         version: 0.2.2

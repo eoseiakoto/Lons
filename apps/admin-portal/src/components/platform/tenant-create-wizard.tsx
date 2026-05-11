@@ -279,7 +279,7 @@ export function TenantCreateWizard({ onSubmit, submitting }: TenantCreateWizardP
                 onChange={(e) => set('planTier', e.target.value)}
               >
                 <option value="starter">{t('platform.wizard.plan.starter')}</option>
-                <option value="professional">{t('platform.wizard.plan.professional')}</option>
+                <option value="growth">{t('platform.wizard.plan.growth')}</option>
                 <option value="enterprise">{t('platform.wizard.plan.enterprise')}</option>
               </select>
             </div>

@@ -227,4 +227,14 @@ export enum EventType {
   // Recourse / write-off (additional, beyond the 23 in spec)
   RECOURSE_ENFORCEMENT_INITIATED = 'invoice.recourse.initiated',
   NON_RECOURSE_WRITE_OFF = 'invoice.non_recourse.write_off',
+
+  // ── Sprint 14 — Commercial billing + plan tier (S14-9 … S14-15) ──
+  BILLING_INVOICE_GENERATED = 'billing.invoice.generated',
+  BILLING_INVOICE_PAID = 'billing.invoice.paid',
+  BILLING_INVOICE_OVERDUE = 'billing.invoice.overdue',
+  BILLING_FEE_RECORDED = 'billing.fee.recorded',
+  USAGE_THRESHOLD_WARNING = 'usage.threshold.warning',
+  QUOTA_EXCEEDED = 'usage.quota.exceeded',
+  PLAN_UPGRADE_REQUESTED = 'plan.upgrade.requested',
+  PLAN_TIER_CHANGED = 'plan.tier.changed',
 }

@@ -21,8 +21,46 @@ enum TenantStatus {
 
 enum PlanTier {
   starter
-  professional
+  growth
   enterprise
+
+  @@map("plan_tier")
+}
+
+/// Sprint 14 (S14-9): a Service Provider's commercial billing model.
+/// `per_disbursement` charges a basis-point fee on every disbursement.
+/// `revenue_share` charges a percentage of the SP's gross revenue (deferred
+/// to a later sprint — the column exists so the model is forward-compatible).
+enum BillingModel {
+  per_disbursement
+  revenue_share
+
+  @@map("billing_model")
+}
+
+enum BillingInvoiceType {
+  subscription
+  usage
+  revenue_share
+
+  @@map("billing_invoice_type")
+}
+
+enum BillingInvoiceStatus {
+  draft
+  issued
+  paid
+  overdue
+
+  @@map("billing_invoice_status")
+}
+
+enum BillingLineItemType {
+  subscription
+  disbursement_fee
+  revenue_share
+
+  @@map("billing_line_item_type")
 }
 
 enum UserStatus {
@@ -343,13 +381,134 @@ model Tenant {
   notificationMockLogs        NotificationMockLog[]
   feedbacks                   Feedback[]
   surveyResponses             SurveyResponse[]
+  // Sprint 14 (S14-9, S14-12): commercial billing relations.
+  billingConfig               TenantBillingConfig?
+  billingInvoices             BillingInvoice[]
 
   @@map("tenants")
 }
 
+/// Sprint 14 (S14-9) — DB-driven plan tier definition.
+///
+/// One row per tier (starter / growth / enterprise). Stores the complete
+/// capability set: allowed product types, operational limits, feature
+/// flags, API access, branding. Platform admins edit these rows via
+/// `updatePlanTierConfig` — changing tier capabilities does NOT require a
+/// code deploy. The PlanTierConfigService caches each row in Redis with
+/// a 5-minute TTL and invalidates on update.
+///
+/// Limits use `Int?` / `Decimal?` with `null` meaning "unlimited"
+/// (enterprise tier).
+model PlanTierConfig {
+  id                                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tier                              PlanTier @unique
+  displayName                       String   @map("display_name") @db.VarChar(50)
+
+  /// JSONB array of `ProductType` strings (e.g. ["micro_loan"] for
+  /// starter, ["micro_loan","overdraft","bnpl","invoice_financing"] for
+  /// enterprise). Validated at the service layer against the
+  /// `ProductType` enum to prevent typo'd entries from going live.
+  allowedProductTypes               Json     @map("allowed_product_types")
+
+  // §3.2 Operational limits. null = unlimited (enterprise behaviour).
+  maxActiveProducts                 Int?     @map("max_active_products")
+  maxCustomers                      Int?     @map("max_customers")
+  maxMonthlyDisbursementVolumeUsd   Decimal? @map("max_monthly_disbursement_volume_usd") @db.Decimal(19, 4)
+  maxMonthlyTransactions            Int?     @map("max_monthly_transactions")
+  maxLenderConfigs                  Int?     @map("max_lender_configs")
+  maxBnplMerchants                  Int?     @map("max_bnpl_merchants")
+  maxPortalUsers                    Int?     @map("max_portal_users")
+  dataRetentionMonths               Int      @default(12) @map("data_retention_months")
+
+  /// JSONB feature-flag bag. Shape (see SPEC-plan-tiers.md §3.3):
+  /// {
+  ///   "mlScoring": boolean,
+  ///   "aiRecovery": boolean,
+  ///   "collectionsLevel": "basic" | "full" | "full_with_agency",
+  ///   "customReports": boolean,
+  ///   "scheduledReports": boolean,
+  ///   "settlementLevel": "basic" | "multi_party" | "multi_party_custom",
+  ///   "reconciliationLevel": "daily_batch" | "daily_plus_ondemand" | "realtime_plus_daily",
+  ///   "notificationChannels": string[],
+  ///   "maxWebhookEndpoints": number | null,
+  ///   "auditLogRetentionDays": number
+  /// }
+  featureFlags                      Json     @map("feature_flags")
+
+  apiRateLimitPerMinute             Int      @default(60) @map("api_rate_limit_per_minute")
+  restApiEnabled                    Boolean  @default(false) @map("rest_api_enabled")
+  websocketEnabled                  Boolean  @default(false) @map("websocket_enabled")
+  bulkOperationsEnabled             Boolean  @default(false) @map("bulk_operations_enabled")
+  maxApiKeys                        Int?     @map("max_api_keys")
+
+  /// JSONB branding options (see SPEC-plan-tiers.md §3.6):
+  /// {
+  ///   "fullBrandPalette": boolean,
+  ///   "customEmailTemplates": boolean,
+  ///   "customSmsSenderId": boolean,
+  ///   "whiteLabel": boolean,
+  ///   "customDomain": boolean
+  /// }
+  brandingOptions                   Json     @map("branding_options")
+
+  createdAt                         DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                         DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("plan_tier_configs")
+}
+
+/// Sprint 14 (S14-9) — per-tenant commercial billing configuration.
+///
+/// One row per tenant. Stores the SP's contracted rates: subscription
+/// amount, per-disbursement basis-points rate, product-specific rate
+/// modifiers (e.g. BNPL gets -10 bps vs base), volume-discount brackets,
+/// and contract dates. Currency is USD by default; per-tenant other
+/// currencies are supported (see `billingCurrency`).
+model TenantBillingConfig {
+  id                      String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId                String       @unique @map("tenant_id") @db.Uuid
+  planTier                PlanTier     @map("plan_tier")
+  subscriptionAmountUsd   Decimal      @map("subscription_amount_usd") @db.Decimal(19, 4)
+  billingModel            BillingModel @default(per_disbursement) @map("billing_model")
+  perDisbursementBps      Decimal?     @map("per_disbursement_bps") @db.Decimal(7, 2)
+  revenueSharePct         Decimal?     @map("revenue_share_pct") @db.Decimal(5, 4)
+
+  // §4.2 — per-product rate adjustments (basis points). Negative values
+  // are discounts vs the base rate.
+  microLoanRateModifier   Decimal      @default(0)   @map("micro_loan_rate_modifier") @db.Decimal(7, 2)
+  overdraftRateModifier   Decimal      @default(0)   @map("overdraft_rate_modifier") @db.Decimal(7, 2)
+  bnplRateModifier        Decimal      @default(-10) @map("bnpl_rate_modifier") @db.Decimal(7, 2)
+  factoringRateModifier   Decimal      @default(-20) @map("factoring_rate_modifier") @db.Decimal(7, 2)
+
+  /// §4.3 Volume discount brackets — JSONB array of
+  /// `{ threshold: number; multiplier: string }`. Sorted descending by
+  /// threshold at lookup time. Default empty (no volume discount).
+  volumeDiscountTiers     Json         @default("[]") @map("volume_discount_tiers")
+
+  billingCurrency         String       @default("USD") @map("billing_currency") @db.VarChar(3)
+  paymentTermsDays        Int          @default(15)   @map("payment_terms_days")
+  contractStartDate       DateTime     @map("contract_start_date") @db.Date
+  contractEndDate         DateTime?    @map("contract_end_date") @db.Date
+
+  createdAt               DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt               DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant                  Tenant       @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([planTier])
+  @@map("tenant_billing_configs")
+}
+
 model PlatformUser {
   id               String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email            String           @unique @db.VarChar(255)
+  /// FIX-S13B-1 (F-S13B-1): `@unique` removed — the column is encrypted, so
+  /// the constraint never fires (random IV ⇒ ciphertext differs per write).
+  /// Uniqueness is now enforced on `emailHash` below.
+  email            String           @db.VarChar(255)
+  /// Sprint 13B (S13B-2): SHA-256 of normalised lowercase email for login lookups.
+  /// Required because `email` is encrypted at rest (see ENCRYPTED_FIELDS).
+  emailHash        String?          @map("email_hash") @db.VarChar(64)
   passwordHash     String           @map("password_hash") @db.VarChar(255)
   name             String?          @db.VarChar(255)
   role             PlatformUserRole
@@ -363,6 +522,9 @@ model PlatformUser {
   updatedAt        DateTime         @updatedAt @map("updated_at") @db.Timestamptz(6)
   deletedAt        DateTime?        @map("deleted_at") @db.Timestamptz(6)
 
+  /// FIX-S13B-1: dedupe enforced on the hash column. NULL hashes (pre-backfill)
+  /// are treated as distinct by Postgres, which is the intended behaviour.
+  @@unique([emailHash])
   @@map("platform_users")
 }
 
@@ -374,6 +536,9 @@ model User {
   id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   tenantId         String     @map("tenant_id") @db.Uuid
   email            String     @db.VarChar(255)
+  /// Sprint 13B (S13B-2): SHA-256 of normalised lowercase email — drives
+  /// tenant-scoped login lookups now that `email` is encrypted at rest.
+  emailHash        String?    @map("email_hash") @db.VarChar(64)
   passwordHash     String     @map("password_hash") @db.VarChar(255)
   name             String?    @db.VarChar(255)
   phone            String?    @db.VarChar(20)
@@ -395,7 +560,11 @@ model User {
   feedbacks         Feedback[]
   surveyResponses   SurveyResponse[]
 
-  @@unique([tenantId, email])
+  /// FIX-S13B-1 (F-S13B-1): the original `@@unique([tenantId, email])` is
+  /// removed — encrypted columns can't enforce uniqueness. The unique
+  /// constraint moves to the hash column (which also creates the implicit
+  /// index that the prior `@@index([tenantId, emailHash])` provided).
+  @@unique([tenantId, emailHash])
   @@index([tenantId])
   @@index([roleId])
   @@map("users")
@@ -445,33 +614,42 @@ model Lender {
 }
 
 model Customer {
-  id              String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId        String         @map("tenant_id") @db.Uuid
-  externalId      String         @map("external_id") @db.VarChar(255)
-  externalSource  String?        @map("external_source") @db.VarChar(100)
-  fullName        String?        @map("full_name") @db.VarChar(255)
-  dateOfBirth     DateTime?      @map("date_of_birth") @db.Date
-  gender          Gender?
-  nationalId      String?        @map("national_id") @db.VarChar(255)
-  nationalIdType  String?        @map("national_id_type") @db.VarChar(50)
-  phonePrimary    String?        @map("phone_primary") @db.VarChar(50)
-  phoneSecondary  String?        @map("phone_secondary") @db.VarChar(50)
-  email           String?        @db.VarChar(255)
-  country         String?        @db.VarChar(3)
-  region          String?        @db.VarChar(100)
-  city            String?        @db.VarChar(100)
-  kycLevel        KycLevel       @default(none) @map("kyc_level")
-  kycVerifiedAt   DateTime?      @map("kyc_verified_at") @db.Timestamptz(6)
-  segment         String?        @db.VarChar(100)
-  status          CustomerStatus @default(active)
-  blacklistReason String?        @map("blacklist_reason") @db.Text
-  watchlist       Boolean        @default(false)
-  metadata        Json?
-  anonymizedAt    DateTime?      @map("anonymized_at") @db.Timestamptz(6)
-  anonymizedBy    String?        @map("anonymized_by") @db.Uuid
-  createdAt       DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt       DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt       DateTime?      @map("deleted_at") @db.Timestamptz(6)
+  id                String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String         @map("tenant_id") @db.Uuid
+  externalId        String         @map("external_id") @db.VarChar(255)
+  externalSource    String?        @map("external_source") @db.VarChar(100)
+  fullName          String?        @map("full_name") @db.VarChar(255)
+  dateOfBirth       DateTime?      @map("date_of_birth") @db.Date
+  gender            Gender?
+  nationalId        String?        @map("national_id") @db.VarChar(255)
+  /// Security Hardening (SEC-1): HMAC-SHA-256 of normalised lowercase
+  /// nationalId for indexed equality lookup. The plaintext is encrypted at
+  /// rest, so direct lookups are impossible.
+  nationalIdHash    String?        @map("national_id_hash") @db.VarChar(64)
+  nationalIdType    String?        @map("national_id_type") @db.VarChar(50)
+  phonePrimary      String?        @map("phone_primary") @db.VarChar(50)
+  /// Security Hardening (SEC-1): HMAC-SHA-256 of normalised lowercase
+  /// phonePrimary. Drives admin portal "find customer by phone" lookups.
+  phonePrimaryHash  String?        @map("phone_primary_hash") @db.VarChar(64)
+  phoneSecondary    String?        @map("phone_secondary") @db.VarChar(50)
+  email             String?        @db.VarChar(255)
+  /// Security Hardening (SEC-1): HMAC-SHA-256 of normalised lowercase email.
+  emailHash         String?        @map("email_hash") @db.VarChar(64)
+  country           String?        @db.VarChar(3)
+  region            String?        @db.VarChar(100)
+  city              String?        @db.VarChar(100)
+  kycLevel          KycLevel       @default(none) @map("kyc_level")
+  kycVerifiedAt     DateTime?      @map("kyc_verified_at") @db.Timestamptz(6)
+  segment           String?        @db.VarChar(100)
+  status            CustomerStatus @default(active)
+  blacklistReason   String?        @map("blacklist_reason") @db.Text
+  watchlist         Boolean        @default(false)
+  metadata          Json?
+  anonymizedAt      DateTime?      @map("anonymized_at") @db.Timestamptz(6)
+  anonymizedBy      String?        @map("anonymized_by") @db.Uuid
+  createdAt         DateTime       @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime       @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt         DateTime?      @map("deleted_at") @db.Timestamptz(6)
 
   consents         CustomerConsent[]
   subscriptions    Subscription[]
@@ -489,8 +667,13 @@ model Customer {
 
   @@unique([tenantId, externalId, externalSource])
   @@index([tenantId])
-  @@index([phonePrimary])
-  @@index([nationalId])
+  /// Security Hardening (SEC-4): the legacy `@@index([phonePrimary])` and
+  /// `@@index([nationalId])` indexed AES-GCM ciphertext (random IV per
+  /// write) — every write produces a different value, so the index is
+  /// pure storage/IO waste. Replaced by hash-column indexes below.
+  @@index([tenantId, phonePrimaryHash])
+  @@index([tenantId, nationalIdHash])
+  @@index([tenantId, emailHash])
   @@index([status])
   @@index([segment])
   @@map("customers")
@@ -851,6 +1034,8 @@ model Disbursement {
 
   contract Contract @relation(fields: [contractId], references: [id])
   customer Customer @relation(fields: [customerId], references: [id])
+  // Sprint 14 (S14-13): metered per-disbursement fee record.
+  disbursementFee DisbursementFee?
 
   @@index([tenantId])
   @@index([contractId])
@@ -1329,6 +1514,16 @@ model ApiKey {
   tenantId           String    @map("tenant_id") @db.Uuid
   name               String    @db.VarChar(255)
   keyHash            String    @map("key_hash") @db.Char(64)
+  /// Security Hardening (SEC-3): SHA-256 hash of the per-key secret.
+  /// `apiKeyService.validateApiKey()` requires both `keyHash` and
+  /// `secretHash` to match — closing the "secret never validated" loophole
+  /// where the X-API-Secret header was extracted but never compared.
+  /// VARCHAR(64) (not CHAR) so the existing pre-secret rows (created
+  /// before this column was introduced) can carry an empty placeholder
+  /// until they're rotated. Non-null with default '' so the migration is
+  /// backwards-compatible — see migration
+  /// 20260510100001_add_api_key_secret_hash for the rotation policy.
+  secretHash         String    @default("") @map("secret_hash") @db.VarChar(64)
   rateLimitPerMinute Int       @default(60) @map("rate_limit_per_minute")
   expiresAt          DateTime? @map("expires_at") @db.Timestamptz(6)
   revokedAt          DateTime? @map("revoked_at") @db.Timestamptz(6)
@@ -1750,37 +1945,48 @@ enum MerchantSettlementStatus {
 // ─────────────────────────────────────────────────────────────────────────
 
 model Debtor {
-  id                   String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId             String       @map("tenant_id") @db.Uuid
-  companyName          String       @map("company_name") @db.VarChar(255)
-  tradingName          String?      @map("trading_name") @db.VarChar(255)
-  registrationNumber   String?      @map("registration_number") @db.VarChar(100)
-  taxId                String?      @map("tax_id") @db.VarChar(100)
-  country              String       @db.VarChar(3)
-  industrySector       String?      @map("industry_sector") @db.VarChar(100)
-  contactEmail         String?      @map("contact_email") @db.VarChar(255)
-  contactPhone         String?      @map("contact_phone") @db.VarChar(50)
-  contactName          String?      @map("contact_name") @db.VarChar(255)
-  address              Json?
-  paymentTerms         String?      @map("payment_terms") @db.VarChar(50)
-  averagePaymentDays   Int?         @map("average_payment_days")
-  externalCreditRating String?      @map("external_credit_rating") @db.VarChar(50)
-  internalRiskScore    Decimal?     @map("internal_risk_score") @db.Decimal(5, 2)
-  totalExposure        Decimal      @default(0) @map("total_exposure") @db.Decimal(19, 4)
-  exposureLimit        Decimal?     @map("exposure_limit") @db.Decimal(19, 4)
-  status               DebtorStatus @default(active)
-  verifiedAt           DateTime?    @map("verified_at") @db.Timestamptz(6)
-  metadata             Json?
-  createdAt            DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt            DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
-  deletedAt            DateTime?    @map("deleted_at") @db.Timestamptz(6)
+  id                     String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId               String       @map("tenant_id") @db.Uuid
+  companyName            String       @map("company_name") @db.VarChar(255)
+  tradingName            String?      @map("trading_name") @db.VarChar(255)
+  registrationNumber     String?      @map("registration_number") @db.VarChar(100)
+  /// Sprint 13B (S13B-2): SHA-256 of normalised lowercase registrationNumber.
+  /// Drives debtor-payment matching now that registrationNumber is encrypted.
+  registrationNumberHash String?      @map("registration_number_hash") @db.VarChar(64)
+  taxId                  String?      @map("tax_id") @db.VarChar(100)
+  /// Sprint 13B (S13B-2): SHA-256 of normalised lowercase taxId, for the
+  /// debtor-payment matching service's lookup paths.
+  taxIdHash              String?      @map("tax_id_hash") @db.VarChar(64)
+  country                String       @db.VarChar(3)
+  industrySector         String?      @map("industry_sector") @db.VarChar(100)
+  contactEmail           String?      @map("contact_email") @db.VarChar(255)
+  contactPhone           String?      @map("contact_phone") @db.VarChar(50)
+  contactName            String?      @map("contact_name") @db.VarChar(255)
+  address                Json?
+  paymentTerms           String?      @map("payment_terms") @db.VarChar(50)
+  averagePaymentDays     Int?         @map("average_payment_days")
+  externalCreditRating   String?      @map("external_credit_rating") @db.VarChar(50)
+  internalRiskScore      Decimal?     @map("internal_risk_score") @db.Decimal(5, 2)
+  totalExposure          Decimal      @default(0) @map("total_exposure") @db.Decimal(19, 4)
+  exposureLimit          Decimal?     @map("exposure_limit") @db.Decimal(19, 4)
+  status                 DebtorStatus @default(active)
+  verifiedAt             DateTime?    @map("verified_at") @db.Timestamptz(6)
+  metadata               Json?
+  createdAt              DateTime     @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime     @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt              DateTime?    @map("deleted_at") @db.Timestamptz(6)
 
   invoices Invoice[]
 
-  @@unique([tenantId, companyName, registrationNumber])
+  /// FIX-S13B-1 (F-S13B-1): unique moves from `registrationNumber` (encrypted,
+  /// non-deterministic ciphertext) to `registrationNumberHash` (deterministic
+  /// SHA-256). The implicit index on the unique tuple subsumes the previous
+  /// `@@index([tenantId, registrationNumberHash])`.
+  @@unique([tenantId, companyName, registrationNumberHash])
   @@index([tenantId])
   @@index([status])
   @@index([industrySector])
+  @@index([tenantId, taxIdHash])
   @@map("debtors")
 }
 
@@ -1881,4 +2087,126 @@ enum RecourseType {
   without_recourse
 
   @@map("recourse_type")
+}
+
+// ============================================================================
+// SPRINT 14 — COMMERCIAL BILLING (S14-12, S14-13)
+// ============================================================================
+
+/// Sprint 14 (S14-12) — Generated billing invoices. Two flavours today
+/// (`subscription`, `usage`) and one reserved for the future revenue-share
+/// commercial model. Invoice numbers are sequential per tenant per year
+/// in the format `INV-{YYYY}-{NNNN}`; collision is handled by the
+/// `BillingInvoiceNumberService` retry loop, and the `(tenantId,
+/// invoiceNumber)` unique constraint here is the backstop.
+///
+/// Monetary fields are Decimal(19,4) per CLAUDE.md — never read these as
+/// `number` (`Number(...)` would lose precision on amounts > 2⁵³).
+model BillingInvoice {
+  id                  String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String               @map("tenant_id") @db.Uuid
+  invoiceNumber       String               @map("invoice_number") @db.VarChar(30)
+  type                BillingInvoiceType
+  billingPeriodStart  DateTime             @map("billing_period_start") @db.Date
+  billingPeriodEnd    DateTime             @map("billing_period_end") @db.Date
+  currency            String               @default("USD") @db.VarChar(3)
+  subtotal            Decimal              @db.Decimal(19, 4)
+  taxAmount           Decimal              @default(0) @map("tax_amount") @db.Decimal(19, 4)
+  total               Decimal              @db.Decimal(19, 4)
+  status              BillingInvoiceStatus @default(draft)
+  issuedAt            DateTime?            @map("issued_at") @db.Timestamptz(6)
+  dueDate             DateTime?            @map("due_date") @db.Date
+  paidAt              DateTime?            @map("paid_at") @db.Timestamptz(6)
+  notes               String?              @db.Text
+  createdAt           DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  lineItems           BillingLineItem[]
+  disbursementFees    DisbursementFee[]
+  tenant              Tenant               @relation(fields: [tenantId], references: [id])
+
+  /// Per-tenant uniqueness on the invoice number. The
+  /// `(tenantId, type, billingPeriodStart)` combination is *also* unique
+  /// in practice — re-running the subscription job for the same month
+  /// hits this and returns the existing invoice — but we enforce
+  /// idempotency at the application layer (findFirst-then-return) to
+  /// give a friendlier error path than a P2002.
+  @@unique([tenantId, invoiceNumber])
+  @@index([tenantId])
+  @@index([status])
+  @@index([type])
+  @@index([billingPeriodStart])
+  @@index([tenantId, type, billingPeriodStart])
+  @@map("billing_invoices")
+}
+
+/// Sprint 14 (S14-12) — Individual line items on a billing invoice.
+/// Usage invoices group disbursement fees by product type into one line
+/// each (description: "Micro-Loan disbursement fees (N transactions)").
+/// Subscription invoices have exactly one line.
+model BillingLineItem {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  billingInvoiceId  String              @map("billing_invoice_id") @db.Uuid
+  type              BillingLineItemType
+  description       String              @db.VarChar(500)
+  quantity          Int                 @default(1)
+  unitPrice         Decimal             @map("unit_price") @db.Decimal(19, 4)
+  amount            Decimal             @db.Decimal(19, 4)
+  currency          String              @default("USD") @db.VarChar(3)
+  metadata          Json?
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  billingInvoice    BillingInvoice      @relation(fields: [billingInvoiceId], references: [id], onDelete: Cascade)
+
+  @@index([billingInvoiceId])
+  @@map("billing_line_items")
+}
+
+/// Sprint 14 (S14-13) — Per-disbursement metered fee record.
+///
+/// Created when a `DISBURSEMENT_COMPLETED` event fires. The rate
+/// calculation captures every input so the fee is fully reproducible:
+///   effective_bps = (base_bps + product_modifier_bps) * volume_multiplier
+///   fee_amount    = bankersRound(gross_amount * effective_bps / 10000, 4)
+///   fee_amount_usd = fee_amount * exchange_rate
+/// All inputs (base_bps, modifier, multiplier, rate, FX) are persisted
+/// alongside the result so the SP can audit any line on a usage invoice
+/// after the fact, even if rates change later.
+///
+/// `(tenantId, disbursementId)` is unique so re-running the listener for
+/// the same DISBURSEMENT_COMPLETED event is a no-op. The listener
+/// short-circuits on `findUnique` before we hit this constraint, but it's
+/// the backstop for races.
+///
+/// `billingInvoiceId` is null until the monthly usage job links the fee
+/// to its invoice (the link is what turns "metered" into "billed").
+model DisbursementFee {
+  id                       String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId                 String          @map("tenant_id") @db.Uuid
+  disbursementId           String          @unique @map("disbursement_id") @db.Uuid
+  contractId               String          @map("contract_id") @db.Uuid
+  productType              String          @map("product_type") @db.VarChar(30)
+  grossAmount              Decimal         @map("gross_amount") @db.Decimal(19, 4)
+  currency                 String          @db.VarChar(3)
+  baseBps                  Decimal         @map("base_bps") @db.Decimal(7, 2)
+  productModifierBps       Decimal         @map("product_modifier_bps") @db.Decimal(7, 2)
+  effectiveBps             Decimal         @map("effective_bps") @db.Decimal(7, 2)
+  volumeDiscountMultiplier Decimal         @map("volume_discount_multiplier") @db.Decimal(7, 4)
+  feeRate                  Decimal         @map("fee_rate") @db.Decimal(7, 2)
+  feeAmount                Decimal         @map("fee_amount") @db.Decimal(19, 4)
+  feeAmountUsd             Decimal         @map("fee_amount_usd") @db.Decimal(19, 4)
+  exchangeRate             Decimal?        @map("exchange_rate") @db.Decimal(12, 6)
+  volumeTier               String?         @map("volume_tier") @db.VarChar(50)
+  billingInvoiceId         String?         @map("billing_invoice_id") @db.Uuid
+  createdAt                DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  disbursement   Disbursement   @relation(fields: [disbursementId], references: [id])
+  billingInvoice BillingInvoice? @relation(fields: [billingInvoiceId], references: [id])
+
+  @@unique([tenantId, disbursementId])
+  @@index([tenantId])
+  @@index([tenantId, createdAt])
+  @@index([billingInvoiceId])
+  @@index([tenantId, productType])
+  @@map("disbursement_fees")
 }

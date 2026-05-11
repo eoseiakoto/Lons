@@ -122,7 +122,7 @@ interface TenantConfig {
   regNumber: string;
   country: string;
   schemaName: string;
-  planTier: 'starter' | 'professional' | 'enterprise';
+  planTier: 'starter' | 'growth' | 'enterprise';
   currency: string;
   timezone: string;
   emailDomain: string;
@@ -175,7 +175,7 @@ const TENANTS: TenantConfig[] = [
     regNumber: 'GHA-REG-2024-001',
     country: 'GHA',
     schemaName: 'tenant_quickcash_gh',
-    planTier: 'professional',
+    planTier: 'growth',
     currency: 'GHS',
     timezone: 'Africa/Accra',
     emailDomain: 'quickcash.gh',
@@ -1342,7 +1342,7 @@ async function seedStagingData(p: PrismaClient) {
     country: string;
     countryCode: string;
     schemaName: string;
-    planTier: 'starter' | 'professional' | 'enterprise';
+    planTier: 'starter' | 'growth' | 'enterprise';
     currency: string;
     timezone: string;
     emailDomain: string;
@@ -1399,7 +1399,7 @@ async function seedStagingData(p: PrismaClient) {
       country: 'KE',
       countryCode: 'KEN',
       schemaName: 'tenant_kenyacredit_stg',
-      planTier: 'professional',
+      planTier: 'growth',
       currency: 'KES',
       timezone: 'Africa/Nairobi',
       emailDomain: 'kenyacredit-stg.lons.io',

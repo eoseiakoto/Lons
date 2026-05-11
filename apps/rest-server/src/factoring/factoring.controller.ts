@@ -25,6 +25,7 @@ import {
   FactoringOriginationService,
   InvoiceSubmissionService,
 } from '@lons/process-engine';
+import { AuditAction, RequiresPlan } from '@lons/common';
 
 import { ApiKeyGuard } from '../guards/api-key.guard';
 import {
@@ -70,8 +71,11 @@ export class FactoringController {
 
   // ─── Invoices ──────────────────────────────────────────────────────────
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Post('invoices/submit')
   @HttpCode(HttpStatus.CREATED)
+  @AuditAction('submit.invoice', 'invoice')
   @ApiOperation({ summary: 'Submit an invoice for factoring' })
   @ApiResponse({ status: 201, description: 'Invoice submitted; verification routing decided.' })
   @ApiResponse({ status: 400, description: 'Validation error (face value, dates, debtor status, concentration breach).' })
@@ -118,8 +122,11 @@ export class FactoringController {
     return invoice;
   }
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Post('invoices/:id/accept')
   @HttpCode(HttpStatus.OK)
+  @AuditAction('accept.invoiceOffer', 'invoice')
   @ApiOperation({ summary: 'Seller accepts the financing offer' })
   @ApiResponse({ status: 200, description: 'Offer accepted; invoice moves to offer_accepted.' })
   @ApiResponse({ status: 400, description: 'Invoice is not in offer_generated state.' })
@@ -133,8 +140,11 @@ export class FactoringController {
     return this.origination.acceptOffer(tenantId, id, body.idempotencyKey);
   }
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Post('invoices/:id/decline')
   @HttpCode(HttpStatus.OK)
+  @AuditAction('decline.invoiceOffer', 'invoice')
   @ApiOperation({ summary: 'Seller declines the financing offer' })
   @ApiResponse({ status: 200, description: 'Offer declined; invoice moves to cancelled.' })
   @ApiResponse({ status: 400, description: 'Invoice is not in offer_generated state.' })
@@ -171,8 +181,11 @@ export class FactoringController {
     return { data: items, nextCursor };
   }
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Post('debtors')
   @HttpCode(HttpStatus.CREATED)
+  @AuditAction('create.debtor', 'debtor')
   @ApiOperation({ summary: 'Create a debtor' })
   @ApiResponse({ status: 201, description: 'Debtor created.' })
   @ApiResponse({ status: 400, description: 'Validation error.' })

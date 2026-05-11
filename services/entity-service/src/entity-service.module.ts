@@ -18,6 +18,7 @@ import { PlatformUserModule } from './platform-user/platform-user.module';
 import { AnonymizationModule } from './anonymization/anonymization.module';
 import { PlatformConfigModule } from './platform-config/platform-config.module';
 import { MerchantModule } from './merchant/merchant.module';
+import { PlanTierModule } from './plan-tier/plan-tier.module';
 
 @Module({
   imports: [
@@ -39,6 +40,10 @@ import { MerchantModule } from './merchant/merchant.module';
     AnonymizationModule,
     PlatformConfigModule,
     MerchantModule,
+    // Sprint 14 (S14-9) — plan-tier infrastructure (config, quota,
+    // tracking, metrics). Requires `RedisClientModule.forRoot()` to be
+    // registered at the app composition root so REDIS_CLIENT resolves.
+    PlanTierModule,
   ],
   exports: [
     AuthModule,
@@ -57,6 +62,7 @@ import { MerchantModule } from './merchant/merchant.module';
     AnonymizationModule,
     PlatformConfigModule,
     MerchantModule,
+    PlanTierModule,
   ],
 })
 export class EntityServiceModule {}

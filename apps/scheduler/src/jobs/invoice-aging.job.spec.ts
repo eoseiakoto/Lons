@@ -7,6 +7,7 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '@lons/database';
+import { AuditService } from '@lons/entity-service';
 import { InvoiceAgingService } from '@lons/process-engine';
 
 import { InvoiceAgingJob } from './invoice-aging.job';
@@ -56,6 +57,8 @@ describe('InvoiceAgingJob', () => {
           provide: InvoiceAgingService,
           useValue: { processAging: jest.fn() },
         },
+        // SEC-7: AuditService stub for the per-tenant batch audit entry.
+        { provide: AuditService, useValue: { log: jest.fn() } },
       ],
     }).compile();
 

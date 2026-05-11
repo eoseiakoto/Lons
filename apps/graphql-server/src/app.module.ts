@@ -4,7 +4,7 @@ import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
-import { EntityServiceModule, AuditService } from '@lons/entity-service';
+import { EntityServiceModule, AuditService, PlanTierConfigService } from '@lons/entity-service';
 import { ProcessEngineModule, SCREENING_GATE } from '@lons/process-engine';
 import { ScreeningService } from '@lons/integration-service';
 import { RepaymentServiceModule } from '@lons/repayment-service';
@@ -23,6 +23,8 @@ import {
   AuditEventInterceptor,
   CorrelationIdMiddleware,
   MetricsInterceptor,
+  RedisClientModule,
+  PLAN_TIER_CONFIG_SERVICE,
 } from '@lons/common';
 import { PrismaService } from '@lons/database';
 
@@ -60,6 +62,9 @@ import { ReportResolver } from './graphql/resolvers/report.resolver';
 import { OverdraftResolver } from './graphql/resolvers/overdraft.resolver';
 import { BnplResolver } from './graphql/resolvers/bnpl.resolver';
 import { FactoringResolver } from './graphql/resolvers/factoring.resolver';
+import { PlanTierResolver } from './graphql/resolvers/plan-tier.resolver';
+import { InvoiceVerificationResolver } from './graphql/resolvers/invoice-verification.resolver';
+import { UsageResolver } from './graphql/resolvers/usage.resolver';
 import { DebugLogService } from './graphql/services/debug-log.service';
 import { GraphqlExceptionFilter } from './filters/graphql-exception.filter';
 import { SubscriptionModule } from './subscriptions/subscription.module';
@@ -89,6 +94,10 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
       storage: new RedisThrottlerStorage(),
     }),
     ObservabilityModule,
+    // Sprint 14 (S14-9) — shared Redis client (PlanTierConfig cache,
+    // QuotaTracking counters). Must come before EntityServiceModule so
+    // the REDIS_CLIENT provider is resolvable.
+    RedisClientModule.forRoot(),
     SubscriptionModule,
     EntityServiceModule,
     ProcessEngineModule,
@@ -135,6 +144,16 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
     BnplResolver,
     FactoringResolver,
     PlatformConfigResolver,
+    PlanTierResolver,
+    InvoiceVerificationResolver,
+    UsageResolver,
+    // Sprint 14 (S14-9) — bind the PLAN_TIER_CONFIG_SERVICE injection
+    // token used by @RequiresPlan's guard. Keeps @lons/common free of
+    // an entity-service dependency.
+    {
+      provide: PLAN_TIER_CONFIG_SERVICE,
+      useExisting: PlanTierConfigService,
+    },
     DebugLogService,
     {
       provide: APP_FILTER,

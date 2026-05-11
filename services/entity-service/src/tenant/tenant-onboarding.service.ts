@@ -68,7 +68,7 @@ export interface OnboardTenantInput {
   legalName?: string;
   registrationNumber?: string;
   country: string;
-  planTier?: 'starter' | 'professional' | 'enterprise';
+  planTier?: 'starter' | 'growth' | 'enterprise';
   platformFeePercent?: Prisma.Decimal | string;
   settings?: Prisma.InputJsonValue;
   adminName: string;

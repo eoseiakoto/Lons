@@ -608,7 +608,7 @@ export default function CreateTenantPage() {
                       onChange={(v) => set('planTier', v)}
                       options={[
                         { value: 'starter', label: 'Starter' },
-                        { value: 'professional', label: 'Professional' },
+                        { value: 'growth', label: 'Growth' },
                         { value: 'enterprise', label: 'Enterprise' },
                       ]}
                     />

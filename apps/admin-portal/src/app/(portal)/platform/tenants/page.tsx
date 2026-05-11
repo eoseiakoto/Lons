@@ -114,7 +114,7 @@ export default function TenantsPage() {
           options={[
             { value: '', label: 'Any plan' },
             { value: 'starter', label: 'Starter' },
-            { value: 'professional', label: 'Professional' },
+            { value: 'growth', label: 'Growth' },
             { value: 'enterprise', label: 'Enterprise' },
           ]}
           value={planFilter}

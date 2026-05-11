@@ -54,10 +54,10 @@ interface Tenant {
   createdAt: string;
 }
 
-const PLAN_ORDER = ['enterprise', 'professional', 'starter', 'trial'] as const;
+const PLAN_ORDER = ['enterprise', 'growth', 'starter', 'trial'] as const;
 const PLAN_LABEL: Record<string, string> = {
   enterprise: 'Enterprise',
-  professional: 'Professional',
+  professional: 'Growth',
   starter: 'Starter',
   trial: 'Trial',
 };

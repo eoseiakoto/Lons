@@ -59,7 +59,12 @@ describe('BnplAutoCollectJob', () => {
         walletRef: 'MOCK-1',
       }),
     };
-    const job = new BnplAutoCollectJob(prisma, installmentService as any);
+    const job = new BnplAutoCollectJob(
+      prisma,
+      installmentService as any,
+      // SEC-7: AuditService stub for the per-tenant batch audit entry.
+      { log: jest.fn() } as any,
+    );
 
     const result = await job.runForTenant(TENANT_ID, today, tomorrow);
 
@@ -85,7 +90,12 @@ describe('BnplAutoCollectJob', () => {
         .mockResolvedValueOnce({ status: 'failed', reason: 'insufficient_balance', attempt: 1 })
         .mockResolvedValueOnce({ status: 'collected', paidAmount: '40.0000', walletRef: 'MOCK-2' }),
     };
-    const job = new BnplAutoCollectJob(prisma, installmentService as any);
+    const job = new BnplAutoCollectJob(
+      prisma,
+      installmentService as any,
+      // SEC-7: AuditService stub for the per-tenant batch audit entry.
+      { log: jest.fn() } as any,
+    );
 
     const result = await job.runForTenant(TENANT_ID, today, tomorrow);
 
@@ -102,7 +112,12 @@ describe('BnplAutoCollectJob', () => {
         .fn()
         .mockResolvedValue({ status: 'skipped', reason: 'max_attempts_reached' }),
     };
-    const job = new BnplAutoCollectJob(prisma, installmentService as any);
+    const job = new BnplAutoCollectJob(
+      prisma,
+      installmentService as any,
+      // SEC-7: AuditService stub for the per-tenant batch audit entry.
+      { log: jest.fn() } as any,
+    );
 
     const result = await job.runForTenant(TENANT_ID, today, tomorrow);
 
@@ -118,7 +133,12 @@ describe('BnplAutoCollectJob', () => {
     const installmentService = {
       collectInstallment: jest.fn(),
     };
-    const job = new BnplAutoCollectJob(prisma, installmentService as any);
+    const job = new BnplAutoCollectJob(
+      prisma,
+      installmentService as any,
+      // SEC-7: AuditService stub for the per-tenant batch audit entry.
+      { log: jest.fn() } as any,
+    );
 
     const result = await job.runForTenant(TENANT_ID, today, tomorrow);
 
@@ -168,7 +188,12 @@ describe('BnplAutoCollectJob', () => {
         walletRef: 'MOCK-3',
       }),
     };
-    const job = new BnplAutoCollectJob(prisma, installmentService as any);
+    const job = new BnplAutoCollectJob(
+      prisma,
+      installmentService as any,
+      // SEC-7: AuditService stub for the per-tenant batch audit entry.
+      { log: jest.fn() } as any,
+    );
 
     await job.handleCron();
 
@@ -188,7 +213,12 @@ describe('BnplAutoCollectJob', () => {
       enterTenantContext: jest.fn(async (_ctx: any, fn: () => Promise<any>) => fn()),
     } as any;
     const installmentService = { collectInstallment: jest.fn() };
-    const job = new BnplAutoCollectJob(prisma, installmentService as any);
+    const job = new BnplAutoCollectJob(
+      prisma,
+      installmentService as any,
+      // SEC-7: AuditService stub for the per-tenant batch audit entry.
+      { log: jest.fn() } as any,
+    );
 
     await job.handleCron();
 

@@ -9,6 +9,8 @@ import {
   compare,
 } from '@lons/common';
 
+import { QuotaEnforcementService } from '../plan-tier/quota-enforcement.service';
+
 /**
  * Merchant CRUD service (Sprint 11 Track B / B3).
  *
@@ -29,7 +31,11 @@ import {
 export class MerchantService {
   private readonly logger = new Logger('MerchantService');
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // Sprint 14 (S14-10): BNPL merchant quota enforcement.
+    private readonly quotaEnforcementService: QuotaEnforcementService,
+  ) {}
 
   async create(
     tenantId: string,
@@ -48,6 +54,9 @@ export class MerchantService {
   ) {
     if (!data.name?.trim()) throw new ValidationError('Merchant name is required');
     if (!data.code?.trim()) throw new ValidationError('Merchant code is required');
+    // S14-10: merchants are a BNPL-only entity. The plan caps both
+    // (a) availability of BNPL products and (b) the merchant headcount.
+    await this.quotaEnforcementService.checkEntityLimit(tenantId, 'merchants');
     this.assertValidDiscountRate(data.discountRate);
 
     const existing = await this.prisma.merchant.findFirst({

@@ -1,7 +1,8 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { ForbiddenException, Injectable, Inject, Optional } from '@nestjs/common';
 import { PrismaService, LoanRequestStatus, DisbursementStatus } from '@lons/database';
 import { EventBusService, NotFoundError } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
+import { QuotaTrackingService } from '@lons/entity-service';
 
 import { LoanRequestService } from '../loan-request/loan-request.service';
 import { CoolingOffService } from '../cooling-off/cooling-off.service';
@@ -19,6 +20,11 @@ export class DisbursementService {
     private coolingOffService: CoolingOffService,
     @Inject(SCREENING_GATE) private screeningGate: IScreeningGate,
     @Inject(WALLET_ADAPTER) private walletAdapter: IWalletAdapter,
+    // Sprint 14 (S14-14a): plan-tier disbursement quota tracking.
+    // `@Optional` so existing tests that build the service via direct
+    // construction without the new dep don't break — production wiring
+    // always provides it via PlanTierModule.
+    @Optional() private quotaTrackingService?: QuotaTrackingService,
   ) {}
 
   async initiateDisbursement(tenantId: string, contractId: string) {
@@ -81,6 +87,32 @@ export class DisbursementService {
 
       case 'CLEAR':
         break; // Proceed with disbursement
+    }
+
+    // Sprint 14 (S14-14a): plan-tier quota enforcement.
+    // After the AML gate but before we commit the disbursement record,
+    // check the monthly transaction + USD volume caps. The tracker
+    // atomically increments and returns `{ allowed, warning }`. On
+    // `allowed=false` we throw a structured ForbiddenException with the
+    // QUOTA_EXCEEDED code — the GraphQL filter and REST exception
+    // mapper surface it unchanged.
+    //
+    // Soft-fail on Redis outage: `QuotaTrackingService` returns
+    // `allowed=true` when Redis is unavailable, so the disbursement
+    // still goes through. We never block payouts on a cache outage.
+    if (this.quotaTrackingService) {
+      const quota = await this.quotaTrackingService.incrementDisbursement(
+        tenantId,
+        String(contract.principalAmount),
+      );
+      if (!quota.allowed) {
+        throw new ForbiddenException({
+          code: 'QUOTA_EXCEEDED',
+          message:
+            'Monthly disbursement limit exceeded for your current plan.',
+          upgradeUrl: '/settings/plan',
+        });
+      }
     }
 
     const disbursement = await this.prisma.disbursement.create({

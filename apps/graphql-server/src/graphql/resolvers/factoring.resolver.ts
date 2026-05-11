@@ -14,6 +14,8 @@ import {
   AuditActionType,
   AuditResourceType,
   NotFoundError,
+  RequiresPlan,
+  computeSearchableHash,
   encodeCursor,
 } from '@lons/common';
 import {
@@ -51,6 +53,12 @@ import {
   InvoiceType,
   RecourseTypeGql,
 } from '../types/factoring.type';
+import {
+  MatchResult,
+  MatchResultTypeGql,
+  WebhookActivityConnection,
+  WebhookActivityEntry,
+} from '../types/webhook-activity.type';
 import {
   CreateDebtorInput,
   DebtorFiltersInput,
@@ -111,9 +119,15 @@ export class FactoringResolver {
     if (filters?.industrySector) where.industrySector = filters.industrySector;
     if (filters?.country) where.country = filters.country;
     if (filters?.search) {
+      // S13B-2 + Security Hardening (SEC-2): registrationNumber is encrypted.
+      // Substring matching is impossible on ciphertext — fall back to
+      // companyName partial match plus exact-match registrationNumberHash.
+      // Spreading conditionally avoids producing `{ registrationNumberHash:
+      // undefined }` (which Prisma reduces to a match-all empty object).
+      const searchHash = computeSearchableHash(filters.search);
       where.OR = [
         { companyName: { contains: filters.search, mode: 'insensitive' } },
-        { registrationNumber: { contains: filters.search, mode: 'insensitive' } },
+        ...(searchHash ? [{ registrationNumberHash: searchHash }] : []),
       ];
     }
 
@@ -259,8 +273,146 @@ export class FactoringResolver {
     return summary as unknown as ConcentrationSummaryType;
   }
 
+  /**
+   * Sprint 13B (S13B-6) — Webhook activity feed for an invoice.
+   *
+   * Sourced from the audit log filtered to webhook-driven actions
+   * (`match.debtorPayment` / `unmatch.debtorPayment` — see S13B-1
+   * `DebtorPaymentMatchingService.recordWebhookAudit`). Tenant-scoped
+   * via the resolver's @CurrentTenant. Cursor-paginated with the same
+   * Relay shape as `invoices`.
+   */
+  @Query(() => WebhookActivityConnection)
+  @Roles('contract:read')
+  async invoiceWebhookActivity(
+    @CurrentTenant() tenantId: string,
+    @Args('invoiceId', { type: () => ID }) invoiceId: string,
+    @Args('first', { type: () => Int, nullable: true, defaultValue: 20 })
+    first?: number,
+    @Args('after', { type: () => String, nullable: true }) after?: string,
+  ): Promise<WebhookActivityConnection> {
+    const take = Math.min(first ?? 20, 100);
+
+    // Audit-log filter: tenant-scoped, this invoice, webhook actions only.
+    const where: Prisma.AuditLogWhereInput = {
+      tenantId,
+      resourceType: 'invoice',
+      resourceId: invoiceId,
+      action: { in: ['match.debtorPayment', 'unmatch.debtorPayment'] },
+    };
+
+    let cursorClause = {};
+    if (after) {
+      const cursorEntry = await this.prisma.auditLog.findFirst({
+        where: { id: after, tenantId },
+        select: { id: true, createdAt: true },
+      });
+      if (cursorEntry) {
+        cursorClause = {
+          cursor: {
+            id_createdAt: {
+              id: cursorEntry.id,
+              createdAt: cursorEntry.createdAt,
+            },
+          },
+          skip: 1,
+        };
+      }
+    }
+
+    const items = await this.prisma.auditLog.findMany({
+      where,
+      take: take + 1,
+      orderBy: { createdAt: 'desc' },
+      ...cursorClause,
+    });
+
+    const hasMore = items.length > take;
+    const sliced = items.slice(0, take);
+
+    const edges = sliced.map((entry) => ({
+      node: this.toWebhookActivityEntry(entry),
+      cursor: encodeCursor(entry.id),
+    }));
+
+    return {
+      edges,
+      pageInfo: {
+        hasNextPage: hasMore,
+        hasPreviousPage: !!after,
+        startCursor:
+          sliced.length > 0 ? encodeCursor(sliced[0].id) : undefined,
+        endCursor:
+          sliced.length > 0
+            ? encodeCursor(sliced[sliced.length - 1].id)
+            : undefined,
+      },
+    };
+  }
+
+  /**
+   * Map an `AuditLog` row to a `WebhookActivityEntry`. Pulls provider /
+   * transactionRef / amount / currency / matchResult / matchStrategy out
+   * of the audit metadata produced by `DebtorPaymentMatchingService`.
+   */
+  private toWebhookActivityEntry(entry: {
+    id: string;
+    createdAt: Date;
+    action: string;
+    metadata: unknown;
+  }): WebhookActivityEntry {
+    const meta = (entry.metadata ?? {}) as Record<string, unknown>;
+    const provider = typeof meta.provider === 'string' ? meta.provider : undefined;
+    const transactionRef =
+      typeof meta.transactionRef === 'string' ? meta.transactionRef : '';
+    const amount = typeof meta.amount === 'string' ? meta.amount : '0';
+    const currency = typeof meta.currency === 'string' ? meta.currency : '';
+    const rawResult =
+      typeof meta.matchResult === 'string' ? meta.matchResult : undefined;
+    const strategy =
+      typeof meta.matchStrategy === 'string' ? meta.matchStrategy : undefined;
+
+    // Map raw audit-log result strings to the GraphQL enum. Fall back to
+    // `no_matching_invoice` for any unexpected legacy value so the field
+    // remains non-null.
+    const resultType: MatchResultTypeGql = (() => {
+      if (rawResult === 'matched') return MatchResultTypeGql.matched;
+      if (rawResult === 'currency_mismatch')
+        return MatchResultTypeGql.currency_mismatch;
+      return MatchResultTypeGql.no_matching_invoice;
+    })();
+
+    const matchResult: MatchResult = {
+      type: resultType,
+      strategy: resultType === MatchResultTypeGql.matched ? strategy : undefined,
+    };
+
+    const payloadSummary =
+      resultType === MatchResultTypeGql.matched
+        ? `Matched ${amount} ${currency} (ref ${transactionRef}${
+            strategy ? `, ${strategy}` : ''
+          })`
+        : resultType === MatchResultTypeGql.currency_mismatch
+          ? `Currency mismatch: payment ${amount} ${currency} (ref ${transactionRef})`
+          : `Unmatched ${amount} ${currency} (ref ${transactionRef})`;
+
+    return {
+      id: entry.id,
+      timestamp: entry.createdAt.toISOString(),
+      eventType: entry.action,
+      provider,
+      transactionRef,
+      amount,
+      currency,
+      matchResult,
+      payloadSummary,
+    };
+  }
+
   // ────── Debtor mutations ───────────────────────────────────────────────
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Mutation(() => DebtorType)
   @AuditAction(AuditActionType.CREATE, AuditResourceType.CUSTOMER)
   @Roles('debtor:create')
@@ -287,6 +439,8 @@ export class FactoringResolver {
     })) as unknown as DebtorType;
   }
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Mutation(() => DebtorType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CUSTOMER)
   @Roles('debtor:update')
@@ -313,6 +467,8 @@ export class FactoringResolver {
     })) as unknown as DebtorType;
   }
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Mutation(() => DebtorType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CUSTOMER)
   @Roles('debtor:update')
@@ -332,6 +488,8 @@ export class FactoringResolver {
     )) as unknown as DebtorType;
   }
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Mutation(() => DebtorType)
   @AuditAction(AuditActionType.BLACKLIST, AuditResourceType.CUSTOMER)
   @Roles('debtor:update')
@@ -351,6 +509,8 @@ export class FactoringResolver {
     )) as unknown as DebtorType;
   }
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Mutation(() => DebtorType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CUSTOMER)
   @Roles('debtor:update')
@@ -368,6 +528,8 @@ export class FactoringResolver {
 
   // ────── Invoice mutations ──────────────────────────────────────────────
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Mutation(() => InvoiceType)
   @AuditAction(AuditActionType.CREATE, AuditResourceType.CONTRACT)
   @Roles('invoice:create')
@@ -395,6 +557,8 @@ export class FactoringResolver {
     })) as unknown as InvoiceType;
   }
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Mutation(() => InvoiceType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CONTRACT)
   @Roles('invoice:verify')
@@ -418,6 +582,8 @@ export class FactoringResolver {
     )) as unknown as InvoiceType;
   }
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Mutation(() => InvoiceOfferType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CONTRACT)
   @Roles('invoice:offer')
@@ -444,6 +610,8 @@ export class FactoringResolver {
     return offer as unknown as InvoiceOfferType;
   }
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Mutation(() => InvoiceType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CONTRACT)
   @Roles('invoice:accept')
@@ -459,6 +627,8 @@ export class FactoringResolver {
     )) as unknown as InvoiceType;
   }
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Mutation(() => InvoiceType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CONTRACT)
   @Roles('invoice:decline')
@@ -476,6 +646,8 @@ export class FactoringResolver {
     )) as unknown as InvoiceType;
   }
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Mutation(() => InvoiceType)
   @AuditAction(AuditActionType.DISBURSEMENT, AuditResourceType.CONTRACT)
   @Roles('invoice:fund')
@@ -491,6 +663,8 @@ export class FactoringResolver {
     )) as unknown as InvoiceType;
   }
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Mutation(() => InvoiceType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CONTRACT)
   @Roles('invoice:notify')
@@ -506,6 +680,8 @@ export class FactoringResolver {
     )) as unknown as InvoiceType;
   }
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Mutation(() => InvoiceType)
   @AuditAction(AuditActionType.REPAYMENT, AuditResourceType.REPAYMENT)
   @Roles('invoice:payment')
@@ -523,6 +699,8 @@ export class FactoringResolver {
     })) as unknown as InvoiceType;
   }
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Mutation(() => InvoiceType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CONTRACT)
   @Roles('invoice:release')
@@ -538,6 +716,8 @@ export class FactoringResolver {
     })) as unknown as InvoiceType;
   }
 
+  // S14-10: invoice factoring is an enterprise-only product.
+  @RequiresPlan('enterprise')
   @Mutation(() => InvoiceType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CONTRACT)
   @Roles('invoice:dispute')

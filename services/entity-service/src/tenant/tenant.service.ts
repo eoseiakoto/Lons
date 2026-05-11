@@ -18,7 +18,7 @@ export class TenantService {
     registrationNumber?: string;
     country: string;
     schemaName: string;
-    planTier?: 'starter' | 'professional' | 'enterprise';
+    planTier?: 'starter' | 'growth' | 'enterprise';
     settings?: Prisma.InputJsonValue;
   }) {
     const existing = await this.prisma.tenant.findUnique({

@@ -1,6 +1,14 @@
 import { Resolver, Query, Mutation, Args, ID } from '@nestjs/graphql';
 import { Inject, Logger, Optional } from '@nestjs/common';
-import { encodeCursor, AuditAction, AuditActionType, AuditResourceType, NotFoundError, add } from '@lons/common';
+import {
+  encodeCursor,
+  AuditAction,
+  AuditActionType,
+  AuditResourceType,
+  NotFoundError,
+  RequiresPlan,
+  add,
+} from '@lons/common';
 import { PrismaService } from '@lons/database';
 import { CurrentTenant, CurrentUser, Roles, IAuthenticatedUser } from '@lons/entity-service';
 import {
@@ -188,6 +196,8 @@ export class OverdraftResolver {
 
   // ────── Mutations ──────────────────────────────────────────────────────
 
+  // S14-10: overdraft is a growth-tier (or higher) product.
+  @RequiresPlan('growth')
   @Mutation(() => ActivationResultType)
   @AuditAction(AuditActionType.CREATE, AuditResourceType.CONTRACT)
   @Roles('subscription:create')
@@ -247,6 +257,7 @@ export class OverdraftResolver {
     });
   }
 
+  @RequiresPlan('growth')
   @Mutation(() => DeactivationResultType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CONTRACT)
   @Roles('subscription:update')
@@ -259,6 +270,7 @@ export class OverdraftResolver {
     return { creditLineId, success: true };
   }
 
+  @RequiresPlan('growth')
   @Mutation(() => OverdraftRepaymentResultType)
   @AuditAction(AuditActionType.REPAYMENT, AuditResourceType.REPAYMENT)
   @Roles('repayment:create')
@@ -294,6 +306,7 @@ export class OverdraftResolver {
     };
   }
 
+  @RequiresPlan('growth')
   @Mutation(() => CreditLineType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CONTRACT)
   @Roles('contract:update')
@@ -306,6 +319,7 @@ export class OverdraftResolver {
     return this.creditLineService.freeze(tenantId, creditLineId, reason) as unknown as Promise<CreditLineType>;
   }
 
+  @RequiresPlan('growth')
   @Mutation(() => CreditLineType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CONTRACT)
   @Roles('contract:update')
@@ -317,6 +331,7 @@ export class OverdraftResolver {
     return this.creditLineService.unfreeze(tenantId, creditLineId) as unknown as Promise<CreditLineType>;
   }
 
+  @RequiresPlan('growth')
   @Mutation(() => CreditLineType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CONTRACT)
   @Roles('contract:update')
@@ -336,6 +351,7 @@ export class OverdraftResolver {
     }) as unknown as Promise<CreditLineType>;
   }
 
+  @RequiresPlan('growth')
   @Mutation(() => CreditLineType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CONTRACT)
   @Roles('contract:update')

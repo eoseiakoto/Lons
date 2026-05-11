@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService, InstallmentStatus } from '@lons/database';
+import { AuditService } from '@lons/entity-service';
 import { BnplInstallmentService } from '@lons/process-engine';
 
 /**
@@ -37,6 +38,9 @@ export class BnplAutoCollectJob {
   constructor(
     private readonly prisma: PrismaService,
     private readonly installmentService: BnplInstallmentService,
+    // Security Hardening (SEC-7): system-actor audit entries for batch
+    // collection runs.
+    private readonly auditService: AuditService,
   ) {}
 
   @Cron(CronExpression.EVERY_DAY_AT_6AM)
@@ -75,6 +79,24 @@ export class BnplAutoCollectJob {
           this.logger.log(
             `Tenant ${tenant.name}: attempted=${result.attempted}, collected=${result.collected}, failed=${result.failed}, skipped=${result.skipped}`,
           );
+          // SEC-7: any auto-collection batch with attempts is auditable.
+          // We log per-tenant batch summary; per-installment outcomes are
+          // emitted by `BnplInstallmentService.collectInstallment`.
+          await this.auditService.log({
+            tenantId: tenant.id,
+            actorType: 'system',
+            action: 'execute.bnplAutoCollect',
+            resourceType: 'tenant',
+            resourceId: tenant.id,
+            metadata: {
+              job: 'bnpl-auto-collect',
+              runDate: today.toISOString(),
+              attempted: result.attempted,
+              collected: result.collected,
+              failed: result.failed,
+              skipped: result.skipped,
+            },
+          });
         }
 
         totalCollected += result.collected;

@@ -8,4 +8,5 @@ export * from './observability';
 export * from './audit';
 export * from './rate-limiting';
 export * from './security';
+export * from './cache/redis-client.module';
 export * from './schemas/tenant-settings.schema';

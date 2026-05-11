@@ -5,6 +5,7 @@ import {
   AuditActionType,
   AuditResourceType,
   NotFoundError,
+  RequiresPlan,
   ValidationError,
   encodeCursor,
 } from '@lons/common';
@@ -264,6 +265,8 @@ export class BnplResolver {
 
   // ────── Mutations ──────────────────────────────────────────────────────
 
+  // S14-10: BNPL is a growth-tier (or higher) product.
+  @RequiresPlan('growth')
   @Mutation(() => BnplPurchaseResultType)
   @AuditAction(AuditActionType.CREATE, AuditResourceType.CONTRACT)
   @Roles('contract:create')
@@ -284,6 +287,8 @@ export class BnplResolver {
     })) as unknown as BnplPurchaseResultType;
   }
 
+  // S14-10: BNPL is a growth-tier (or higher) product.
+  @RequiresPlan('growth')
   @Mutation(() => CancelBnplTransactionResultType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CONTRACT)
   @Roles('contract:update')
@@ -311,6 +316,8 @@ export class BnplResolver {
     return { transactionId, success: true };
   }
 
+  // S14-10: BNPL is a growth-tier (or higher) product.
+  @RequiresPlan('growth')
   @Mutation(() => InstallmentPaymentResultType)
   @AuditAction(AuditActionType.REPAYMENT, AuditResourceType.REPAYMENT)
   @Roles('repayment:create')
@@ -333,6 +340,8 @@ export class BnplResolver {
    * FIX 13: convenience mutation for "make a payment" without picking
    * an installment. Server selects the earliest unpaid installment.
    */
+  // S14-10: BNPL is a growth-tier (or higher) product.
+  @RequiresPlan('growth')
   @Mutation(() => InstallmentPaymentResultType)
   @AuditAction(AuditActionType.REPAYMENT, AuditResourceType.REPAYMENT)
   @Roles('repayment:create')
@@ -361,6 +370,8 @@ export class BnplResolver {
    * Sprint 12 G3 — pay off all remaining unpaid installments early,
    * applying any configured early-settlement discount.
    */
+  // S14-10: BNPL is a growth-tier (or higher) product.
+  @RequiresPlan('growth')
   @Mutation(() => EarlySettlementType)
   @AuditAction(AuditActionType.REPAYMENT, AuditResourceType.REPAYMENT)
   @Roles('repayment:create')
@@ -380,6 +391,8 @@ export class BnplResolver {
    * Sprint 12 G3 — pay one or more future installments ahead of their
    * due dates without settling the entire transaction.
    */
+  // S14-10: BNPL is a growth-tier (or higher) product.
+  @RequiresPlan('growth')
   @Mutation(() => AdvancePaymentType)
   @AuditAction(AuditActionType.REPAYMENT, AuditResourceType.REPAYMENT)
   @Roles('repayment:create')
@@ -396,6 +409,8 @@ export class BnplResolver {
     });
   }
 
+  // S14-10: BNPL is a growth-tier (or higher) product.
+  @RequiresPlan('growth')
   @Mutation(() => BnplRefundResultType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.CONTRACT)
   @Roles('contract:update')
@@ -422,6 +437,8 @@ export class BnplResolver {
   // logged at debug level (helper below) for traceability; full
   // dedupe-via-table is a Sprint 12 follow-up alongside the ledger work.
 
+  // S14-10: BNPL is a growth-tier (or higher) product.
+  @RequiresPlan('growth')
   @Mutation(() => MerchantType)
   @AuditAction(AuditActionType.CREATE, AuditResourceType.LENDER)
   @Roles('product:create')
@@ -443,6 +460,8 @@ export class BnplResolver {
     })) as unknown as MerchantType;
   }
 
+  // S14-10: BNPL is a growth-tier (or higher) product.
+  @RequiresPlan('growth')
   @Mutation(() => MerchantType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.LENDER)
   @Roles('product:update')
@@ -464,6 +483,8 @@ export class BnplResolver {
     })) as unknown as MerchantType;
   }
 
+  // S14-10: BNPL is a growth-tier (or higher) product.
+  @RequiresPlan('growth')
   @Mutation(() => MerchantType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.LENDER)
   @Roles('product:update')
@@ -476,6 +497,8 @@ export class BnplResolver {
     return (await this.merchantService.activate(tenantId, id)) as unknown as MerchantType;
   }
 
+  // S14-10: BNPL is a growth-tier (or higher) product.
+  @RequiresPlan('growth')
   @Mutation(() => MerchantType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.LENDER)
   @Roles('product:update')
@@ -492,6 +515,8 @@ export class BnplResolver {
     return (await this.merchantService.suspend(tenantId, id, reason)) as unknown as MerchantType;
   }
 
+  // S14-10: BNPL is a growth-tier (or higher) product.
+  @RequiresPlan('growth')
   @Mutation(() => MerchantType)
   @AuditAction(AuditActionType.UPDATE, AuditResourceType.LENDER)
   @Roles('product:update')
@@ -504,6 +529,8 @@ export class BnplResolver {
     return (await this.merchantService.reactivate(tenantId, id)) as unknown as MerchantType;
   }
 
+  // S14-10: BNPL is a growth-tier (or higher) product.
+  @RequiresPlan('growth')
   @Mutation(() => MerchantType)
   @AuditAction(AuditActionType.DELETE, AuditResourceType.LENDER)
   @Roles('product:delete')

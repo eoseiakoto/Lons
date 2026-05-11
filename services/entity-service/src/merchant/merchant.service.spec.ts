@@ -27,7 +27,11 @@ function makePrisma(opts: { existing?: any; current?: any } = {}) {
 describe('MerchantService.create', () => {
   it('rejects empty name', async () => {
     const prisma = makePrisma();
-    const service = new MerchantService(prisma as any);
+    const service = new MerchantService(
+      prisma as any,
+      // S14-10: QuotaEnforcementService stub — no-op for these tests.
+      { checkEntityLimit: jest.fn(async () => undefined) } as any,
+    );
 
     await expect(
       service.create(TENANT, { name: '', code: 'M1', discountRate: '0.025' }),
@@ -36,7 +40,11 @@ describe('MerchantService.create', () => {
 
   it('rejects empty code', async () => {
     const prisma = makePrisma();
-    const service = new MerchantService(prisma as any);
+    const service = new MerchantService(
+      prisma as any,
+      // S14-10: QuotaEnforcementService stub — no-op for these tests.
+      { checkEntityLimit: jest.fn(async () => undefined) } as any,
+    );
 
     await expect(
       service.create(TENANT, { name: 'M', code: '', discountRate: '0.025' }),
@@ -45,7 +53,11 @@ describe('MerchantService.create', () => {
 
   it('rejects discount rate >= 1', async () => {
     const prisma = makePrisma();
-    const service = new MerchantService(prisma as any);
+    const service = new MerchantService(
+      prisma as any,
+      // S14-10: QuotaEnforcementService stub — no-op for these tests.
+      { checkEntityLimit: jest.fn(async () => undefined) } as any,
+    );
 
     await expect(
       service.create(TENANT, { name: 'M', code: 'M1', discountRate: '1.0' }),
@@ -54,7 +66,11 @@ describe('MerchantService.create', () => {
 
   it('rejects negative discount rate', async () => {
     const prisma = makePrisma();
-    const service = new MerchantService(prisma as any);
+    const service = new MerchantService(
+      prisma as any,
+      // S14-10: QuotaEnforcementService stub — no-op for these tests.
+      { checkEntityLimit: jest.fn(async () => undefined) } as any,
+    );
 
     await expect(
       service.create(TENANT, { name: 'M', code: 'M1', discountRate: '-0.01' }),
@@ -65,7 +81,11 @@ describe('MerchantService.create', () => {
     const prisma = makePrisma({
       existing: { id: 'm-existing', code: 'M1', tenantId: TENANT },
     });
-    const service = new MerchantService(prisma as any);
+    const service = new MerchantService(
+      prisma as any,
+      // S14-10: QuotaEnforcementService stub — no-op for these tests.
+      { checkEntityLimit: jest.fn(async () => undefined) } as any,
+    );
 
     await expect(
       service.create(TENANT, { name: 'M', code: 'M1', discountRate: '0.025' }),
@@ -74,7 +94,11 @@ describe('MerchantService.create', () => {
 
   it('creates a pending merchant with the configured discount rate', async () => {
     const prisma = makePrisma();
-    const service = new MerchantService(prisma as any);
+    const service = new MerchantService(
+      prisma as any,
+      // S14-10: QuotaEnforcementService stub — no-op for these tests.
+      { checkEntityLimit: jest.fn(async () => undefined) } as any,
+    );
 
     const created = await service.create(TENANT, {
       name: 'Acme',
@@ -98,7 +122,11 @@ describe('MerchantService.create', () => {
 
   it('defaults to T_PLUS_1 when settlementType is not supplied', async () => {
     const prisma = makePrisma();
-    const service = new MerchantService(prisma as any);
+    const service = new MerchantService(
+      prisma as any,
+      // S14-10: QuotaEnforcementService stub — no-op for these tests.
+      { checkEntityLimit: jest.fn(async () => undefined) } as any,
+    );
 
     await service.create(TENANT, {
       name: 'Acme',
@@ -126,7 +154,11 @@ describe('MerchantService.activate / suspend / reactivate / deactivate', () => {
         update: jest.fn(async (args: any) => ({ id: MERCHANT_ID, ...args.data })),
       },
     };
-    const service = new MerchantService(prisma as any);
+    const service = new MerchantService(
+      prisma as any,
+      // S14-10: QuotaEnforcementService stub — no-op for these tests.
+      { checkEntityLimit: jest.fn(async () => undefined) } as any,
+    );
 
     await service.activate(TENANT, MERCHANT_ID);
 
@@ -149,7 +181,11 @@ describe('MerchantService.activate / suspend / reactivate / deactivate', () => {
         }),
       },
     };
-    const service = new MerchantService(prisma as any);
+    const service = new MerchantService(
+      prisma as any,
+      // S14-10: QuotaEnforcementService stub — no-op for these tests.
+      { checkEntityLimit: jest.fn(async () => undefined) } as any,
+    );
 
     await expect(service.activate(TENANT, MERCHANT_ID)).rejects.toThrow(
       /only pending is allowed/,
@@ -168,7 +204,11 @@ describe('MerchantService.activate / suspend / reactivate / deactivate', () => {
         update: jest.fn(async (args: any) => ({ id: MERCHANT_ID, ...args.data })),
       },
     };
-    const service = new MerchantService(prisma as any);
+    const service = new MerchantService(
+      prisma as any,
+      // S14-10: QuotaEnforcementService stub — no-op for these tests.
+      { checkEntityLimit: jest.fn(async () => undefined) } as any,
+    );
 
     await service.suspend(TENANT, MERCHANT_ID, 'fraud_alert');
 
@@ -191,7 +231,11 @@ describe('MerchantService.activate / suspend / reactivate / deactivate', () => {
         update: jest.fn(async (args: any) => ({ id: MERCHANT_ID, ...args.data })),
       },
     };
-    const service = new MerchantService(prisma as any);
+    const service = new MerchantService(
+      prisma as any,
+      // S14-10: QuotaEnforcementService stub — no-op for these tests.
+      { checkEntityLimit: jest.fn(async () => undefined) } as any,
+    );
 
     await service.reactivate(TENANT, MERCHANT_ID);
 
@@ -213,7 +257,11 @@ describe('MerchantService.activate / suspend / reactivate / deactivate', () => {
       },
       bnplTransaction: { count: jest.fn().mockResolvedValue(0) },
     };
-    const service = new MerchantService(prisma as any);
+    const service = new MerchantService(
+      prisma as any,
+      // S14-10: QuotaEnforcementService stub — no-op for these tests.
+      { checkEntityLimit: jest.fn(async () => undefined) } as any,
+    );
 
     await service.deactivate(TENANT, MERCHANT_ID);
 
@@ -235,7 +283,11 @@ describe('MerchantService.activate / suspend / reactivate / deactivate', () => {
       },
       bnplTransaction: { count: jest.fn().mockResolvedValue(3) },
     };
-    const service = new MerchantService(prisma as any);
+    const service = new MerchantService(
+      prisma as any,
+      // S14-10: QuotaEnforcementService stub — no-op for these tests.
+      { checkEntityLimit: jest.fn(async () => undefined) } as any,
+    );
 
     await expect(service.deactivate(TENANT, MERCHANT_ID)).rejects.toThrow(
       /3 active BNPL transaction/,
@@ -255,7 +307,11 @@ describe('MerchantService.list', () => {
         count: jest.fn().mockResolvedValue(2),
       },
     };
-    const service = new MerchantService(prisma as any);
+    const service = new MerchantService(
+      prisma as any,
+      // S14-10: QuotaEnforcementService stub — no-op for these tests.
+      { checkEntityLimit: jest.fn(async () => undefined) } as any,
+    );
 
     const out = await service.list(TENANT, {}, 20);
 
@@ -274,7 +330,11 @@ describe('MerchantService.list', () => {
         count: jest.fn().mockResolvedValue(3),
       },
     };
-    const service = new MerchantService(prisma as any);
+    const service = new MerchantService(
+      prisma as any,
+      // S14-10: QuotaEnforcementService stub — no-op for these tests.
+      { checkEntityLimit: jest.fn(async () => undefined) } as any,
+    );
 
     const out = await service.list(TENANT, {}, 2);
 

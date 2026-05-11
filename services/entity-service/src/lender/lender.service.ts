@@ -2,9 +2,15 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService, Prisma } from '@lons/database';
 import { NotFoundError, ValidationError } from '@lons/common';
 
+import { QuotaEnforcementService } from '../plan-tier/quota-enforcement.service';
+
 @Injectable()
 export class LenderService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    // Sprint 14 (S14-10): lender-count quota enforcement.
+    private quotaEnforcementService: QuotaEnforcementService,
+  ) {}
 
   async create(tenantId: string, data: {
     name: string;
@@ -18,6 +24,8 @@ export class LenderService {
     settlementAccount?: Prisma.InputJsonValue;
     riskParameters?: Prisma.InputJsonValue;
   }) {
+    // S14-10: cap configured lender count at the plan limit.
+    await this.quotaEnforcementService.checkEntityLimit(tenantId, 'lenders');
     return this.prisma.lender.create({
       data: {
         tenantId,

@@ -11,8 +11,16 @@ import {
   IpWhitelistGuard,
   CorrelationIdMiddleware,
   MetricsInterceptor,
+  AuditEventInterceptor,
+  RedisClientModule,
+  PLAN_TIER_CONFIG_SERVICE,
 } from '@lons/common';
-import { EntityServiceModule } from '@lons/entity-service';
+import {
+  EntityServiceModule,
+  AuditService,
+  PlanTierConfigService,
+} from '@lons/entity-service';
+import { PrismaService } from '@lons/database';
 
 import { LoanRequestModule } from './loan-request/loan-request.module';
 import { CustomerModule } from './customer/customer.module';
@@ -26,6 +34,7 @@ import { WalletWebhookModule } from './wallet-webhook/wallet-webhook.module';
 import { BnplRestModule } from './bnpl/bnpl.module';
 import { FactoringRestModule } from './factoring/factoring.module';
 import { DebtorPaymentWebhookModule } from './debtor-payment-webhook/debtor-payment-webhook.module';
+import { UsageRestModule } from './usage/usage.module';
 
 @Module({
   imports: [
@@ -38,6 +47,9 @@ import { DebtorPaymentWebhookModule } from './debtor-payment-webhook/debtor-paym
       storage: new RedisThrottlerStorage(),
     }),
     ObservabilityModule,
+    // Sprint 14 (S14-9) — shared Redis client for plan-tier cache +
+    // quota counters. Must precede EntityServiceModule.
+    RedisClientModule.forRoot(),
     EntityServiceModule,
     LoanRequestModule,
     CustomerModule,
@@ -51,12 +63,25 @@ import { DebtorPaymentWebhookModule } from './debtor-payment-webhook/debtor-paym
     BnplRestModule,
     FactoringRestModule,
     DebtorPaymentWebhookModule,
+    // Sprint 14 (S14-14b) — REST usage snapshot endpoint.
+    UsageRestModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: TenantThrottlerGuard },
     { provide: APP_GUARD, useClass: IpWhitelistGuard },
     { provide: APP_INTERCEPTOR, useClass: RateLimitHeadersInterceptor },
     { provide: APP_INTERCEPTOR, useClass: MetricsInterceptor },
+    // S13B-1: register the audit-event interceptor on REST routes too. The
+    // interceptor honours @AuditAction(...) decorators on controller handlers
+    // (mirrors the GraphQL-server registration in apps/graphql-server/src/app.module.ts).
+    {
+      provide: 'AUDIT_SERVICE',
+      useFactory: (prisma: PrismaService) => new AuditService(prisma),
+      inject: [PrismaService],
+    },
+    { provide: APP_INTERCEPTOR, useClass: AuditEventInterceptor },
+    // Sprint 14 (S14-9) — bind PLAN_TIER_CONFIG_SERVICE for TenantPlanGuard.
+    { provide: PLAN_TIER_CONFIG_SERVICE, useExisting: PlanTierConfigService },
   ],
 })
 export class AppModule implements NestModule {

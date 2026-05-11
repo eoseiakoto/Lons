@@ -1,14 +1,22 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService, Prisma } from '@lons/database';
 import { NotFoundError, ValidationError } from '@lons/common';
 import * as crypto from 'crypto';
+
+import { PlanTierConfigService } from '../plan-tier/plan-tier-config.service';
+import { QuotaEnforcementService } from '../plan-tier/quota-enforcement.service';
 
 // In-memory idempotency cache (use Redis in production)
 const idempotencyCache = new Map<string, { result: any; expiresAt: number }>();
 
 @Injectable()
 export class ProductService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    // Sprint 14 (S14-10): plan tier gating at the boundary.
+    private planTierConfigService: PlanTierConfigService,
+    private quotaEnforcementService: QuotaEnforcementService,
+  ) {}
 
   /**
    * Find or create the tenant's "Self-Funded" lender record.
@@ -118,6 +126,28 @@ export class ProductService {
         return cached.result;
       }
     }
+
+    // Sprint 14 (S14-10): plan-tier gating.
+    //   1. The product *type* must be allowed by the tenant's plan
+    //      (e.g. starter forbids overdraft/bnpl/factoring).
+    //   2. The active-product *count* must be below the tier cap.
+    // Both checks are upfront so we don't burn idempotency state on
+    // a request that's destined to fail.
+    const typeAllowed = await this.planTierConfigService.isProductTypeAllowed(
+      tenantId,
+      data.type,
+    );
+    if (!typeAllowed) {
+      const cfg = await this.planTierConfigService.getTenantTierConfig(tenantId);
+      throw new ForbiddenException({
+        code: 'PRODUCT_TYPE_NOT_ALLOWED',
+        message: `Product type '${data.type}' is not available on the ${cfg.tier} plan.`,
+        productType: data.type,
+        currentTier: cfg.tier,
+        upgradeUrl: '/settings/plan',
+      });
+    }
+    await this.quotaEnforcementService.checkEntityLimit(tenantId, 'products');
 
     // Generate code server-side if not provided or placeholder
     let code = data.code;
