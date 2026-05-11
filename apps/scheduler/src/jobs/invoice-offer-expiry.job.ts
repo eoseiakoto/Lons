@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService, InvoiceStatus } from '@lons/database';
 import { EventBusService } from '@lons/common';
+import { AuditService } from '@lons/entity-service';
 import { EventType } from '@lons/event-contracts';
 
 /**
@@ -25,6 +26,7 @@ export class InvoiceOfferExpiryJob {
   constructor(
     private readonly prisma: PrismaService,
     private readonly eventBus: EventBusService,
+    private readonly auditService: AuditService,
   ) {}
 
   /** Every hour, on the hour. */
@@ -68,6 +70,22 @@ export class InvoiceOfferExpiryJob {
                   reason: 'offer_expired',
                 },
               );
+              // S13B-1: append a system-actor audit entry for each automated
+              // state transition. Action label follows verb.noun convention.
+              await this.auditService.log({
+                tenantId: tenant.id,
+                actorType: 'system',
+                action: 'transition.invoice',
+                resourceType: 'invoice',
+                resourceId: inv.id,
+                beforeValue: { status: InvoiceStatus.offer_generated },
+                afterValue: { status: InvoiceStatus.cancelled },
+                metadata: {
+                  job: 'invoice-offer-expiry',
+                  reason: 'offer_expired',
+                  offerExpiresAt: inv.offerExpiresAt,
+                },
+              });
             }
 
             return expired.length;

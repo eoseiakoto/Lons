@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService, ContractStatus, RepaymentScheduleStatus } from '@lons/database';
 import { EventBusService } from '@lons/common';
+import { AuditService } from '@lons/entity-service';
 import { EventType } from '@lons/event-contracts';
 
 import { CoolingOffService } from '../cooling-off/cooling-off.service';
@@ -45,6 +46,11 @@ describe('Cooling-Off Integration', () => {
           useValue: {
             emitAndBuild: jest.fn(),
           },
+        },
+        // S13B-1: AuditService stub.
+        {
+          provide: AuditService,
+          useValue: { log: jest.fn() },
         },
       ],
     }).compile();

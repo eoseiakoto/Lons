@@ -18,6 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { ContractService, CoolingOffService } from '@lons/process-engine';
 import { ScheduleService } from '@lons/repayment-service';
+import { AuditAction } from '@lons/common';
 import { ApiKeyGuard } from '../guards/api-key.guard';
 import { PaginationQueryDto, buildPaginatedResponse } from '../dto/pagination.dto';
 
@@ -76,6 +77,7 @@ export class ContractController {
   }
 
   @Post(':id/cancel-cooling-off')
+  @AuditAction('cancel.contractCoolingOff', 'contract')
   @ApiOperation({ summary: 'Cancel contract during cooling-off period' })
   @ApiResponse({ status: 200, description: 'Contract cancelled during cooling-off' })
   @ApiResponse({ status: 400, description: 'Contract not in cooling-off period' })

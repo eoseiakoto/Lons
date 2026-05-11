@@ -98,6 +98,9 @@ export class MessageResolver {
     }) as unknown as PlatformMessageType;
   }
 
+  // @audit-exempt: per-user inbox state mutation (mark-read), not a
+  // platform/business-state change. High-volume and personally-scoped — does
+  // not warrant audit-log noise. (S13B-1)
   @Mutation(() => PlatformMessageType)
   async markMessageRead(
     @CurrentUser() user: IAuthenticatedUser,
@@ -109,6 +112,8 @@ export class MessageResolver {
     return this.messagingService.markRead(id, recipientId) as unknown as PlatformMessageType;
   }
 
+  // @audit-exempt: bulk per-user inbox state mutation (mark-all-read), same
+  // rationale as markMessageRead. (S13B-1)
   @Mutation(() => Boolean)
   async markAllMessagesRead(
     @CurrentUser() user: IAuthenticatedUser,
@@ -119,6 +124,8 @@ export class MessageResolver {
     return this.messagingService.markAllRead(recipientId, isPlatform ? undefined : tenantId);
   }
 
+  // @audit-exempt: per-user inbox state mutation (archive), same rationale
+  // as markMessageRead. (S13B-1)
   @Mutation(() => Boolean)
   async archiveMessage(
     @CurrentUser() user: IAuthenticatedUser,

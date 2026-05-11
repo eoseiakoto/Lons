@@ -16,6 +16,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService, InvoiceStatus, RecourseType } from '@lons/database';
 import { RecourseService } from '@lons/process-engine';
+import { AuditService } from '@lons/entity-service';
 
 import { RecourseGraceExpiryJob } from './recourse-grace-expiry.job';
 
@@ -56,6 +57,11 @@ describe('RecourseGraceExpiryJob', () => {
           useValue: {
             enforceGracePeriodElapsed: jest.fn(),
           },
+        },
+        // S13B-1: AuditService stub.
+        {
+          provide: AuditService,
+          useValue: { log: jest.fn() },
         },
       ],
     }).compile();

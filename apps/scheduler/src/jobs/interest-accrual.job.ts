@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '@lons/database';
+import { AuditService } from '@lons/entity-service';
 import { InterestAccrualService } from '@lons/process-engine';
 
 @Injectable()
@@ -10,6 +11,9 @@ export class InterestAccrualJob {
   constructor(
     private prisma: PrismaService,
     private interestAccrualService: InterestAccrualService,
+    // Security Hardening (SEC-7): system-actor audit entries for batch
+    // accrual jobs.
+    private auditService: AuditService,
   ) {}
 
   @Cron('0 1 * * *') // Daily at 1:00 AM
@@ -35,6 +39,25 @@ export class InterestAccrualJob {
           () => this.interestAccrualService.accrueForDate(tenant.id, today),
         );
         this.logger.log(`Tenant ${tenant.name}: ${result.processedCount} contracts accrued, total: ${result.totalAccrued}`);
+
+        // SEC-7: per-tenant batch summary audit. Individual contract-level
+        // ledger entries are tracked in the ledger; this entry captures
+        // the cron run itself for compliance and operator timeline.
+        if (result.processedCount > 0) {
+          await this.auditService.log({
+            tenantId: tenant.id,
+            actorType: 'system',
+            action: 'execute.interestAccrual',
+            resourceType: 'tenant',
+            resourceId: tenant.id,
+            metadata: {
+              job: 'interest-accrual',
+              accrualDate: today.toISOString(),
+              processedCount: result.processedCount,
+              totalAccrued: String(result.totalAccrued),
+            },
+          });
+        }
       } catch (error) {
         this.logger.error(`Accrual failed for tenant ${tenant.name}: ${error}`);
       }

@@ -1,5 +1,6 @@
 export * from './aes-gcm.util';
 export * from './masking.util';
+export * from './searchable-hash.util';
 export * from './key-provider.interface';
 export * from './env-key.provider';
 export * from './vault-key.provider';

@@ -1,6 +1,37 @@
 import { decryptFromString, encryptToString } from './aes-gcm.util';
 import { ENCRYPTED_FIELDS } from './encrypted-fields.config';
 import { IKeyProvider } from './key-provider.interface';
+import { computeSearchableHash } from './searchable-hash.util';
+
+/**
+ * Sprint 13B (S13B-2): map of <model> → <plaintext-field, hash-field>.
+ * When the middleware encrypts the plaintext field on write, it also
+ * computes the SHA-256 hash and writes it to the companion column so
+ * lookups (login by email, debtor matching by tax id / registration
+ * number) keep working after encryption.
+ *
+ * Kept here rather than in `encrypted-fields.config.ts` because the
+ * middleware is the only consumer; consolidating the data flow into one
+ * file makes the contract obvious.
+ */
+const HASH_FIELD_MAP: Record<string, Record<string, string>> = {
+  PlatformUser: { email: 'emailHash' },
+  User: { email: 'emailHash' },
+  Debtor: {
+    taxId: 'taxIdHash',
+    registrationNumber: 'registrationNumberHash',
+  },
+  // Security Hardening (SEC-1): Customer search by phone / email / national
+  // ID is broken on encrypted columns; we maintain hash companions for
+  // indexed equality lookups. fullName is intentionally omitted — there is
+  // no exact-match search use case, and full-name hashing on its own is
+  // collidable enough to leak demographic information.
+  Customer: {
+    email: 'emailHash',
+    phonePrimary: 'phonePrimaryHash',
+    nationalId: 'nationalIdHash',
+  },
+};
 
 /**
  * Minimal type aliases that mirror the Prisma middleware contract.
@@ -55,12 +86,35 @@ function isEncryptedBlob(value: unknown): boolean {
 }
 
 /**
- * Recursively encrypt designated fields in a data object.
+ * Recursively encrypt designated fields in a data object. When a field is
+ * configured with a companion hash column (Sprint 13B / S13B-2 — see
+ * HASH_FIELD_MAP), the SHA-256 of the *plaintext* is also written to the
+ * hash column in the same `data` object — atomic with the ciphertext write.
+ *
+ * If the value is already an encrypted blob (idempotency case), the hash
+ * field is left untouched: there's nothing recoverable to hash from
+ * ciphertext, and the row should already have a hash from the original write.
  */
-function encryptFields(data: Record<string, unknown>, fields: string[], key: Buffer): void {
+function encryptFields(
+  data: Record<string, unknown>,
+  fields: string[],
+  key: Buffer,
+  hashFields?: Record<string, string>,
+): void {
   for (const field of fields) {
     const value = data[field];
-    if (value == null || isEncryptedBlob(value)) continue;
+    if (value == null || isEncryptedBlob(value)) {
+      // Still keep the hash column null when the plaintext is null so the
+      // two columns don't drift (e.g. clearing an email).
+      if (value === null && hashFields && hashFields[field]) {
+        data[hashFields[field]] = null;
+      }
+      continue;
+    }
+
+    if (hashFields && hashFields[field]) {
+      data[hashFields[field]] = computeSearchableHash(String(value));
+    }
     data[field] = encryptToString(String(value), key);
   }
 }
@@ -113,6 +167,7 @@ export function createFieldEncryptionMiddleware(keyProvider: IKeyProvider): Pris
     // ── Encrypt on write ──────────────────────────────────────────────────────
     if (WRITE_ACTIONS.has(action)) {
       const key = await keyProvider.getKey();
+      const hashFields = HASH_FIELD_MAP[model];
 
       if (params.args?.data) {
         if (action === 'createMany' || action === 'updateMany') {
@@ -121,10 +176,20 @@ export function createFieldEncryptionMiddleware(keyProvider: IKeyProvider): Pris
             ? params.args.data
             : [params.args.data];
           for (const item of dataArray) {
-            encryptFields(item as Record<string, unknown>, fields, key);
+            encryptFields(
+              item as Record<string, unknown>,
+              fields,
+              key,
+              hashFields,
+            );
           }
         } else {
-          encryptFields(params.args.data as Record<string, unknown>, fields, key);
+          encryptFields(
+            params.args.data as Record<string, unknown>,
+            fields,
+            key,
+            hashFields,
+          );
         }
       }
 

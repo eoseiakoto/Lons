@@ -21,6 +21,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { LoanRequestService, OfferService } from '@lons/process-engine';
+import { AuditAction } from '@lons/common';
 import { ApiKeyGuard } from '../guards/api-key.guard';
 import { IdempotencyInterceptor } from '../interceptors/idempotency.interceptor';
 import { CreateLoanRequestDto } from '../dto/create-loan-request.dto';
@@ -40,6 +41,7 @@ export class LoanRequestController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(IdempotencyInterceptor)
+  @AuditAction('create.loanRequest', 'loan_request')
   @ApiOperation({ summary: 'Submit a loan request' })
   @ApiResponse({ status: 201, description: 'Loan request created' })
   @ApiResponse({ status: 400, description: 'Validation error' })
@@ -100,6 +102,7 @@ export class LoanRequestController {
   @Post(':id/accept')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(IdempotencyInterceptor)
+  @AuditAction('accept.loanOffer', 'loan_request')
   @ApiOperation({ summary: 'Accept a loan offer' })
   @ApiResponse({ status: 200, description: 'Offer accepted' })
   @ApiResponse({ status: 404, description: 'Loan request not found' })

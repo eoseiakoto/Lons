@@ -13,6 +13,7 @@ import {
   ValidationError,
   add,
   bankersRound,
+  computeSearchableHash,
   divide,
   multiply,
   subtract,
@@ -181,13 +182,16 @@ export class DebtorService {
 
     // Idempotency: caller can opt in by supplying `idempotencyKey`. We
     // dedupe on the natural key (companyName + registrationNumber) per
-    // tenant, which matches the unique constraint in Prisma.
+    // tenant. S13B-2: registrationNumber is encrypted at rest, so the
+    // dedupe lookup is routed through registrationNumberHash.
     if (input.idempotencyKey) {
       const existing = await this.prisma.debtor.findFirst({
         where: {
           tenantId,
           companyName: input.companyName,
-          registrationNumber: input.registrationNumber ?? null,
+          registrationNumberHash: computeSearchableHash(
+            input.registrationNumber ?? null,
+          ),
           deletedAt: null,
         },
       });
@@ -253,9 +257,17 @@ export class DebtorService {
     if (filters.industrySector) where.industrySector = filters.industrySector;
     if (filters.country) where.country = filters.country;
     if (filters.search) {
+      // S13B-2 + Security Hardening (SEC-2): registrationNumber is encrypted
+      // at rest, so substring matching against ciphertext would never
+      // succeed. We keep companyName partial-match (plaintext) and add an
+      // exact-match clause against registrationNumberHash only when the
+      // search string normalises to a non-null hash. Spreading
+      // conditionally avoids `{ registrationNumberHash: undefined }` which
+      // Prisma reduces to `{}` — an empty OR clause that matches every row.
+      const searchHash = computeSearchableHash(filters.search);
       where.OR = [
         { companyName: { contains: filters.search, mode: 'insensitive' } },
-        { registrationNumber: { contains: filters.search, mode: 'insensitive' } },
+        ...(searchHash ? [{ registrationNumberHash: searchHash }] : []),
       ];
     }
 

@@ -7,6 +7,7 @@ import {
   Prisma,
 } from '@lons/database';
 import { RecourseService } from '@lons/process-engine';
+import { AuditService } from '@lons/entity-service';
 
 /**
  * Sprint 13 S13-3 — RecourseGraceExpiryJob.
@@ -35,6 +36,7 @@ export class RecourseGraceExpiryJob {
   constructor(
     private readonly prisma: PrismaService,
     private readonly recourseService: RecourseService,
+    private readonly auditService: AuditService,
   ) {}
 
   /** Daily at 07:00 UTC — after aging (06:00) has classified new defaults. */
@@ -91,6 +93,20 @@ export class RecourseGraceExpiryJob {
                   tenant.id,
                   inv.id,
                 );
+                // S13B-1: system-actor audit entry. The recourse enforcement
+                // itself touches collections + risk; this entry captures the
+                // automated trigger (vs. an operator-initiated enforcement).
+                await this.auditService.log({
+                  tenantId: tenant.id,
+                  actorType: 'system',
+                  action: 'enforce.recourseGrace',
+                  resourceType: 'invoice',
+                  resourceId: inv.id,
+                  metadata: {
+                    job: 'recourse-grace-expiry',
+                    recourseGraceEndAt: graceEndStr,
+                  },
+                });
                 enforced += 1;
               } catch (err) {
                 this.logger.error(

@@ -16,6 +16,7 @@ import {
   ApiHeader,
 } from '@nestjs/swagger';
 import { ApiKeyRotationService } from '@lons/entity-service';
+import { AuditAction } from '@lons/common';
 import { ApiKeyGuard } from '../guards/api-key.guard';
 import { IdempotencyInterceptor } from '../interceptors/idempotency.interceptor';
 import { RotateApiKeyDto } from '../dto/rotate-api-key.dto';
@@ -33,6 +34,7 @@ export class ApiKeyController {
   @Post('rotate')
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(IdempotencyInterceptor)
+  @AuditAction('rotate.apiKey', 'api_key')
   @ApiOperation({
     summary: 'Rotate API secret',
     description: 'Generates a new API key/secret pair. The old key remains valid for the specified grace period (default 24 hours).',

@@ -20,6 +20,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { PaymentService } from '@lons/repayment-service';
+import { AuditAction } from '@lons/common';
 import { ApiKeyGuard } from '../guards/api-key.guard';
 import { IdempotencyInterceptor } from '../interceptors/idempotency.interceptor';
 import { CreateRepaymentDto } from '../dto/create-repayment.dto';
@@ -36,6 +37,7 @@ export class RepaymentController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(IdempotencyInterceptor)
+  @AuditAction('record.repayment', 'repayment')
   @ApiOperation({ summary: 'Record a repayment' })
   @ApiResponse({ status: 201, description: 'Repayment recorded' })
   @ApiResponse({ status: 400, description: 'Validation error' })

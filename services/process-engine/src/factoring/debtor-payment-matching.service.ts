@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 
 import { PrismaService, InvoiceStatus } from '@lons/database';
-import { EventBusService } from '@lons/common';
+import { EventBusService, computeSearchableHash } from '@lons/common';
+import { AuditService } from '@lons/entity-service';
 import {
   EventType,
   IDebtorPaymentMatchedEvent,
@@ -9,6 +10,15 @@ import {
 } from '@lons/event-contracts';
 
 import { ReserveService } from './reserve.service';
+
+/**
+ * S13B-1 / S13B-6: action labels emitted to the audit log when a webhook
+ * payment lands. The S13B-6 `invoiceWebhookActivity` resolver filters on
+ * these strings — keep them stable across releases.
+ */
+const AUDIT_ACTION_PAYMENT_MATCHED = 'match.debtorPayment';
+const AUDIT_ACTION_PAYMENT_UNMATCHED = 'unmatch.debtorPayment';
+const AUDIT_RESOURCE_INVOICE = 'invoice';
 
 /**
  * Sprint 13 S13-1 — Inbound debtor-payment matching.
@@ -38,6 +48,7 @@ export class DebtorPaymentMatchingService {
     private readonly prisma: PrismaService,
     private readonly eventBus: EventBusService,
     private readonly reserveService: ReserveService,
+    private readonly auditService: AuditService,
   ) {}
 
   async matchAndApply(
@@ -49,6 +60,10 @@ export class DebtorPaymentMatchingService {
       invoiceNumber?: string;
       debtorRef?: string;
       paymentRef?: string;
+      // S13B-1 / S13B-6: identifies the inbound payment provider (e.g. 'mtn-momo',
+      // 'm-pesa') for the webhook activity audit feed. Optional so direct
+      // (non-webhook) callers don't have to fabricate one.
+      provider?: string;
       metadata?: Record<string, unknown>;
     },
   ): Promise<{
@@ -108,6 +123,14 @@ export class DebtorPaymentMatchingService {
           tenantId,
           evt,
         );
+        // S13B-1 / S13B-6: scope the audit entry to the invoice that *would*
+        // have matched if currency lined up — the operator's webhook-activity
+        // panel can surface the failure on the correct invoice.
+        await this.recordWebhookAudit(tenantId, currencyOnly.id, {
+          action: AUDIT_ACTION_PAYMENT_UNMATCHED,
+          payload,
+          matchResult: 'currency_mismatch',
+        });
         return { matched: false, reason: 'currency_mismatch' };
       }
       // Otherwise: invoice number not found → fall through to debtorRef/FIFO.
@@ -115,12 +138,16 @@ export class DebtorPaymentMatchingService {
 
     // ── Strategy 2: debtor ref + FIFO ────────────────────────────────────
     if (payload.debtorRef) {
+      // S13B-2: `taxId` and `registrationNumber` are encrypted at rest.
+      // Lookups go through their hash columns; the raw `id` UUID column
+      // is unencrypted and stays a direct match.
+      const refHash = computeSearchableHash(payload.debtorRef);
       const debtor = await this.prisma.debtor.findFirst({
         where: {
           tenantId,
           OR: [
-            { registrationNumber: payload.debtorRef },
-            { taxId: payload.debtorRef },
+            { registrationNumberHash: refHash },
+            { taxIdHash: refHash },
             { id: payload.debtorRef },
           ],
         },
@@ -163,6 +190,15 @@ export class DebtorPaymentMatchingService {
       tenantId,
       evt,
     );
+    // S13B-1 / S13B-6: tenant-scoped audit entry with no resourceId — the
+    // payment never landed on an invoice, so the webhook-activity feed can
+    // only surface this through tenant-level filtering (it won't appear on
+    // any invoice page, but it's preserved for compliance).
+    await this.recordWebhookAudit(tenantId, undefined, {
+      action: AUDIT_ACTION_PAYMENT_UNMATCHED,
+      payload,
+      matchResult: 'no_matching_invoice',
+    });
     return { matched: false, reason: 'no_matching_invoice' };
   }
 
@@ -179,6 +215,8 @@ export class DebtorPaymentMatchingService {
       transactionRef: string;
       amount: string;
       currency: string;
+      provider?: string;
+      paymentRef?: string;
     },
   ): Promise<{
     matched: true;
@@ -205,9 +243,68 @@ export class DebtorPaymentMatchingService {
       evt,
     );
 
+    // S13B-1 / S13B-6: persist the match outcome to the audit log so the
+    // S13B-6 invoiceWebhookActivity resolver can render it. We rely on
+    // ReserveService.recordDebtorPayment to handle ledger + state writes;
+    // this entry is purely the webhook-activity record and is scoped to the
+    // matched invoice id.
+    await this.recordWebhookAudit(tenantId, invoiceId, {
+      action: AUDIT_ACTION_PAYMENT_MATCHED,
+      payload,
+      matchResult: 'matched',
+      matchStrategy,
+    });
+
     this.logger.log(
       `Debtor payment ${payload.transactionRef} matched invoice ${invoiceId} via ${matchStrategy} (${payload.amount} ${payload.currency})`,
     );
     return { matched: true, invoiceId, matchStrategy };
+  }
+
+  /**
+   * S13B-1 / S13B-6: write a webhook-activity audit entry. `auditService.log()`
+   * already swallows errors internally, so this is fire-and-forget — never
+   * lets an audit failure unwind the matching path.
+   */
+  private async recordWebhookAudit(
+    tenantId: string,
+    invoiceId: string | undefined,
+    args: {
+      action: typeof AUDIT_ACTION_PAYMENT_MATCHED | typeof AUDIT_ACTION_PAYMENT_UNMATCHED;
+      payload: {
+        transactionRef: string;
+        amount: string;
+        currency: string;
+        provider?: string;
+        invoiceNumber?: string;
+        debtorRef?: string;
+        paymentRef?: string;
+      };
+      matchResult:
+        | 'matched'
+        | 'no_matching_invoice'
+        | 'currency_mismatch';
+      matchStrategy?: 'invoice_number' | 'debtor_ref' | 'fifo';
+    },
+  ): Promise<void> {
+    await this.auditService.log({
+      tenantId,
+      actorType: 'system',
+      action: args.action,
+      resourceType: AUDIT_RESOURCE_INVOICE,
+      resourceId: invoiceId,
+      correlationId: args.payload.transactionRef,
+      metadata: {
+        provider: args.payload.provider ?? null,
+        transactionRef: args.payload.transactionRef,
+        amount: args.payload.amount,
+        currency: args.payload.currency,
+        invoiceNumber: args.payload.invoiceNumber ?? null,
+        debtorRef: args.payload.debtorRef ?? null,
+        paymentRef: args.payload.paymentRef ?? null,
+        matchResult: args.matchResult,
+        matchStrategy: args.matchStrategy ?? null,
+      },
+    });
   }
 }

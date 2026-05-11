@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '@lons/database';
 import { EventBusModule } from '@lons/common';
+import { AuditModule } from '@lons/entity-service';
 
 import { DebtorService } from './debtor.service';
 import { InvoiceSubmissionService } from './invoice-submission.service';
@@ -10,6 +11,7 @@ import { RecourseService } from './recourse.service';
 import { ConcentrationLimitService } from './concentration-limit.service';
 import { InvoiceAgingService } from './invoice-aging.service';
 import { DebtorPaymentMatchingService } from './debtor-payment-matching.service';
+import { InvoiceVerificationService } from './invoice-verification.service';
 
 /**
  * Sprint 12 Phase 3 — Invoice Factoring services.
@@ -35,7 +37,9 @@ import { DebtorPaymentMatchingService } from './debtor-payment-matching.service'
  * to one another.
  */
 @Module({
-  imports: [PrismaModule, EventBusModule],
+  // S13B-1: AuditModule for webhook-activity audit writes from
+  // DebtorPaymentMatchingService.
+  imports: [PrismaModule, EventBusModule, AuditModule],
   providers: [
     DebtorService,
     InvoiceSubmissionService,
@@ -45,6 +49,8 @@ import { DebtorPaymentMatchingService } from './debtor-payment-matching.service'
     ConcentrationLimitService,
     InvoiceAgingService,
     DebtorPaymentMatchingService,
+    // Sprint 14 (S14-IF-1) — verification queue service.
+    InvoiceVerificationService,
   ],
   exports: [
     DebtorService,
@@ -55,6 +61,7 @@ import { DebtorPaymentMatchingService } from './debtor-payment-matching.service'
     ConcentrationLimitService,
     InvoiceAgingService,
     DebtorPaymentMatchingService,
+    InvoiceVerificationService,
   ],
 })
 export class ProcessEngineFactoringModule {}

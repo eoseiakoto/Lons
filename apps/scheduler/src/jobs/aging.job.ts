@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '@lons/database';
+import { AuditService } from '@lons/entity-service';
 import { AgingService } from '@lons/process-engine';
 import { OverdraftAgingService } from '@lons/overdraft-service';
 
@@ -12,6 +13,8 @@ export class AgingJob {
     private prisma: PrismaService,
     private agingService: AgingService,
     private overdraftAgingService: OverdraftAgingService,
+    // Security Hardening (SEC-7): system-actor audit entries for aging.
+    private auditService: AuditService,
   ) {}
 
   @Cron('30 1 * * *') // Daily at 1:30 AM
@@ -38,6 +41,23 @@ export class AgingJob {
         this.logger.log(
           `Tenant ${tenant.name}: ${result.processed} contracts, ${result.transitioned.length} transitioned`,
         );
+        // SEC-7: only log when actual transitions occurred — pure-no-op
+        // runs would flood the audit log otherwise.
+        if (result.transitioned.length > 0) {
+          await this.auditService.log({
+            tenantId: tenant.id,
+            actorType: 'system',
+            action: 'classify.contractAging',
+            resourceType: 'tenant',
+            resourceId: tenant.id,
+            metadata: {
+              job: 'aging',
+              classifyDate: today.toISOString(),
+              processed: result.processed,
+              transitionedCount: result.transitioned.length,
+            },
+          });
+        }
       } catch (error) {
         this.logger.error(`Contract aging failed for tenant ${tenant.name}: ${error}`);
       }
@@ -53,6 +73,21 @@ export class AgingJob {
         this.logger.log(
           `Tenant ${tenant.name}: ${odResult.processed} credit lines, ${odResult.transitioned.length} transitioned`,
         );
+        if (odResult.transitioned.length > 0) {
+          await this.auditService.log({
+            tenantId: tenant.id,
+            actorType: 'system',
+            action: 'classify.overdraftAging',
+            resourceType: 'tenant',
+            resourceId: tenant.id,
+            metadata: {
+              job: 'aging',
+              classifyDate: today.toISOString(),
+              processed: odResult.processed,
+              transitionedCount: odResult.transitioned.length,
+            },
+          });
+        }
       } catch (error) {
         this.logger.error(`Overdraft aging failed for tenant ${tenant.name}: ${error}`);
       }

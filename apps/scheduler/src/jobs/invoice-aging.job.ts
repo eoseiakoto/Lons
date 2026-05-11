@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '@lons/database';
+import { AuditService } from '@lons/entity-service';
 import { InvoiceAgingService } from '@lons/process-engine';
 
 /**
@@ -22,6 +23,9 @@ export class InvoiceAgingJob {
   constructor(
     private readonly prisma: PrismaService,
     private readonly invoiceAgingService: InvoiceAgingService,
+    // Security Hardening (SEC-7): system-actor audit entries for invoice
+    // bucket transitions and new defaults.
+    private readonly auditService: AuditService,
   ) {}
 
   @Cron('0 6 * * *')
@@ -56,6 +60,24 @@ export class InvoiceAgingJob {
           this.logger.log(
             `Tenant ${tenant.name}: scanned ${result.totalScanned} invoices, ${result.transitions} bucket transitions, ${result.newDefaults.length} new defaults`,
           );
+        }
+        // SEC-7: only emit audit entries when actual transitions or
+        // defaults landed — pure no-op runs would flood the log.
+        if (result.transitions > 0 || result.newDefaults.length > 0) {
+          await this.auditService.log({
+            tenantId: tenant.id,
+            actorType: 'system',
+            action: 'classify.invoiceAging',
+            resourceType: 'tenant',
+            resourceId: tenant.id,
+            metadata: {
+              job: 'invoice-aging',
+              totalScanned: result.totalScanned,
+              transitions: result.transitions,
+              newDefaultsCount: result.newDefaults.length,
+              newDefaults: result.newDefaults,
+            },
+          });
         }
       } catch (error) {
         this.logger.error(

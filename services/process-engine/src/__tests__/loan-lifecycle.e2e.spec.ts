@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService, LoanRequestStatus, ContractStatus } from '@lons/database';
 import { EventBusService } from '@lons/common';
+import { AuditService } from '@lons/entity-service';
 import { EventType } from '@lons/event-contracts';
 import { v4 as uuidv4 } from 'uuid';
 import { Decimal } from '@prisma/client/runtime/library';
@@ -323,6 +324,8 @@ describe('Loan Lifecycle E2E: Request to Disbursement', () => {
         DisbursementService,
         ExposureService,
         CoolingOffService,
+        // S13B-1: stub AuditService since CoolingOffService now requires it.
+        { provide: AuditService, useValue: { log: jest.fn() } },
         { provide: PrismaService, useValue: prisma },
         { provide: EventBusService, useValue: { emitAndBuild: jest.fn() } },
         { provide: WALLET_ADAPTER, useClass: MockWalletAdapter },

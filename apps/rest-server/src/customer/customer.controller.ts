@@ -20,6 +20,7 @@ import {
   ApiQuery,
 } from '@nestjs/swagger';
 import { CustomerService } from '@lons/entity-service';
+import { AuditAction } from '@lons/common';
 import { ApiKeyGuard } from '../guards/api-key.guard';
 import { IdempotencyInterceptor } from '../interceptors/idempotency.interceptor';
 import { CreateCustomerDto } from '../dto/create-customer.dto';
@@ -36,6 +37,7 @@ export class CustomerController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(IdempotencyInterceptor)
+  @AuditAction('create.customer', 'customer')
   @ApiOperation({ summary: 'Create or sync a customer' })
   @ApiResponse({ status: 201, description: 'Customer created or synced' })
   @ApiResponse({ status: 400, description: 'Validation error' })

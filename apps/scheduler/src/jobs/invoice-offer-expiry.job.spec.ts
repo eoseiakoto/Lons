@@ -9,6 +9,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService, InvoiceStatus } from '@lons/database';
 import { EventBusService } from '@lons/common';
+import { AuditService } from '@lons/entity-service';
 import { EventType } from '@lons/event-contracts';
 
 import { InvoiceOfferExpiryJob } from './invoice-offer-expiry.job';
@@ -46,6 +47,11 @@ describe('InvoiceOfferExpiryJob', () => {
         {
           provide: EventBusService,
           useValue: { emitAndBuild: jest.fn() },
+        },
+        // S13B-1: AuditService stub.
+        {
+          provide: AuditService,
+          useValue: { log: jest.fn() },
         },
       ],
     }).compile();

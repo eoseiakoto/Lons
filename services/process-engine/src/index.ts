@@ -69,3 +69,5 @@ export * from './factoring/invoice-aging.service';
 export * from './factoring/invoice-aging.types';
 export * from './factoring/risk-tables';
 export * from './factoring/debtor-payment-matching.service';
+// Sprint 14 (S14-IF-1) — invoice verification queue + actions.
+export * from './factoring/invoice-verification.service';

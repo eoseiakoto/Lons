@@ -135,7 +135,7 @@ describe('DebtorPaymentWebhookController', () => {
     expect(errors.some((e) => e.property === 'amount')).toBe(true);
   });
 
-  it('DTO rejects payload missing all of invoiceNumber, debtorRef, paymentRef', async () => {
+  it('DTO rejects payload missing both invoiceNumber and debtorRef', async () => {
     const dto = plainToInstance(DebtorPaymentWebhookDto, {
       transactionRef: 'TX-1',
       amount: '10000.00',
@@ -148,13 +148,43 @@ describe('DebtorPaymentWebhookController', () => {
     expect(
       errors.some((e) =>
         Object.values(e.constraints ?? {}).some((m) =>
-          /at least one/.test(m),
+          /at least one of invoiceNumber or debtorRef/.test(m),
         ),
       ),
     ).toBe(true);
   });
 
-  it('controller-level fallback: rejects payload missing all matchers with BadRequestException', async () => {
+  // S13B-4 (F-S13-1 fix): paymentRef alone is supplementary metadata, not a matcher.
+  it('DTO rejects payload with only paymentRef (paymentRef is not a matcher)', async () => {
+    const dto = plainToInstance(DebtorPaymentWebhookDto, {
+      transactionRef: 'TX-1',
+      amount: '10000.00',
+      currency: 'GHS',
+      paymentRef: 'SELLER-PAY-REF-1',
+    });
+    const errors = await validate(dto);
+    expect(
+      errors.some((e) =>
+        Object.values(e.constraints ?? {}).some((m) =>
+          /at least one of invoiceNumber or debtorRef/.test(m),
+        ),
+      ),
+    ).toBe(true);
+  });
+
+  it('DTO accepts invoiceNumber + paymentRef (paymentRef passes through as metadata)', async () => {
+    const dto = plainToInstance(DebtorPaymentWebhookDto, {
+      transactionRef: 'TX-1',
+      amount: '10000.00',
+      currency: 'GHS',
+      invoiceNumber: 'INV-1',
+      paymentRef: 'SELLER-PAY-REF-1',
+    });
+    const errors = await validate(dto);
+    expect(errors.length).toBe(0);
+  });
+
+  it('controller-level fallback: rejects payload missing both invoiceNumber and debtorRef with BadRequestException', async () => {
     const { controller } = makeController();
     const body: any = {
       transactionRef: 'TX-1',
@@ -167,6 +197,52 @@ describe('DebtorPaymentWebhookController', () => {
     await expect(
       controller.debtorPayment(PROVIDER, req, signature, body),
     ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('controller-level fallback: rejects payload with only paymentRef with BadRequestException', async () => {
+    const { controller } = makeController();
+    const body: any = {
+      transactionRef: 'TX-1',
+      amount: '10000.00',
+      currency: 'GHS',
+      paymentRef: 'SELLER-PAY-REF-1',
+    };
+    const { raw, signature } = signBody(body);
+    const req: any = { rawBody: raw, body };
+
+    await expect(
+      controller.debtorPayment(PROVIDER, req, signature, body),
+    ).rejects.toBeInstanceOf(BadRequestException);
+  });
+
+  it('happy path: invoiceNumber + paymentRef forwards both to matching service', async () => {
+    const { controller, matchingService } = makeController();
+    const body: any = {
+      transactionRef: 'TX-COMBO',
+      amount: '500.00',
+      currency: 'GHS',
+      invoiceNumber: 'INV-COMBO',
+      paymentRef: 'SELLER-COMBO-1',
+    };
+    const { raw, signature } = signBody(body);
+    const req: any = { rawBody: raw, body };
+
+    const result = await controller.debtorPayment(
+      PROVIDER,
+      req,
+      signature,
+      body,
+    );
+    await flushSetImmediate();
+
+    expect(result.status).toBe('accepted');
+    expect(matchingService.matchAndApply).toHaveBeenCalledWith(
+      TENANT,
+      expect.objectContaining({
+        invoiceNumber: 'INV-COMBO',
+        paymentRef: 'SELLER-COMBO-1',
+      }),
+    );
   });
 
   it('rejects when provider tenant is unconfigured', async () => {

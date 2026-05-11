@@ -33,6 +33,7 @@ import {
   subtract,
 } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
+import { AuditService } from '@lons/entity-service';
 
 import { ProcessEngineFactoringModule } from '../factoring.module';
 import { ConcentrationLimitService } from '../concentration-limit.service';
@@ -660,6 +661,14 @@ async function buildWorld(opts: WorldOpts = {}) {
   // The seven factoring services are wired by Nest DI, so we exercise
   // the real cross-service constructor graph (Reserve → Origination,
   // Aging → Recourse, Submission → Concentration, etc.).
+  // S13B-1: stub AuditService to a no-op so the integration test doesn't
+  // spam logger output trying to write to `prisma.auditLog` (the in-memory
+  // store doesn't model that table).
+  const auditServiceStub = {
+    log: jest.fn(async (_input: unknown) => {}),
+    findAllCrossTenant: jest.fn(),
+  };
+
   const moduleRef: TestingModule = await Test.createTestingModule({
     imports: [ProcessEngineFactoringModule],
   })
@@ -667,6 +676,8 @@ async function buildWorld(opts: WorldOpts = {}) {
     .useValue(prisma)
     .overrideProvider(EventBusService)
     .useValue(eventBus)
+    .overrideProvider(AuditService)
+    .useValue(auditServiceStub)
     .compile();
 
   const debtorService = moduleRef.get(DebtorService);

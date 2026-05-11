@@ -1,5 +1,6 @@
 import { Resolver, Query, Mutation, Args, Int } from '@nestjs/graphql';
 import { PrismaService } from '@lons/database';
+import { AuditAction } from '@lons/common';
 import { SurveyResponseType, NpsSummary } from '../types/survey.type';
 
 @Resolver(() => SurveyResponseType)
@@ -7,6 +8,7 @@ export class SurveyResolver {
   constructor(private readonly prisma: PrismaService) {}
 
   @Mutation(() => SurveyResponseType)
+  @AuditAction('submit.surveyResponse', 'survey_response')
   async submitSurveyResponse(
     @Args('tenantId') tenantId: string,
     @Args('userId') userId: string,

@@ -2289,7 +2289,14 @@
       "strategyInvoiceNumber": "Invoice number",
       "strategyDebtorRef": "Debtor reference",
       "strategyFifo": "FIFO",
-      "noEvents": "No webhook events"
+      "noEvents": "No webhook events",
+      "strategyCurrencyMismatch": "Currency mismatch",
+      "strategyUnmatched": "Unmatched"
+    },
+    "invoice": {
+      "offerExpiresAt": "Offer expiry",
+      "offerExpiresIn": "Expires in {{time}}",
+      "offerExpired": "Expired {{date}}"
     },
     "timeline": {
       "title": "Lifecycle timeline",
@@ -2596,7 +2603,7 @@
       },
       "plan": {
         "starter": "Starter",
-        "professional": "Professional",
+        "growth": "Growth",
         "enterprise": "Enterprise"
       },
       "validation": {

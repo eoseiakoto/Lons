@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '@lons/database';
+import { AuditService } from '@lons/entity-service';
 import {
   BnplInstallmentService,
   MerchantSettlementService,
@@ -28,6 +29,8 @@ export class BnplInstallmentJob {
     private readonly prisma: PrismaService,
     private readonly installmentService: BnplInstallmentService,
     private readonly settlementService: MerchantSettlementService,
+    // Security Hardening (SEC-7): system-actor audit entries.
+    private readonly auditService: AuditService,
   ) {}
 
   @Cron('0 2 * * *')
@@ -52,6 +55,20 @@ export class BnplInstallmentJob {
           this.logger.log(
             `Tenant ${tenant.name}: ${result.markedOverdue} marked overdue, ${result.accelerated} accelerated`,
           );
+          // SEC-7: any state change (overdue or acceleration) is auditable.
+          await this.auditService.log({
+            tenantId: tenant.id,
+            actorType: 'system',
+            action: 'classify.bnplOverdue',
+            resourceType: 'tenant',
+            resourceId: tenant.id,
+            metadata: {
+              job: 'bnpl-installment',
+              classifyDate: today.toISOString(),
+              markedOverdue: result.markedOverdue,
+              accelerated: result.accelerated,
+            },
+          });
         }
       } catch (error) {
         this.logger.error(
@@ -84,6 +101,20 @@ export class BnplInstallmentJob {
           this.logger.log(
             `Tenant ${tenant.name}: ${result.batches} T+1 settlement batches covering ${result.transactions} transactions`,
           );
+          // SEC-7: settlement batches move money — must be audited.
+          await this.auditService.log({
+            tenantId: tenant.id,
+            actorType: 'system',
+            action: 'execute.merchantSettlementBatch',
+            resourceType: 'tenant',
+            resourceId: tenant.id,
+            metadata: {
+              job: 'bnpl-installment',
+              settlementDate: today.toISOString(),
+              batches: result.batches,
+              transactions: result.transactions,
+            },
+          });
         }
       } catch (error) {
         this.logger.error(

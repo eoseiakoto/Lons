@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService, ContractStatus, RepaymentScheduleStatus } from '@lons/database';
 import { EventBusService, NotFoundError } from '@lons/common';
+import { AuditService } from '@lons/entity-service';
 import { EventType } from '@lons/event-contracts';
 
 @Injectable()
@@ -10,6 +11,7 @@ export class CoolingOffService {
   constructor(
     private prisma: PrismaService,
     private eventBus: EventBusService,
+    private auditService: AuditService,
   ) {}
 
   /**
@@ -211,6 +213,23 @@ export class CoolingOffService {
             expiredAt: now.toISOString(),
           },
         );
+
+        // S13B-1: system-actor audit entry for automatic state transition.
+        await this.auditService.log({
+          tenantId: contract.tenantId,
+          actorType: 'system',
+          action: 'transition.contract',
+          resourceType: 'contract',
+          resourceId: contract.id,
+          beforeValue: { status: ContractStatus.cooling_off },
+          afterValue: { status: ContractStatus.active },
+          metadata: {
+            job: 'cooling-off-expiry',
+            reason: 'cooling_off_expired',
+            coolingOffExpiresAt:
+              metadata.coolingOffExpiresAt as string | undefined,
+          },
+        });
 
         transitionedCount++;
       } catch (error) {

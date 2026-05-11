@@ -12,10 +12,10 @@ import {
 } from 'class-validator';
 
 /**
- * S13-1: At least one of `invoiceNumber`, `debtorRef`, or `paymentRef` must be
- * present in the body — otherwise we have nothing to match against. Implemented
- * as a class-level constraint applied to a synthetic property so we can return
- * a single coherent validation error.
+ * At least one of `invoiceNumber` or `debtorRef` must be present in the body —
+ * otherwise we have no matching strategy. `paymentRef` is supplementary
+ * metadata and does not drive matching, so it does NOT satisfy the constraint
+ * (S13B-4 fix: F-S13-1).
  */
 function HasAtLeastOneMatcher(validationOptions?: ValidationOptions) {
   return function (object: object, propertyName: string) {
@@ -29,12 +29,11 @@ function HasAtLeastOneMatcher(validationOptions?: ValidationOptions) {
           const obj = (args?.object ?? {}) as DebtorPaymentWebhookDto;
           return Boolean(
             (obj.invoiceNumber && obj.invoiceNumber.length > 0) ||
-              (obj.debtorRef && obj.debtorRef.length > 0) ||
-              (obj.paymentRef && obj.paymentRef.length > 0),
+              (obj.debtorRef && obj.debtorRef.length > 0),
           );
         },
         defaultMessage() {
-          return 'at least one of invoiceNumber, debtorRef, or paymentRef must be provided';
+          return 'at least one of invoiceNumber or debtorRef must be provided';
         },
       },
     });
@@ -65,7 +64,7 @@ export class DebtorPaymentWebhookDto {
 
   @ApiPropertyOptional({
     description:
-      'Invoice number (preferred matching strategy). Either this, debtorRef, or paymentRef must be provided.',
+      'Invoice number (preferred matching strategy). Either this or debtorRef must be provided.',
   })
   @IsOptional()
   @IsString()
@@ -81,7 +80,7 @@ export class DebtorPaymentWebhookDto {
 
   @ApiPropertyOptional({
     description:
-      "Optional payment reference (e.g. seller's own payment ref printed on the invoice).",
+      "Supplementary payment reference metadata (e.g. seller's own payment ref printed on the invoice). Stored against the resulting payment record but does NOT drive matching — invoiceNumber or debtorRef is required for that.",
   })
   @IsOptional()
   @IsString()

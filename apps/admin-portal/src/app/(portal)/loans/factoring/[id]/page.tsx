@@ -17,35 +17,71 @@ import { InvoiceDetailActions } from '@/components/factoring/invoice-detail-acti
 import {
   INVOICE_QUERY,
   DEBTOR_QUERY,
+  INVOICE_WEBHOOK_ACTIVITY_QUERY,
   type IInvoice,
   type IDebtor,
+  type IWebhookActivityEntry,
 } from '@/lib/graphql/factoring';
 
 /**
- * Sprint 13 S13-1 — Webhook activity events for an invoice.
+ * Sprint 13B (S13B-6) — Webhook activity events for an invoice.
  *
- * Sourced from the audit log / event history filtered by event types
- * `DEBTOR_PAYMENT_MATCHED` / `DEBTOR_PAYMENT_UNMATCHED`. The dedicated
- * GraphQL surface for "events for this invoice" does not exist yet —
- * TODO(S14): wire to a real `invoiceWebhookEvents` query once the
- * backend resolver is added. For now, this is always an empty array so
- * the section is hidden in current production data; integration tests
- * cover the matching + event-emission paths end-to-end.
+ * Backed by the `invoiceWebhookActivity` GraphQL query, which reads the
+ * audit log filtered to `match.debtorPayment` / `unmatch.debtorPayment`
+ * actions emitted by `DebtorPaymentMatchingService` (process-engine).
+ * Tenant-scoped on the server. Only the first page (20 entries) is
+ * fetched — pagination can be wired up post-S13B if operators need it.
  */
-interface IWebhookEvent {
-  id: string;
-  occurredAt: string;
-  transactionRef: string;
-  amount: string;
-  currency: string;
-  matchStrategy: 'invoice_number' | 'debtor_ref' | 'fifo';
+function useInvoiceWebhookEvents(invoiceId: string): IWebhookActivityEntry[] {
+  const { data } = useQuery(INVOICE_WEBHOOK_ACTIVITY_QUERY, {
+    variables: { invoiceId, first: 20 },
+    fetchPolicy: 'cache-and-network',
+    skip: !invoiceId,
+  });
+  const edges = (data?.invoiceWebhookActivity?.edges ?? []) as Array<{
+    node: IWebhookActivityEntry;
+  }>;
+  return edges.map((e) => e.node);
 }
 
-function useInvoiceWebhookEvents(_invoiceId: string): IWebhookEvent[] {
-  // TODO(S14): replace with `useQuery(INVOICE_WEBHOOK_EVENTS_QUERY, …)`
-  // once the GraphQL resolver lands. Returning an empty array here keeps
-  // the section hidden until then.
-  return [];
+/**
+ * S13B-5 (F-S13-2 fix): format the `offerExpiresAt` ISO-8601 string for the
+ * Invoice Detail screen.
+ *
+ * - When status is `offer_generated` and the timestamp is in the future:
+ *   "Expires in 23h 14m" (computed at render time; refreshing the page
+ *   re-evaluates — real-time countdown is nice-to-have, not required).
+ * - Otherwise (status moved on, or expiry is in the past): "Expired
+ *   2026-05-08 14:30 UTC".
+ * - Returns `null` for the caller to short-circuit when the field is null.
+ */
+function formatOfferExpiry(
+  offerExpiresAt: string | null | undefined,
+  status: string,
+  t: (key: string, vars?: Record<string, string | number>) => string,
+): { kind: 'pending' | 'past'; text: string } | null {
+  if (!offerExpiresAt) return null;
+  const expiry = new Date(offerExpiresAt);
+  if (Number.isNaN(expiry.getTime())) return null;
+  const now = Date.now();
+  const isFuture = expiry.getTime() > now;
+  if (status === 'offer_generated' && isFuture) {
+    const ms = expiry.getTime() - now;
+    const totalMinutes = Math.floor(ms / 60_000);
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    const human = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
+    return {
+      kind: 'pending',
+      text: t('factoring.invoice.offerExpiresIn', { time: human }),
+    };
+  }
+  return {
+    kind: 'past',
+    text: t('factoring.invoice.offerExpired', {
+      date: formatDateTime(offerExpiresAt),
+    }),
+  };
 }
 
 interface CardRowProps {
@@ -128,6 +164,13 @@ export default function InvoiceDetailPage() {
     compare(amountReceived, '0') > 0 && compare(remaining, '0') > 0;
   const isFull = compare(amountReceived, '0') > 0 && compare(remaining, '0') <= 0;
 
+  // S13B-5 (F-S13-2 fix): offer expiry display (countdown vs. past date).
+  const offerExpiry = formatOfferExpiry(
+    invoice.offerExpiresAt,
+    invoice.status,
+    t,
+  );
+
   const reserveAmount = invoice.reserveAmount ?? '0';
   const reserveReleased = invoice.reserveReleased ?? '0';
   const reservePending =
@@ -135,11 +178,11 @@ export default function InvoiceDetailPage() {
       ? subtract(reserveAmount, reserveReleased)
       : '0';
 
-  // S13-1: webhook events for this invoice (currently always empty until
-  // the backend GraphQL resolver lands — see useInvoiceWebhookEvents).
+  // S13B-6: webhook events for this invoice — sourced from audit log via
+  // the `invoiceWebhookActivity` GraphQL query.
   const webhookEvents = useInvoiceWebhookEvents(invoice.id);
   const matchStrategyLabel = (
-    s: 'invoice_number' | 'debtor_ref' | 'fifo',
+    s: string | null | undefined,
   ): string => {
     switch (s) {
       case 'invoice_number':
@@ -148,6 +191,8 @@ export default function InvoiceDetailPage() {
         return t('factoring.webhookActivity.strategyDebtorRef');
       case 'fifo':
         return t('factoring.webhookActivity.strategyFifo');
+      default:
+        return '—';
     }
   };
 
@@ -252,6 +297,24 @@ export default function InvoiceDetailPage() {
                   </span>
                 }
               />
+              {/* S13B-5 (F-S13-2 fix): offer expiry — countdown when pending,
+                  past-date when superseded or expired. */}
+              {offerExpiry && (
+                <CardRow
+                  label={t('factoring.invoice.offerExpiresAt')}
+                  value={
+                    <span
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border ${
+                        offerExpiry.kind === 'pending'
+                          ? 'bg-[color:var(--status-info-soft)] text-[color:var(--status-info-text)] border-[color:var(--status-info)]'
+                          : 'bg-[color:var(--status-error-soft)] text-[color:var(--status-error-text)] border-[color:var(--status-error)]'
+                      }`}
+                    >
+                      {offerExpiry.text}
+                    </span>
+                  }
+                />
+              )}
             </dl>
           </section>
 
@@ -424,7 +487,7 @@ export default function InvoiceDetailPage() {
                         className="border-b border-[color:var(--border-subtle)] last:border-b-0"
                       >
                         <td className="py-2 pr-4 text-[color:var(--text-secondary)] tabular-nums">
-                          {formatDateTime(evt.occurredAt)}
+                          {formatDateTime(evt.timestamp)}
                         </td>
                         <td className="py-2 pr-4 font-mono text-xs text-[color:var(--text-secondary)]">
                           {evt.transactionRef}
@@ -433,7 +496,11 @@ export default function InvoiceDetailPage() {
                           {formatMoney(evt.amount, evt.currency)}
                         </td>
                         <td className="py-2 pr-4 text-[color:var(--text-secondary)]">
-                          {matchStrategyLabel(evt.matchStrategy)}
+                          {evt.matchResult.type === 'matched'
+                            ? matchStrategyLabel(evt.matchResult.strategy)
+                            : evt.matchResult.type === 'currency_mismatch'
+                              ? t('factoring.webhookActivity.strategyCurrencyMismatch')
+                              : t('factoring.webhookActivity.strategyUnmatched')}
                         </td>
                       </tr>
                     ))}

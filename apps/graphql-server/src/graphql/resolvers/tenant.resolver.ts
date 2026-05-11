@@ -83,7 +83,7 @@ export class TenantResolver {
       legalName: input.legalName,
       registrationNumber: input.registrationNumber,
       country: input.country,
-      planTier: (input.planTier as 'starter' | 'professional' | 'enterprise') || 'starter',
+      planTier: (input.planTier as 'starter' | 'growth' | 'enterprise') || 'starter',
       platformFeePercent: input.platformFeePercent ? new Prisma.Decimal(input.platformFeePercent) : undefined,
       settings: parsedSettings as any,
       adminName: input.adminName,

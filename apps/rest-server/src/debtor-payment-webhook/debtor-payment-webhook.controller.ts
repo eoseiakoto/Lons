@@ -84,10 +84,11 @@ export class DebtorPaymentWebhookController {
     // Belt-and-braces: even with the class-validator constraint on the DTO,
     // make the contract obvious at the controller boundary so a future
     // refactor of the validator can't accidentally let a no-matcher payload
-    // through to the matching service.
-    if (!body.invoiceNumber && !body.debtorRef && !body.paymentRef) {
+    // through to the matching service. paymentRef is supplementary metadata
+    // and does NOT count as a matcher (S13B-4 fix: F-S13-1).
+    if (!body.invoiceNumber && !body.debtorRef) {
       throw new BadRequestException(
-        'At least one of invoiceNumber, debtorRef, or paymentRef is required',
+        'At least one of invoiceNumber or debtorRef is required',
       );
     }
 
@@ -106,6 +107,9 @@ export class DebtorPaymentWebhookController {
             invoiceNumber: body.invoiceNumber,
             debtorRef: body.debtorRef,
             paymentRef: body.paymentRef,
+            // S13B-1 / S13B-6: forward the provider so the matching service
+            // can include it in webhook-activity audit-log metadata.
+            provider,
             metadata: body.metadata,
           });
         })

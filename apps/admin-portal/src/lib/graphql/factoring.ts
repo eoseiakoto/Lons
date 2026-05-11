@@ -71,6 +71,7 @@ export const INVOICE_FIELDS_FRAGMENT = gql`
     amountReceived
     reserveReleased
     disputeReason
+    offerExpiresAt
     fundedAt
     settledAt
     defaultedAt
@@ -164,6 +165,43 @@ export const INVOICE_QUERY = gql`
   query Invoice($invoiceId: ID!) {
     invoice(invoiceId: $invoiceId) {
       ...InvoiceFields
+    }
+  }
+`;
+
+// Sprint 13B (S13B-6) — Webhook activity feed for an invoice. Backed by
+// `match.debtorPayment` / `unmatch.debtorPayment` audit-log entries
+// emitted by DebtorPaymentMatchingService.
+export const INVOICE_WEBHOOK_ACTIVITY_QUERY = gql`
+  query InvoiceWebhookActivity(
+    $invoiceId: ID!
+    $first: Int = 20
+    $after: String
+  ) {
+    invoiceWebhookActivity(invoiceId: $invoiceId, first: $first, after: $after) {
+      edges {
+        node {
+          id
+          timestamp
+          eventType
+          provider
+          transactionRef
+          amount
+          currency
+          matchResult {
+            type
+            strategy
+          }
+          payloadSummary
+        }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
     }
   }
 `;
@@ -517,6 +555,8 @@ export interface IInvoice {
   /** Decimal-as-string. */
   reserveReleased?: string | null;
   disputeReason?: string | null;
+  /** S13-2 / S13B-5: ISO-8601 expiry of an issued offer. Null when no offer outstanding. */
+  offerExpiresAt?: string | null;
   fundedAt?: string | null;
   settledAt?: string | null;
   defaultedAt?: string | null;
@@ -590,4 +630,49 @@ export interface IConcentrationSummary {
   industryBreakdown: IIndustryExposureRow[];
   topSellerDebtors: ISellerDebtorExposureRow[];
   limitUtilization: ILimitUtilizationRow[];
+}
+
+// ─── Webhook activity (Sprint 13B / S13B-6) ──────────────────────────────
+
+export type MatchResultType =
+  | 'matched'
+  | 'no_matching_invoice'
+  | 'currency_mismatch';
+
+export interface IMatchResult {
+  type: MatchResultType;
+  /** `'invoice_number' | 'debtor_ref' | 'fifo'` when matched; null otherwise. */
+  strategy?: string | null;
+}
+
+export interface IWebhookActivityEntry {
+  id: string;
+  /** ISO-8601 timestamp. */
+  timestamp: string;
+  /** `'match.debtorPayment'` or `'unmatch.debtorPayment'`. */
+  eventType: string;
+  provider?: string | null;
+  transactionRef: string;
+  /** Decimal-as-string. */
+  amount: string;
+  currency: string;
+  matchResult: IMatchResult;
+  payloadSummary: string;
+}
+
+export interface IWebhookActivityEdge {
+  node: IWebhookActivityEntry;
+  cursor: string;
+}
+
+export interface IPageInfo {
+  hasNextPage: boolean;
+  hasPreviousPage: boolean;
+  startCursor?: string | null;
+  endCursor?: string | null;
+}
+
+export interface IWebhookActivityConnection {
+  edges: IWebhookActivityEdge[];
+  pageInfo: IPageInfo;
 }

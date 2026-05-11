@@ -1,5 +1,6 @@
 import { Resolver, Query, Mutation, Args, ID, Int } from '@nestjs/graphql';
 import { PrismaService } from '@lons/database';
+import { AuditAction } from '@lons/common';
 import { FeedbackCategory, FeedbackSeverity, FeedbackStatus } from '@lons/shared-types';
 
 import {
@@ -79,6 +80,7 @@ export class FeedbackResolver {
   // ─── Mutations ────────────────────────────────────────────────────────────
 
   @Mutation(() => FeedbackType)
+  @AuditAction('submit.feedback', 'feedback')
   async submitFeedback(
     @Args('input') input: SubmitFeedbackInput,
   ): Promise<FeedbackType> {
@@ -98,6 +100,7 @@ export class FeedbackResolver {
   }
 
   @Mutation(() => FeedbackType)
+  @AuditAction('update.feedback', 'feedback')
   async updateFeedbackStatus(
     @Args('id', { type: () => ID }) id: string,
     @Args('status', { type: () => FeedbackStatus }) status: FeedbackStatus,

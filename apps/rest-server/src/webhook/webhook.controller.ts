@@ -20,6 +20,7 @@ import {
   ApiHeader,
 } from '@nestjs/swagger';
 import { WebhookService } from '@lons/entity-service';
+import { AuditAction } from '@lons/common';
 import { ApiKeyGuard } from '../guards/api-key.guard';
 import { IdempotencyInterceptor } from '../interceptors/idempotency.interceptor';
 import { CreateWebhookDto } from '../dto/create-webhook.dto';
@@ -35,6 +36,7 @@ export class WebhookController {
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(IdempotencyInterceptor)
+  @AuditAction('register.webhook', 'webhook')
   @ApiOperation({ summary: 'Register a new webhook endpoint' })
   @ApiResponse({ status: 201, description: 'Webhook registered' })
   @ApiResponse({ status: 400, description: 'Validation error' })
@@ -59,6 +61,7 @@ export class WebhookController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @AuditAction('delete.webhook', 'webhook')
   @ApiOperation({ summary: 'Remove a webhook registration' })
   @ApiResponse({ status: 204, description: 'Webhook removed' })
   @ApiResponse({ status: 404, description: 'Webhook not found' })
