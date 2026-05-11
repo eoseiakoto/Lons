@@ -22,7 +22,11 @@ export class ApiKeyGuard implements CanActivate {
       return true;
     }
 
-    // Check for API key
+    // Security Hardening (SEC-3): two-factor extraction. Both X-API-Key
+    // and X-API-Secret are required; previously the secret was extracted
+    // and asserted-present but never validated, which made the contract a
+    // single-factor system. The validation now happens inside
+    // ApiKeyService.validateApiKey() with timing-safe comparison.
     const apiKey = request.headers['x-api-key'];
     const apiSecret = request.headers['x-api-secret'];
 
@@ -33,21 +37,37 @@ export class ApiKeyGuard implements CanActivate {
       });
     }
 
-    try {
-      // Validate the API key against the database
-      const result = await this.apiKeyService.validateApiKey(apiKey);
+    if (typeof apiKey !== 'string' || typeof apiSecret !== 'string') {
+      // Header arrays (multiple values) are a misconfigured client; reject.
+      throw new UnauthorizedException({
+        code: 'UNAUTHORIZED',
+        message: 'API key and secret must be single string values.',
+      });
+    }
 
-      // Attach tenant context and API key metadata to the request
+    try {
+      // SEC-3: pass BOTH credentials. The service does timing-safe
+      // comparison of the secret hash and returns an opaque tenant id +
+      // rate limit on success.
+      const result = await this.apiKeyService.validateApiKey(apiKey, apiSecret);
+
+      // Attach tenant context and API key metadata to the request. We use
+      // the *opaque* `apiKeyId` from the service result (UUID) — never
+      // store the plaintext key on the request, which could otherwise
+      // leak through logs or downstream serializers.
       request['tenantId'] = result.tenantId;
-      request['apiKeyId'] = apiKey;
+      request['apiKeyId'] = result.apiKeyId;
       request['rateLimitPerMin'] = result.rateLimitPerMin;
 
       return true;
     } catch (error: any) {
+      // Log the failure but never echo back which factor failed — the
+      // service already returns a generic "Invalid API credentials"
+      // message. We keep the error.message in the log for ops triage.
       this.logger.warn(`API key validation failed: ${error.message}`);
       throw new UnauthorizedException({
         code: 'UNAUTHORIZED',
-        message: error.message || 'Invalid API key or secret',
+        message: error.message || 'Invalid API credentials',
       });
     }
   }

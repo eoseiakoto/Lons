@@ -20,6 +20,8 @@ const config: Config = {
   testEnvironment: 'node',
   clearMocks: true,
   restoreMocks: true,
+  // Security Hardening (SEC-5): set HASH_PEPPER deterministically.
+  setupFiles: ['<rootDir>/jest.setup.ts'],
 };
 
 export default config;

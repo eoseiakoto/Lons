@@ -7,9 +7,13 @@ import { ApiKeyGuard } from '../api-key.guard';
 
 function createMockApiKeyService(overrides: Partial<{ validateApiKey: jest.Mock }> = {}) {
   return {
+    // Security Hardening (SEC-3): the service now returns `apiKeyId` (the
+    // opaque UUID) so the guard can stamp it on the request without
+    // ever surfacing the plaintext key downstream.
     validateApiKey: overrides.validateApiKey ?? jest.fn().mockResolvedValue({
       tenantId: 'tenant-123',
       rateLimitPerMin: 100,
+      apiKeyId: '00000000-0000-0000-0000-000000000abc',
     }),
   };
 }
@@ -78,6 +82,27 @@ describe('ApiKeyGuard', () => {
       await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
     });
 
+    // SEC-3: only X-API-Key (no secret) → fail. The previous implementation
+    // accepted this when the secret was missing only after a regression.
+    it('throws UnauthorizedException when secret header is missing', async () => {
+      const service = createMockApiKeyService();
+      const guard = new ApiKeyGuard(service as any);
+      const { context } = makeHttpContext({ 'x-api-key': 'key-abc' });
+
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      expect(service.validateApiKey).not.toHaveBeenCalled();
+    });
+
+    // SEC-3: only X-API-Secret (no key) → fail.
+    it('throws UnauthorizedException when key header is missing', async () => {
+      const service = createMockApiKeyService();
+      const guard = new ApiKeyGuard(service as any);
+      const { context } = makeHttpContext({ 'x-api-secret': 'secret-xyz' });
+
+      await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+      expect(service.validateApiKey).not.toHaveBeenCalled();
+    });
+
     it('validates and attaches tenant context for a valid API key', async () => {
       const service = createMockApiKeyService();
       const guard = new ApiKeyGuard(service as any);
@@ -87,9 +112,13 @@ describe('ApiKeyGuard', () => {
       });
 
       await expect(guard.canActivate(context)).resolves.toBe(true);
-      expect(service.validateApiKey).toHaveBeenCalledWith('key-abc');
+      // SEC-3: guard now passes BOTH key + secret to the service.
+      expect(service.validateApiKey).toHaveBeenCalledWith('key-abc', 'secret-xyz');
       expect(request['tenantId']).toBe('tenant-123');
-      expect(request['apiKeyId']).toBe('key-abc');
+      // SEC-3: guard stamps the opaque apiKeyId from the service result —
+      // never the plaintext key (which would otherwise leak via downstream
+      // logs / serializers).
+      expect(request['apiKeyId']).toBe('00000000-0000-0000-0000-000000000abc');
       expect(request['rateLimitPerMin']).toBe(100);
     });
 
@@ -138,9 +167,13 @@ describe('ApiKeyGuard', () => {
       });
 
       await expect(guard.canActivate(context)).resolves.toBe(true);
-      expect(service.validateApiKey).toHaveBeenCalledWith('key-abc');
+      // SEC-3: guard now passes BOTH key + secret to the service.
+      expect(service.validateApiKey).toHaveBeenCalledWith('key-abc', 'secret-xyz');
       expect(request['tenantId']).toBe('tenant-123');
-      expect(request['apiKeyId']).toBe('key-abc');
+      // SEC-3: guard stamps the opaque apiKeyId from the service result —
+      // never the plaintext key (which would otherwise leak via downstream
+      // logs / serializers).
+      expect(request['apiKeyId']).toBe('00000000-0000-0000-0000-000000000abc');
       expect(request['rateLimitPerMin']).toBe(100);
     });
 

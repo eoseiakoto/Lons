@@ -3,6 +3,7 @@ import { BadRequestException, NotFoundException, ForbiddenException } from '@nes
 import { PrismaService } from '@lons/database';
 import * as crypto from 'crypto';
 import { ApiKeyService } from './api-key.service';
+import { QuotaEnforcementService } from '../plan-tier/quota-enforcement.service';
 
 describe('ApiKeyService', () => {
   let service: ApiKeyService;
@@ -26,6 +27,11 @@ describe('ApiKeyService', () => {
             },
           },
         },
+        // S14-10: QuotaEnforcementService stub — no-op for these tests.
+        {
+          provide: QuotaEnforcementService,
+          useValue: { checkEntityLimit: jest.fn(async () => undefined) },
+        },
       ],
     }).compile();
 
@@ -46,7 +52,7 @@ describe('ApiKeyService', () => {
         tenantId: mockTenantId,
         name: input.name,
         keyHash: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
-        rateLimitPerMin: input.rateLimitPerMin,
+        rateLimitPerMinute: input.rateLimitPerMin,
         expiresAt: null,
         revokedAt: null,
         lastUsedAt: null,
@@ -74,7 +80,7 @@ describe('ApiKeyService', () => {
         tenantId: mockTenantId,
         name: input.name,
         keyHash: 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2',
-        rateLimitPerMin: 60,
+        rateLimitPerMinute: 60,
         expiresAt: null,
         revokedAt: null,
         lastUsedAt: null,
@@ -87,7 +93,7 @@ describe('ApiKeyService', () => {
       expect(createSpy).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            rateLimitPerMin: 60,
+            rateLimitPerMinute: 60,
           }),
         }),
       );
@@ -114,7 +120,7 @@ describe('ApiKeyService', () => {
         tenantId: mockTenantId,
         name: input.name,
         keyHash: 'existinghash',
-        rateLimitPerMin: 60,
+        rateLimitPerMinute: 60,
         expiresAt: null,
         revokedAt: null,
         lastUsedAt: null,
@@ -153,7 +159,7 @@ describe('ApiKeyService', () => {
         tenantId: mockTenantId,
         name: input.name,
         keyHash: 'somehash',
-        rateLimitPerMin: 60,
+        rateLimitPerMinute: 60,
         expiresAt: futureDate,
         revokedAt: null,
         lastUsedAt: null,
@@ -174,7 +180,7 @@ describe('ApiKeyService', () => {
         tenantId: mockTenantId,
         name: input.name,
         keyHash: 'somehash',
-        rateLimitPerMin: 60,
+        rateLimitPerMinute: 60,
         expiresAt: null,
         revokedAt: null,
         lastUsedAt: null,
@@ -199,7 +205,7 @@ describe('ApiKeyService', () => {
           tenantId: mockTenantId,
           name: 'Key 1',
           keyHash: 'hash1',
-          rateLimitPerMin: 60,
+          rateLimitPerMinute: 60,
           expiresAt: null,
           revokedAt: null,
           lastUsedAt: new Date(),
@@ -241,7 +247,7 @@ describe('ApiKeyService', () => {
           tenantId: mockTenantId,
           name: 'Key 1',
           keyHash: 'abcdef0123456789abcdef0123456789',
-          rateLimitPerMin: 60,
+          rateLimitPerMinute: 60,
           expiresAt: null,
           revokedAt: null,
           lastUsedAt: null,
@@ -265,7 +271,7 @@ describe('ApiKeyService', () => {
         tenantId: mockTenantId,
         name: 'Single Key',
         keyHash: 'somehash',
-        rateLimitPerMin: 60,
+        rateLimitPerMinute: 60,
         expiresAt: null,
         revokedAt: null,
         lastUsedAt: null,
@@ -297,7 +303,7 @@ describe('ApiKeyService', () => {
         tenantId: '00000000-0000-0000-0000-000000000099', // different tenant
         name: 'Other Tenant Key',
         keyHash: 'somehash',
-        rateLimitPerMin: 60,
+        rateLimitPerMinute: 60,
         expiresAt: null,
         revokedAt: null,
         lastUsedAt: null,
@@ -318,7 +324,7 @@ describe('ApiKeyService', () => {
         tenantId: mockTenantId,
         name: 'To Revoke',
         keyHash: 'somehash',
-        rateLimitPerMin: 60,
+        rateLimitPerMinute: 60,
         expiresAt: null,
         revokedAt: null,
         lastUsedAt: null,
@@ -354,7 +360,7 @@ describe('ApiKeyService', () => {
         tenantId: mockTenantId,
         name: 'Already Revoked',
         keyHash: 'somehash',
-        rateLimitPerMin: 60,
+        rateLimitPerMinute: 60,
         expiresAt: null,
         revokedAt: new Date(),
         lastUsedAt: null,
@@ -371,118 +377,137 @@ describe('ApiKeyService', () => {
   });
 
   describe('validateApiKey', () => {
-    it('should validate a valid API key', async () => {
+    /**
+     * Security Hardening (SEC-3): every fixture now carries a `secretHash`
+     * and every call passes the matching plaintext secret. The previous
+     * single-arg API was security theater — see api-key.service.ts for
+     * the full rationale.
+     */
+    function makeFixture(overrides: Partial<Record<string, unknown>> = {}) {
       const plaintextKey = 'lons_' + crypto.randomBytes(32).toString('hex');
+      const plaintextSecret = 'lons_secret_' + crypto.randomBytes(32).toString('hex');
       const keyHash = crypto.createHash('sha256').update(plaintextKey).digest('hex');
-
-      const mockKey = {
-        id: '00000000-0000-0000-0000-000000000002',
-        tenantId: mockTenantId,
-        name: 'Valid Key',
+      const secretHash = crypto.createHash('sha256').update(plaintextSecret).digest('hex');
+      return {
+        plaintextKey,
+        plaintextSecret,
         keyHash,
-        rateLimitPerMin: 100,
-        expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-        revokedAt: null,
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
+        secretHash,
+        row: {
+          id: '00000000-0000-0000-0000-000000000002',
+          tenantId: mockTenantId,
+          name: 'Test Key',
+          keyHash,
+          secretHash,
+          rateLimitPerMinute: 100,
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          revokedAt: null,
+          lastUsedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          ...overrides,
+        },
       };
+    }
 
-      jest.spyOn((prisma as any).apiKey, 'findUnique').mockResolvedValue(mockKey);
+    it('should validate a valid API key + secret', async () => {
+      const { plaintextKey, plaintextSecret, row } = makeFixture();
+
+      jest.spyOn((prisma as any).apiKey, 'findUnique').mockResolvedValue(row);
       const updateSpy = jest.spyOn((prisma as any).apiKey, 'update').mockResolvedValue({
-        ...mockKey,
+        ...row,
         lastUsedAt: new Date(),
       });
 
-      const result = await service.validateApiKey(plaintextKey);
+      const result = await service.validateApiKey(plaintextKey, plaintextSecret);
 
       expect(result.tenantId).toBe(mockTenantId);
       expect(result.rateLimitPerMin).toBe(100);
+      expect(result.apiKeyId).toBe(row.id);
       expect(updateSpy).toHaveBeenCalled();
     });
 
+    // SEC-3: rejects an otherwise valid key when the secret is wrong.
+    it('should reject a valid key with the wrong secret (timing-safe compare)', async () => {
+      const { plaintextKey, row } = makeFixture();
+      jest.spyOn((prisma as any).apiKey, 'findUnique').mockResolvedValue(row);
+
+      const wrongSecret = 'lons_secret_' + 'f'.repeat(64);
+      await expect(
+        service.validateApiKey(plaintextKey, wrongSecret),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
+    // SEC-3: missing secret rejected before any DB access.
+    it('should reject when secret is empty', async () => {
+      const { plaintextKey } = makeFixture();
+      await expect(
+        service.validateApiKey(plaintextKey, ''),
+      ).rejects.toThrow();
+    });
+
+    // SEC-3: legacy keys with an empty secretHash placeholder are
+    // treated as un-authenticatable.
+    it('should reject legacy keys with empty secretHash placeholder', async () => {
+      const { plaintextKey, plaintextSecret, row } = makeFixture({
+        secretHash: '',
+      });
+      jest.spyOn((prisma as any).apiKey, 'findUnique').mockResolvedValue(row);
+
+      await expect(
+        service.validateApiKey(plaintextKey, plaintextSecret),
+      ).rejects.toThrow(ForbiddenException);
+    });
+
     it('should throw if key does not start with lons_', async () => {
-      await expect(service.validateApiKey('invalid_key')).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.validateApiKey('invalid_key', 'lons_secret_xxx'),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('should throw if key not found', async () => {
-      const plaintextKey = 'lons_' + crypto.randomBytes(32).toString('hex');
+      const { plaintextKey, plaintextSecret } = makeFixture();
       jest.spyOn((prisma as any).apiKey, 'findUnique').mockResolvedValue(null);
 
-      await expect(service.validateApiKey(plaintextKey)).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.validateApiKey(plaintextKey, plaintextSecret),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('should throw if key is revoked', async () => {
-      const plaintextKey = 'lons_' + crypto.randomBytes(32).toString('hex');
-      const keyHash = crypto.createHash('sha256').update(plaintextKey).digest('hex');
-
-      const mockKey = {
-        id: '00000000-0000-0000-0000-000000000002',
-        tenantId: mockTenantId,
-        name: 'Revoked Key',
-        keyHash,
-        rateLimitPerMin: 60,
-        expiresAt: null,
+      const { plaintextKey, plaintextSecret, row } = makeFixture({
         revokedAt: new Date(),
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      });
+      jest.spyOn((prisma as any).apiKey, 'findUnique').mockResolvedValue(row);
 
-      jest.spyOn((prisma as any).apiKey, 'findUnique').mockResolvedValue(mockKey);
-
-      await expect(service.validateApiKey(plaintextKey)).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.validateApiKey(plaintextKey, plaintextSecret),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('should throw if key is expired', async () => {
-      const plaintextKey = 'lons_' + crypto.randomBytes(32).toString('hex');
-      const keyHash = crypto.createHash('sha256').update(plaintextKey).digest('hex');
-
-      const mockKey = {
-        id: '00000000-0000-0000-0000-000000000002',
-        tenantId: mockTenantId,
-        name: 'Expired Key',
-        keyHash,
-        rateLimitPerMin: 60,
+      const { plaintextKey, plaintextSecret, row } = makeFixture({
         expiresAt: new Date(Date.now() - 1000),
-        revokedAt: null,
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+      });
+      jest.spyOn((prisma as any).apiKey, 'findUnique').mockResolvedValue(row);
 
-      jest.spyOn((prisma as any).apiKey, 'findUnique').mockResolvedValue(mockKey);
-
-      await expect(service.validateApiKey(plaintextKey)).rejects.toThrow(ForbiddenException);
+      await expect(
+        service.validateApiKey(plaintextKey, plaintextSecret),
+      ).rejects.toThrow(ForbiddenException);
     });
 
     it('should update lastUsedAt on validation', async () => {
-      const plaintextKey = 'lons_' + crypto.randomBytes(32).toString('hex');
-      const keyHash = crypto.createHash('sha256').update(plaintextKey).digest('hex');
-
-      const mockKey = {
-        id: '00000000-0000-0000-0000-000000000002',
-        tenantId: mockTenantId,
-        name: 'Active Key',
-        keyHash,
-        rateLimitPerMin: 60,
-        expiresAt: null,
-        revokedAt: null,
-        lastUsedAt: null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
-
-      jest.spyOn((prisma as any).apiKey, 'findUnique').mockResolvedValue(mockKey);
+      const { plaintextKey, plaintextSecret, row } = makeFixture();
+      jest.spyOn((prisma as any).apiKey, 'findUnique').mockResolvedValue(row);
       const updateSpy = jest.spyOn((prisma as any).apiKey, 'update').mockResolvedValue({
-        ...mockKey,
+        ...row,
         lastUsedAt: new Date(),
       });
 
-      await service.validateApiKey(plaintextKey);
+      await service.validateApiKey(plaintextKey, plaintextSecret);
 
       expect(updateSpy).toHaveBeenCalledWith({
-        where: { id: mockKey.id },
+        where: { id: row.id },
         data: { lastUsedAt: expect.any(Date) },
       });
     });

@@ -25,6 +25,8 @@ describe('AuthService', () => {
     id: mockUserId,
     tenantId: mockTenantId,
     email,
+    // S13B-2: emailHash drives login lookups now that email is encrypted at rest.
+    emailHash: null,
     passwordHash: hashedPassword,
     name: 'Test User',
     phone: null,
@@ -53,6 +55,8 @@ describe('AuthService', () => {
   const mockPlatformUser = {
     id: mockUserId,
     email,
+    // S13B-2: emailHash for platform admin login lookups.
+    emailHash: null,
     passwordHash: hashedPassword,
     name: 'Platform Admin',
     role: PlatformUserRole.platform_admin,
@@ -82,6 +86,7 @@ describe('AuthService', () => {
               update: jest.fn(),
             },
             platformUser: {
+              findFirst: jest.fn(),
               findUnique: jest.fn(),
               update: jest.fn(),
             },
@@ -218,7 +223,7 @@ describe('AuthService', () => {
 
   describe('loginPlatformUser', () => {
     it('should successfully login a platform user', async () => {
-      jest.spyOn(prisma.platformUser, 'findUnique').mockResolvedValue(mockPlatformUser);
+      jest.spyOn(prisma.platformUser, 'findFirst').mockResolvedValue(mockPlatformUser);
       jest.spyOn(passwordService, 'verify').mockResolvedValue(true);
       jest.spyOn(prisma.platformUser, 'update').mockResolvedValue(mockPlatformUser);
       jest.spyOn((prisma as any).refreshToken, 'create').mockResolvedValue({
@@ -239,7 +244,7 @@ describe('AuthService', () => {
     });
 
     it('should throw if platform user not found', async () => {
-      jest.spyOn(prisma.platformUser, 'findUnique').mockResolvedValue(null);
+      jest.spyOn(prisma.platformUser, 'findFirst').mockResolvedValue(null);
 
       await expect(service.loginPlatformUser(email, password)).rejects.toThrow(
         UnauthorizedException,

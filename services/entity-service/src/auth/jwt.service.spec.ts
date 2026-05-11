@@ -249,6 +249,82 @@ describe('JwtService', () => {
     });
   });
 
+  // ─── Security Hardening (SEC-9) — production guard ─────────────────
+  describe('Production guard (SEC-9)', () => {
+    const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
+
+    afterEach(() => {
+      process.env.NODE_ENV = ORIGINAL_NODE_ENV;
+    });
+
+    function buildJwtServiceWith({
+      nodeEnv,
+      privateKey,
+      publicKey,
+    }: {
+      nodeEnv?: string;
+      privateKey: string;
+      publicKey: string;
+    }): JwtService {
+      // Set NODE_ENV before instantiation — the constructor reads it.
+      if (nodeEnv === undefined) {
+        delete process.env.NODE_ENV;
+      } else {
+        process.env.NODE_ENV = nodeEnv;
+      }
+      const config = {
+        get: jest.fn((key: string, defaultValue?: unknown) => {
+          const map: Record<string, unknown> = {
+            JWT_PRIVATE_KEY: privateKey,
+            JWT_PUBLIC_KEY: publicKey,
+            JWT_EXPIRY: 3600,
+            REFRESH_TOKEN_EXPIRY: 604800,
+            // Mirror NODE_ENV through ConfigService too — the service reads
+            // both with a fallback chain.
+            NODE_ENV: nodeEnv,
+          };
+          return map[key] ?? defaultValue;
+        }),
+      };
+      return new JwtService(config as any);
+    }
+
+    it('throws at boot when NODE_ENV=production and key files are unreadable', () => {
+      expect(() =>
+        buildJwtServiceWith({
+          nodeEnv: 'production',
+          privateKey: '/nonexistent/private.pem',
+          publicKey: '/nonexistent/public.pem',
+        }),
+      ).toThrow(/Ephemeral RSA keys are not permitted in production/);
+    });
+
+    it('falls back to ephemeral keys in development when key files are unreadable', () => {
+      const svc = buildJwtServiceWith({
+        nodeEnv: 'development',
+        privateKey: '/nonexistent/private.pem',
+        publicKey: '/nonexistent/public.pem',
+      });
+      // Sanity check: the service can still sign/verify with ephemeral keys.
+      const token = svc.signAccessToken({
+        sub: 'u1',
+        tenantId: 't1',
+        role: 'sp_operator',
+        permissions: [],
+      });
+      expect(token.split('.')).toHaveLength(3);
+    });
+
+    it('falls back to ephemeral keys when NODE_ENV is unset (test default)', () => {
+      const svc = buildJwtServiceWith({
+        nodeEnv: undefined,
+        privateKey: '/nonexistent/private.pem',
+        publicKey: '/nonexistent/public.pem',
+      });
+      expect(svc).toBeInstanceOf(JwtService);
+    });
+  });
+
   describe('Token payload structure', () => {
     it('should preserve custom claims', () => {
       const payload = {

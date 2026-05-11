@@ -1,6 +1,7 @@
 import { Injectable, UnauthorizedException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@lons/database';
 import { DEFAULTS } from '@lons/shared-types';
+import { computeSearchableHash } from '@lons/common';
 
 import { JwtService } from './jwt.service';
 import { PasswordService } from './password.service';
@@ -19,8 +20,13 @@ export class AuthService {
     email: string,
     password: string,
   ): Promise<{ accessToken: string; refreshToken: string; user: IAuthenticatedUser }> {
+    // S13B-2: `email` is encrypted at rest. Equality lookups are routed
+    // through `emailHash` (SHA-256 of normalised lowercase). The encrypted
+    // `email` column itself is decrypted by the field-encryption middleware
+    // when the row is returned, so downstream code still sees plaintext.
+    const emailHash = computeSearchableHash(email);
     const user = await this.prisma.user.findFirst({
-      where: { tenantId, email, deletedAt: null },
+      where: { tenantId, emailHash, deletedAt: null },
       include: { role: true },
     });
 
@@ -91,8 +97,12 @@ export class AuthService {
     email: string,
     password: string,
   ): Promise<{ accessToken: string; refreshToken: string; user: IAuthenticatedUser }> {
-    const user = await this.prisma.platformUser.findUnique({
-      where: { email },
+    // S13B-2: PlatformUser.email is encrypted at rest. Equality lookup
+    // routed through `emailHash`. The middleware still decrypts the
+    // `email` column when the row is returned.
+    const emailHash = computeSearchableHash(email);
+    const user = await this.prisma.platformUser.findFirst({
+      where: { emailHash },
     });
 
     if (!user || user.deletedAt) {

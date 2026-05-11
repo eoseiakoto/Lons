@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService, Prisma } from '@lons/database';
-import { NotFoundError, ValidationError } from '@lons/common';
+import { NotFoundError, ValidationError, computeSearchableHash } from '@lons/common';
 
 @Injectable()
 export class PlatformUserService {
@@ -12,8 +12,14 @@ export class PlatformUserService {
     name?: string;
     role: 'platform_admin' | 'platform_support';
   }) {
-    const existing = await this.prisma.platformUser.findUnique({
-      where: { email: data.email },
+    // S13B-2: PlatformUser.email is encrypted at rest. Lookups go through
+    // `emailHash`. Use `findFirst` (not `findUnique`) since `emailHash` is
+    // not a unique constraint — duplicate-email prevention is enforced by
+    // the application-level check below + the existing unique on `email`
+    // (which still applies to the ciphertext blob, but is left in place
+    // as a guardrail).
+    const existing = await this.prisma.platformUser.findFirst({
+      where: { emailHash: computeSearchableHash(data.email) },
     });
     if (existing && !existing.deletedAt) {
       throw new ValidationError('Email already in use', { email: data.email });

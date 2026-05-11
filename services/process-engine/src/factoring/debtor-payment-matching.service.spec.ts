@@ -38,6 +38,22 @@ interface DebtorFixture {
   taxId: string | null;
 }
 
+/**
+ * S13B-2 + Security Hardening (SEC-5): lookups route through HMAC-SHA-256
+ * hash columns. The mock derives the hash from the fixture's plaintext
+ * with the same util the production code uses, keeping the test in
+ * sync with any future hash-algorithm changes (e.g. pepper rotation).
+ *
+ * `computeSearchableHash` reads `HASH_PEPPER` from the environment; the
+ * package's jest.setup.ts seeds a deterministic value before any module
+ * loads, so this works without explicit beforeEach setup.
+ */
+import { computeSearchableHash } from '@lons/common';
+
+function fixtureHash(value: string | null): string | null {
+  return computeSearchableHash(value);
+}
+
 function makeService(opts: {
   invoices?: InvoiceFixture[];
   debtors?: DebtorFixture[];
@@ -81,6 +97,18 @@ function makeService(opts: {
     const found = debtors.find((d) => {
       if (d.tenantId !== where.tenantId) return false;
       return orClauses.some((cl) => {
+        // S13B-2: production code queries the hash columns. Mock matches
+        // by deriving the hash from the fixture's plaintext.
+        if ('registrationNumberHash' in cl) {
+          return (
+            fixtureHash(d.registrationNumber) === cl.registrationNumberHash
+          );
+        }
+        if ('taxIdHash' in cl) {
+          return fixtureHash(d.taxId) === cl.taxIdHash;
+        }
+        // Legacy paths kept for back-compat with any tests that still
+        // probe the old shape.
         if ('registrationNumber' in cl)
           return d.registrationNumber === cl.registrationNumber;
         if ('taxId' in cl) return d.taxId === cl.taxId;
@@ -103,14 +131,17 @@ function makeService(opts: {
       status: InvoiceStatus.payment_received,
     })),
   } as any;
+  // S13B-1: AuditService dependency for webhook-activity audit writes.
+  const auditService = { log: jest.fn(async (_input: unknown) => {}) } as any;
 
   const service = new DebtorPaymentMatchingService(
     prisma,
     eventBus,
     reserveService,
+    auditService,
   );
 
-  return { service, prisma, eventBus, reserveService };
+  return { service, prisma, eventBus, reserveService, auditService };
 }
 
 const baseInvoice: InvoiceFixture = {

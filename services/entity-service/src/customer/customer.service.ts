@@ -1,10 +1,20 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService, Prisma } from '@lons/database';
-import { NotFoundError, ValidationError } from '@lons/common';
+import {
+  NotFoundError,
+  ValidationError,
+  computeSearchableHash,
+} from '@lons/common';
+
+import { QuotaEnforcementService } from '../plan-tier/quota-enforcement.service';
 
 @Injectable()
 export class CustomerService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    // Sprint 14 (S14-10): plan-tier customer-quota enforcement.
+    private quotaEnforcementService: QuotaEnforcementService,
+  ) {}
 
   async create(tenantId: string, data: {
     externalId: string;
@@ -23,6 +33,11 @@ export class CustomerService {
     kycLevel?: 'none' | 'tier_1' | 'tier_2' | 'tier_3';
     metadata?: Prisma.InputJsonValue;
   }) {
+    // Sprint 14 (S14-10): customer-count quota gate before any DB write.
+    // Throws ForbiddenException({ code: 'QUOTA_EXCEEDED', ... }) when
+    // the tenant is at its plan's customer cap.
+    await this.quotaEnforcementService.checkEntityLimit(tenantId, 'customers');
+
     // Check for duplicates by externalId
     const existing = await this.prisma.customer.findFirst({
       where: { tenantId, externalId: data.externalId, externalSource: data.externalSource, deletedAt: null },
@@ -82,7 +97,14 @@ export class CustomerService {
     if (filters.status) where.status = filters.status as Prisma.EnumCustomerStatusFilter['equals'];
     if (filters.kycLevel) where.kycLevel = filters.kycLevel as Prisma.EnumKycLevelFilter['equals'];
     if (filters.segment) where.segment = filters.segment;
-    if (filters.phonePrimary) where.phonePrimary = filters.phonePrimary;
+    // Security Hardening (SEC-1): phonePrimary is encrypted at rest. The
+    // legacy `where.phonePrimary = filters.phonePrimary` compared plaintext
+    // to AES-GCM ciphertext (random IV) and silently returned empty — every
+    // call. Equality lookup now routes through the deterministic
+    // phonePrimaryHash companion column.
+    if (filters.phonePrimary) {
+      where.phonePrimaryHash = computeSearchableHash(filters.phonePrimary);
+    }
     if (filters.externalId) where.externalId = filters.externalId;
 
     const customers = await this.prisma.customer.findMany({
@@ -94,6 +116,41 @@ export class CustomerService {
     return { items: customers.slice(0, take), hasMore: customers.length > take };
   }
 
+  /**
+   * Security Hardening (SEC-1): build the OR clause for free-text customer
+   * search. The encrypted PII columns (`fullName`, `phonePrimary`, `email`)
+   * cannot be substring-matched against ciphertext, so we expose only:
+   *   - `externalId` (plaintext) — partial match
+   *   - `phonePrimaryHash` (deterministic HMAC) — exact match when the
+   *     search string normalises to a stored phone number
+   *   - `emailHash` — exact match when the search looks like an email
+   *
+   * **Known trade-off:** name / partial-phone / partial-email substring
+   * search is gone. Operators searching for "John" can no longer surface
+   * customers by name. Re-introducing partial PII search requires a
+   * tokenised search index outside the encrypted column (out of scope
+   * here — see SECURITY-HARDENING-2026-05-10.md §"Tests" notes).
+   */
+  private buildSearchOr(
+    search: string,
+  ): Prisma.CustomerWhereInput['OR'] {
+    const normalised = search.trim();
+    if (normalised === '') return undefined;
+    const hash = computeSearchableHash(normalised);
+    const clauses: Prisma.CustomerWhereInput[] = [
+      { externalId: { contains: normalised } },
+    ];
+    if (hash) {
+      // Same hash works for any encrypted PII column — `phonePrimary` and
+      // `email` lookups both exact-match it. We don't try to disambiguate
+      // (the worst case is an over-permissive OR, which is fine for a
+      // search box).
+      clauses.push({ phonePrimaryHash: hash });
+      clauses.push({ emailHash: hash });
+    }
+    return clauses;
+  }
+
   async findAll(tenantId: string, filters?: {
     skip?: number;
     take?: number;
@@ -103,12 +160,8 @@ export class CustomerService {
     const where: Prisma.CustomerWhereInput = { tenantId, deletedAt: null };
     if (filters?.status) where.status = filters.status as Prisma.EnumCustomerStatusFilter['equals'];
     if (filters?.search) {
-      where.OR = [
-        { fullName: { contains: filters.search, mode: 'insensitive' } },
-        { phonePrimary: { contains: filters.search } },
-        { externalId: { contains: filters.search } },
-        { email: { contains: filters.search, mode: 'insensitive' } },
-      ];
+      const or = this.buildSearchOr(filters.search);
+      if (or) where.OR = or;
     }
 
     return this.prisma.customer.findMany({
@@ -126,12 +179,8 @@ export class CustomerService {
     const where: Prisma.CustomerWhereInput = { tenantId, deletedAt: null };
     if (filters?.status) where.status = filters.status as Prisma.EnumCustomerStatusFilter['equals'];
     if (filters?.search) {
-      where.OR = [
-        { fullName: { contains: filters.search, mode: 'insensitive' } },
-        { phonePrimary: { contains: filters.search } },
-        { externalId: { contains: filters.search } },
-        { email: { contains: filters.search, mode: 'insensitive' } },
-      ];
+      const or = this.buildSearchOr(filters.search);
+      if (or) where.OR = or;
     }
 
     return this.prisma.customer.count({ where });

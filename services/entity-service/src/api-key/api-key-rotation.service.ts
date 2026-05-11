@@ -21,10 +21,14 @@ export class ApiKeyRotationService {
       throw new NotFoundException(`API key ${apiKeyId} not found or already revoked`);
     }
 
-    // Generate new key and secret
-    const newKey = `lons_${crypto.randomBytes(24).toString('hex')}`;
-    const newSecret = crypto.randomBytes(32).toString('hex');
-    const keyHash = crypto.createHash('sha256').update(`${newKey}:${newSecret}`).digest('hex');
+    // Security Hardening (SEC-3): generate independent key + secret. The
+    // previous implementation combined them into a single hash
+    // (`hash(key:secret)`), which was incompatible with `validateApiKey`'s
+    // two-column timing-safe comparison and silently broke rotated keys.
+    const newKey = `lons_${crypto.randomBytes(32).toString('hex')}`;
+    const newSecret = `lons_secret_${crypto.randomBytes(32).toString('hex')}`;
+    const keyHash = crypto.createHash('sha256').update(newKey).digest('hex');
+    const secretHash = crypto.createHash('sha256').update(newSecret).digest('hex');
 
     const gracePeriodMs = gracePeriodHours * 60 * 60 * 1000;
 
@@ -35,7 +39,11 @@ export class ApiKeyRotationService {
           tenantId,
           name: existingKey.name,
           keyHash,
-          rateLimitPerMin: existingKey.rateLimitPerMin,
+          // SEC-3: store the secret hash alongside the key hash.
+          secretHash,
+          // SEC-3: schema column is `rateLimitPerMinute`; the previous
+          // `rateLimitPerMin` was a typo that wrote to no column.
+          rateLimitPerMinute: existingKey.rateLimitPerMinute ?? 60,
         },
       }),
       // Rename old key to avoid unique constraint, set expiry for grace period
@@ -73,7 +81,8 @@ export class ApiKeyRotationService {
   async listActiveKeys(tenantId: string) {
     return (this.prisma as any).apiKey.findMany({
       where: { tenantId, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] },
-      select: { id: true, name: true, rateLimitPerMin: true, expiresAt: true, lastUsedAt: true, createdAt: true },
+      // SEC-3: schema column is `rateLimitPerMinute`.
+      select: { id: true, name: true, rateLimitPerMinute: true, expiresAt: true, lastUsedAt: true, createdAt: true },
       orderBy: { createdAt: 'desc' },
     });
   }

@@ -1,10 +1,16 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService, Prisma } from '@lons/database';
-import { NotFoundError, ValidationError } from '@lons/common';
+import { NotFoundError, ValidationError, computeSearchableHash } from '@lons/common';
+
+import { QuotaEnforcementService } from '../plan-tier/quota-enforcement.service';
 
 @Injectable()
 export class UserService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    // Sprint 14 (S14-10): portal-user quota enforcement.
+    private quotaEnforcementService: QuotaEnforcementService,
+  ) {}
 
   async create(tenantId: string, data: {
     email: string;
@@ -12,8 +18,16 @@ export class UserService {
     name?: string;
     roleId: string;
   }) {
+    // S14-10: cap active portal users at the plan limit.
+    await this.quotaEnforcementService.checkEntityLimit(tenantId, 'users');
+    // S13B-2: equality lookup on `email` is impossible after encryption,
+    // so existence checks go through the `emailHash` companion column.
     const existing = await this.prisma.user.findFirst({
-      where: { tenantId, email: data.email, deletedAt: null },
+      where: {
+        tenantId,
+        emailHash: computeSearchableHash(data.email),
+        deletedAt: null,
+      },
     });
     if (existing) {
       throw new ValidationError('Email already in use', { email: data.email });
