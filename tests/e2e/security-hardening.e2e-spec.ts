@@ -395,8 +395,19 @@ describe('Sprint 13B (S13B-3) — ENCRYPTED_FIELDS configuration', () => {
   });
 
   it('PlatformUser, User, Debtor, Merchant are all configured (S13B-2)', () => {
-    expect(ENCRYPTED_FIELDS.PlatformUser).toEqual(['email']);
-    expect(ENCRYPTED_FIELDS.User).toEqual(expect.arrayContaining(['email', 'phone']));
+    // FIX-12 (Sprint 15 fixes): Sprint 15 added `mfaSecret` to both
+    // PlatformUser and User. `mfaBackupCodes` was added in S15-6 but
+    // moved to SHA-256 hashes (FIX-6) — it is intentionally NOT in
+    // ENCRYPTED_FIELDS anymore. Use arrayContaining so future additions
+    // don't break this guardrail.
+    expect(ENCRYPTED_FIELDS.PlatformUser).toEqual(
+      expect.arrayContaining(['email', 'mfaSecret']),
+    );
+    expect(ENCRYPTED_FIELDS.PlatformUser).not.toContain('mfaBackupCodes');
+    expect(ENCRYPTED_FIELDS.User).toEqual(
+      expect.arrayContaining(['email', 'phone', 'mfaSecret']),
+    );
+    expect(ENCRYPTED_FIELDS.User).not.toContain('mfaBackupCodes');
     expect(ENCRYPTED_FIELDS.Debtor).toEqual(
       expect.arrayContaining([
         'contactEmail',

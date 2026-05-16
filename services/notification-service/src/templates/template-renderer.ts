@@ -57,4 +57,57 @@ export const NOTIFICATION_TEMPLATES: Record<string, Record<string, string>> = {
     push: 'Cooling-off ended. Loan active. First repayment {{repaymentAmount}} due {{firstRepaymentDate}}.',
     in_app: 'Your cooling-off period has ended. Your loan of {{currency}} {{amount}} is now active. First repayment due on {{firstRepaymentDate}}.',
   },
+
+  // ── Sprint 16 FIX-7 — payment reminder templates ───────────────────
+  // Wired into PaymentReminderJob via product.notificationConfig.
+  // Variables available: customerName, amount, currency, dueDate,
+  // installmentNumber, contractId.
+  //
+  // The Job dispatches eventType `payment_reminder.{daysBefore}` with
+  // an optional `:{installmentId}` discriminator (FIX-4) that the
+  // notification service strips before template lookup. Three buckets
+  // — 3 days out, 1 day out, due today — match the
+  // DEFAULT_REMINDER_CONFIG in payment-reminder.job.ts.
+  'payment_reminder.3': {
+    sms: 'Hi {{customerName}}, your payment of {{currency}} {{amount}} is due in 3 days ({{dueDate}}). Please ensure sufficient funds.',
+    email: 'Payment reminder: {{currency}} {{amount}} due on {{dueDate}}.',
+    push: 'Payment of {{currency}} {{amount}} due in 3 days',
+    in_app: 'Your installment of {{currency}} {{amount}} is due on {{dueDate}}.',
+  },
+  'payment_reminder.1': {
+    sms: 'Hi {{customerName}}, your payment of {{currency}} {{amount}} is due tomorrow ({{dueDate}}). Please ensure sufficient funds.',
+    email: 'Payment due tomorrow: {{currency}} {{amount}}.',
+    push: 'Payment of {{currency}} {{amount}} due tomorrow',
+    in_app: 'Your installment of {{currency}} {{amount}} is due tomorrow.',
+  },
+  'payment_reminder.0': {
+    sms: 'Hi {{customerName}}, your payment of {{currency}} {{amount}} is due today ({{dueDate}}). Please make your payment now.',
+    email: 'Payment due today: {{currency}} {{amount}}.',
+    push: 'Payment of {{currency}} {{amount}} due today',
+    in_app: 'Your installment of {{currency}} {{amount}} is due today.',
+  },
+
+  // Micro-loan-specific templates — used when a product's
+  // notificationConfig references these keys explicitly. The
+  // PaymentReminderJob resolves `templateKey` from the product
+  // config; the Sprint 16 micro-loan-reminder.config.ts seeds use
+  // `micro_loan.payment_reminder.{3_day|1_day|due_today}`.
+  'micro_loan.payment_reminder.3_day': {
+    sms: 'Hi {{customerName}}, your micro-loan repayment of {{currency}} {{amount}} is due in 3 days. Installment {{installmentNumber}}.',
+    email: 'Micro-loan repayment reminder: {{currency}} {{amount}} due on {{dueDate}}.',
+    push: 'Micro-loan payment due in 3 days: {{currency}} {{amount}}',
+    in_app: 'Your micro-loan installment {{installmentNumber}} of {{currency}} {{amount}} is due on {{dueDate}}.',
+  },
+  'micro_loan.payment_reminder.1_day': {
+    sms: 'Hi {{customerName}}, your micro-loan repayment of {{currency}} {{amount}} is due tomorrow. Please ensure your wallet is funded.',
+    email: 'Micro-loan payment due tomorrow: {{currency}} {{amount}}.',
+    push: 'Micro-loan payment due tomorrow: {{currency}} {{amount}}',
+    in_app: 'Your micro-loan installment {{installmentNumber}} of {{currency}} {{amount}} is due tomorrow.',
+  },
+  'micro_loan.payment_reminder.due_today': {
+    sms: 'Hi {{customerName}}, your micro-loan repayment of {{currency}} {{amount}} is due today. Auto-deduction will attempt shortly.',
+    email: 'Micro-loan payment due today: {{currency}} {{amount}}.',
+    push: 'Micro-loan payment due today: {{currency}} {{amount}}',
+    in_app: 'Your micro-loan installment {{installmentNumber}} of {{currency}} {{amount}} is due today.',
+  },
 };

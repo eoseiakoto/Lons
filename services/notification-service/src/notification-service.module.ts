@@ -4,6 +4,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { BullModule } from '@nestjs/bullmq';
 import { PrismaModule } from '@lons/database';
 import { ObservabilityModule } from '@lons/common';
+import { AuditModule } from '@lons/entity-service';
 
 import { NotificationService } from './notification.service';
 import { ConsoleNotificationAdapter } from './adapters/console-notification.adapter';
@@ -32,6 +33,8 @@ import { WebhookDeliveryExhaustedListener } from './webhooks/webhook-delivery-ex
       },
     }),
     BullModule.registerQueue({ name: 'webhook-delivery' }),
+    // S16-FIX-6: AuditService for outbound webhook delivery audit trail.
+    AuditModule,
   ],
   providers: [
     NotificationService,

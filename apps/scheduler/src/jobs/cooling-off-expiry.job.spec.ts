@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '@lons/database';
+import { AuditService } from '@lons/entity-service';
 import { CoolingOffService } from '@lons/process-engine';
 
 import { CoolingOffExpiryJob } from './cooling-off-expiry.job';
@@ -36,6 +37,14 @@ describe('CoolingOffExpiryJob', () => {
           provide: CoolingOffService,
           useValue: {
             expireCoolingOffContracts: jest.fn(),
+          },
+        },
+        {
+          // Sprint 15 fix (S15-FIX-2): job now logs system-actor audit
+          // entries when contracts transition out of cooling-off.
+          provide: AuditService,
+          useValue: {
+            log: jest.fn().mockResolvedValue(undefined),
           },
         },
       ],

@@ -68,6 +68,30 @@ export class JwtService {
     return this.sign({ ...payload, role: '', permissions: [], type: 'refresh' }, this.refreshTokenExpiry);
   }
 
+  /**
+   * Sprint 15 (S15-6) — short-lived MFA verification token. Issued when
+   * login credentials are valid but MFA is required; consumed by the
+   * `verifyMfa` mutation in exchange for a full access+refresh pair.
+   * 5-minute expiry. Carries `purpose: 'mfa_verification'` so the access
+   * guard can reject any other endpoint that sees it.
+   */
+  signMfaToken(payload: {
+    sub: string;
+    tenantId: string;
+    userType: 'user' | 'platform_user';
+  }): string {
+    return this.sign(
+      {
+        ...payload,
+        role: '',
+        permissions: [],
+        type: 'mfa',
+        purpose: 'mfa_verification',
+      },
+      300, // 5 minutes
+    );
+  }
+
   verifyToken(token: string): IJwtPayload {
     return this.verify(token);
   }

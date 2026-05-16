@@ -5,6 +5,7 @@ import { EventBusService, REDIS_CLIENT } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
 import { PlanTierConfigService } from './plan-tier-config.service';
+import { QUOTA_INCREMENT_SCRIPT } from './quota-lua-scripts';
 
 /**
  * Sprint 14 (S14-14a) — Redis-backed quota counters.
@@ -61,83 +62,114 @@ export class QuotaTrackingService {
     const countKey = this.monthlyKey(tenantId, 'disbursements:count');
     const volumeKey = this.monthlyKey(tenantId, 'disbursements:volume');
 
-    let newCount = 0;
-    let newVolume = '0';
-
-    try {
-      newCount = await this.redis.incr(countKey);
-      // ioredis returns string for incrbyfloat — keep as string for
-      // Decimal compatibility downstream.
-      const v = await this.redis.incrbyfloat(volumeKey, parseFloat(amountUsd));
-      newVolume = typeof v === 'string' ? v : String(v);
-
-      // Set TTL on the first increment of the month. We bound the call
-      // to once-per-key with `newCount === 1` so we don't churn the
-      // expiry on every increment.
-      if (newCount === 1) {
-        const ttl = this.secondsUntilNextMonth();
-        await this.redis.expire(countKey, ttl);
-        await this.redis.expire(volumeKey, ttl);
-      }
-    } catch (err) {
-      // Soft-fail: see the class docstring. Log and admit the call.
-      this.logger.warn(
-        `Redis quota increment failed for tenant ${tenantId}: ${(err as Error).message}. Admitting disbursement.`,
-      );
-      return { allowed: true, currentCount: 0 };
-    }
-
+    // Tier config first — the Lua script needs limits as ARGV. The
+    // config is Redis-cached at 5min, so this is usually a single GET.
     let config;
     try {
       config = await this.planTierConfigService.getTenantTierConfig(tenantId);
     } catch (err) {
-      // No tier config → admit (same fail-open posture as Redis outage).
       this.logger.warn(
         `Tier config lookup failed for tenant ${tenantId}: ${(err as Error).message}. Admitting disbursement.`,
       );
-      return { allowed: true, currentCount: newCount };
+      // Counters never get incremented in this branch — without limits
+      // we can't enforce, and double-incrementing on the next call would
+      // be wrong. Fail-open with zero count.
+      return { allowed: true, currentCount: 0 };
     }
 
     const txnLimit = config.maxMonthlyTransactions;
     const volumeLimit = config.maxMonthlyDisbursementVolumeUsd;
+    const ttl = this.secondsUntilNextMonth();
 
-    // Hard limit on transaction count.
-    if (txnLimit !== null && newCount > txnLimit) {
+    // S15-FIX-1: atomic increment-and-check via Lua. Replaces the
+    // sequential INCR + INCRBYFLOAT + per-attribute check pattern.
+    // Concurrent callers can no longer both pass a hard limit at the
+    // single-counter step — Redis runs the script atomically per key.
+    let newCount = 0;
+    let newVolume = '0';
+    let countExceeded = false;
+    let volumeExceeded = false;
+    let countWarning = false;
+    let volumeWarning = false;
+    try {
+      const result = (await this.redis.eval(
+        QUOTA_INCREMENT_SCRIPT,
+        2,
+        countKey,
+        volumeKey,
+        amountUsd,
+        String(txnLimit ?? -1),
+        volumeLimit !== null && volumeLimit !== undefined
+          ? String(volumeLimit)
+          : '-1',
+        String(ttl),
+      )) as [number, string, number, number, number, number];
+      newCount = Number(result[0]);
+      newVolume = result[1];
+      countExceeded = result[2] === 1;
+      volumeExceeded = result[3] === 1;
+      countWarning = result[4] === 1;
+      volumeWarning = result[5] === 1;
+    } catch (err) {
+      this.logger.warn(
+        `Redis quota Lua eval failed for tenant ${tenantId}: ${(err as Error).message}. Admitting disbursement.`,
+      );
+      return { allowed: true, currentCount: 0 };
+    }
+
+    // Hard caps fire first — they're rejection events. The warnings
+    // never co-occur with their respective exceeded flag (Lua handles
+    // the elseif).
+    if (countExceeded) {
       this.eventBus.emitAndBuild(EventType.QUOTA_EXCEEDED, tenantId, {
         limitType: 'monthly_transactions',
         current: newCount,
-        limit: txnLimit,
+        limit: txnLimit ?? -1,
+        tier: config.tier,
+      });
+      return { allowed: false, currentCount: newCount };
+    }
+    if (volumeExceeded) {
+      this.eventBus.emitAndBuild(EventType.QUOTA_EXCEEDED, tenantId, {
+        limitType: 'monthly_volume_usd',
+        current: newVolume,
+        limit:
+          volumeLimit !== null && volumeLimit !== undefined
+            ? String(volumeLimit)
+            : '-1',
         tier: config.tier,
       });
       return { allowed: false, currentCount: newCount };
     }
 
-    // Hard limit on USD volume.
-    if (volumeLimit !== null && volumeLimit !== undefined) {
-      const limitNumber = Number(volumeLimit);
-      if (parseFloat(newVolume) > limitNumber) {
-        this.eventBus.emitAndBuild(EventType.QUOTA_EXCEEDED, tenantId, {
-          limitType: 'monthly_volume_usd',
-          current: newVolume,
-          limit: String(limitNumber),
-          tier: config.tier,
-        });
-        return { allowed: false, currentCount: newCount };
-      }
-    }
-
-    // Soft warning at 80% of transaction cap.
-    if (txnLimit !== null && newCount >= Math.floor(txnLimit * 0.8)) {
+    // S15-FIX-3: emit USAGE_THRESHOLD_WARNING for BOTH count and volume
+    // at the 80% line. Multiple events can fire on a single call if the
+    // tenant is simultaneously close to both caps.
+    let warning = false;
+    if (countWarning && txnLimit !== null) {
       this.eventBus.emitAndBuild(EventType.USAGE_THRESHOLD_WARNING, tenantId, {
         limitType: 'monthly_transactions',
         current: newCount,
         limit: txnLimit,
         percentUsed: Math.round((newCount / txnLimit) * 100),
       });
-      return { allowed: true, warning: true, currentCount: newCount };
+      warning = true;
+    }
+    if (volumeWarning && volumeLimit !== null && volumeLimit !== undefined) {
+      const limitNumber = Number(volumeLimit);
+      const currentVolume = parseFloat(newVolume);
+      this.eventBus.emitAndBuild(EventType.USAGE_THRESHOLD_WARNING, tenantId, {
+        limitType: 'monthly_volume_usd',
+        current: newVolume,
+        limit: String(limitNumber),
+        percentUsed: Math.round((currentVolume / limitNumber) * 100),
+      });
+      warning = true;
     }
 
-    return { allowed: true, currentCount: newCount };
+    return warning
+      ? { allowed: true, warning: true, currentCount: newCount }
+      : { allowed: true, currentCount: newCount };
   }
 
   /**

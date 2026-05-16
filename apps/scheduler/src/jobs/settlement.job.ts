@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '@lons/database';
+import { AuditService } from '@lons/entity-service';
 import { SettlementService } from '@lons/settlement-service';
 
 @Injectable()
@@ -10,6 +11,10 @@ export class SettlementJob {
   constructor(
     private prisma: PrismaService,
     private settlementService: SettlementService,
+    // Sprint 15 (S15-FIX-2) — system-actor audit entries for settlement
+    // runs so revenue-share disputes have a clear job-execution
+    // breadcrumb.
+    private auditService: AuditService,
   ) {}
 
   @Cron('0 3 * * *') // 3:00 AM daily
@@ -58,6 +63,20 @@ export class SettlementJob {
           () => this.settlementService.calculateSettlement(tenant.id, periodStart, periodEnd),
         );
         this.logger.log(`Settlement calculated for tenant ${tenant.id}`);
+        // S15-FIX-2: audit-log every settlement run with the period.
+        await this.auditService.log({
+          tenantId: tenant.id,
+          actorType: 'system',
+          action: 'execute.settlementCalculate',
+          resourceType: 'tenant',
+          resourceId: tenant.id,
+          metadata: {
+            job: 'settlement',
+            frequency,
+            periodStart: periodStart.toISOString(),
+            periodEnd: periodEnd.toISOString(),
+          },
+        });
       } catch (error) {
         this.logger.error(`Settlement failed for tenant ${tenant.id}: ${error instanceof Error ? error.message : error}`);
       }

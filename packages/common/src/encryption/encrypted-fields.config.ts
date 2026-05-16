@@ -32,10 +32,17 @@ export const ENCRYPTED_FIELDS: Record<string, string[]> = {
   ],
 
   // Platform admin users — login-by-email lookup uses `emailHash`.
-  PlatformUser: ['email'],
+  // Sprint 15 (S15-6): `mfaSecret` (TOTP shared secret) is encrypted at
+  // rest because the server needs to recover the plaintext to verify
+  // TOTP codes. `mfaBackupCodes` was originally also encrypted, but
+  // Sprint 15 FIX-6 moved them to a SHA-256 hash representation — the
+  // server only needs equality comparison, so one-way hashes are
+  // strictly safer (an exfiltrated encryption key can't recover them).
+  PlatformUser: ['email', 'mfaSecret'],
 
-  // Tenant-scoped operator users — login uses `emailHash`.
-  User: ['email', 'phone'],
+  // Tenant-scoped operator users — login uses `emailHash`. Same MFA
+  // encryption rationale as PlatformUser above.
+  User: ['email', 'phone', 'mfaSecret'],
 
   // Factoring debtors — corporate PII + government identifiers used by the
   // debtor-payment matching service. `taxIdHash` and `registrationNumberHash`

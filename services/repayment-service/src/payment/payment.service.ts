@@ -1,15 +1,22 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService, Prisma, RepaymentStatus, RepaymentMethodType, ContractStatus } from '@lons/database';
 import { EventBusService, NotFoundError, ValidationError, add, subtract, compare, bankersRound } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
 import { allocatePayment, OutstandingAmounts } from '../waterfall/waterfall-allocator';
+import { ScheduleRecalculationService } from '../schedule/schedule-recalculation.service';
 
 @Injectable()
 export class PaymentService {
   constructor(
     private prisma: PrismaService,
     private eventBus: EventBusService,
+    /**
+     * Sprint 16 (S16-7) — optional injection so legacy tests that
+     * construct PaymentService without the schedule module still work.
+     * Production wiring always provides it via RepaymentServiceModule.
+     */
+    @Optional() private scheduleRecalc?: ScheduleRecalculationService,
   ) {}
 
   async processPayment(tenantId: string, input: {
@@ -19,7 +26,24 @@ export class PaymentService {
     method: string;
     source?: string;
     externalRef?: string;
+    /**
+     * FIX-3 (Sprint 16 fixes): caller-supplied replay key. A duplicate
+     * call with the same `(tenantId, idempotencyKey)` returns the
+     * existing repayment instead of creating a phantom row. Optional
+     * for legacy / internal callers; the GraphQL resolver requires it.
+     */
+    idempotencyKey?: string;
   }) {
+    // FIX-3: idempotency check BEFORE any read of contract state so a
+    // replayed mutation against a since-settled contract still returns
+    // the original repayment (instead of throwing on the status guard).
+    if (input.idempotencyKey) {
+      const existing = await this.prisma.repayment.findFirst({
+        where: { tenantId, idempotencyKey: input.idempotencyKey },
+      });
+      if (existing) return existing;
+    }
+
     const contract = await this.prisma.contract.findFirst({
       where: { id: input.contractId, tenantId },
     });
@@ -50,6 +74,10 @@ export class PaymentService {
         method: input.method as RepaymentMethodType,
         source: input.source,
         externalRef: input.externalRef,
+        // FIX-3: persist the replay key. The partial unique index in
+        // the migration enforces (tenantId, idempotencyKey) uniqueness
+        // for non-null keys — backstops the application-level check.
+        idempotencyKey: input.idempotencyKey,
         allocatedPrincipal: allocation.allocatedPrincipal,
         allocatedInterest: allocation.allocatedInterest,
         allocatedFees: allocation.allocatedFees,
@@ -111,6 +139,27 @@ export class PaymentService {
       allocatedFees: allocation.allocatedFees,
       allocatedPenalties: allocation.allocatedPenalties,
     });
+
+    // Sprint 16 (S16-7): recalculate the future schedule when the
+    // payment was an early/advance payment — defined as principal
+    // allocated > 0 AND the contract is NOT now fully settled.
+    // Settlement skips the recalc (no future installments to balance).
+    // Best-effort: failure logs but does not roll back the payment.
+    if (
+      this.scheduleRecalc &&
+      !isSettled &&
+      compare(allocation.allocatedPrincipal, '0') > 0
+    ) {
+      try {
+        await this.scheduleRecalc.recalculate(
+          tenantId,
+          input.contractId,
+          'early_payment',
+        );
+      } catch {
+        // Schedule recalc is best-effort — never break the payment.
+      }
+    }
 
     return repayment;
   }

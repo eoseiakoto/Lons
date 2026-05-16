@@ -2,12 +2,18 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from '@lons/database';
-import { EventBusModule, ObservabilityModule, RedisClientModule } from '@lons/common';
+import {
+  EventBusModule,
+  ObservabilityModule,
+  RedisClientModule,
+  WalletAdaptersModule,
+} from '@lons/common';
 import { ProcessEngineModule } from '@lons/process-engine';
 import { SettlementServiceModule } from '@lons/settlement-service';
 import { ReconciliationServiceModule } from '@lons/reconciliation-service';
 import { OverdraftAgingModule } from '@lons/overdraft-service';
 import { AuditModule } from '@lons/entity-service';
+import { NotificationServiceModule } from '@lons/notification-service';
 
 import { InterestAccrualJob } from './jobs/interest-accrual.job';
 import { AgingJob } from './jobs/aging.job';
@@ -22,6 +28,10 @@ import { InvoiceOfferExpiryJob } from './jobs/invoice-offer-expiry.job';
 import { RecourseGraceExpiryJob } from './jobs/recourse-grace-expiry.job';
 import { SubscriptionInvoiceJob } from './jobs/subscription-invoice.job';
 import { UsageInvoiceJob } from './jobs/usage-invoice.job';
+import { AutoDeductionJob } from './jobs/auto-deduction.job';
+import { AutoDeductionRetryJob } from './jobs/auto-deduction-retry.job';
+import { SettlementJob } from './jobs/settlement.job';
+import { PaymentReminderJob } from './jobs/payment-reminder.job';
 
 @Module({
   imports: [
@@ -42,6 +52,13 @@ import { UsageInvoiceJob } from './jobs/usage-invoice.job';
     // module reads the monthly disbursement counter from Redis to pick
     // a volume discount bracket.
     RedisClientModule.forRoot(),
+    // Sprint 15 (S15-4, S15-8) — shared wallet adapters for the new
+    // generic AutoDeductionJob. Defaults to mock; live mode wires real
+    // adapters in Phase 5.
+    WalletAdaptersModule.register(),
+    // Sprint 16 (S16-10) — payment reminder scheduler needs
+    // NotificationService to dispatch SMS / email reminders.
+    NotificationServiceModule,
   ],
   providers: [
     InterestAccrualJob,
@@ -58,6 +75,16 @@ import { UsageInvoiceJob } from './jobs/usage-invoice.job';
     // Sprint 14 (S14-12, S14-13) — billing cron jobs.
     SubscriptionInvoiceJob,
     UsageInvoiceJob,
+    // Sprint 15 (S15-4, S15-5) — generic auto-deduction for Micro-Loan
+    // + Overdraft installments + the half-hourly retry pass.
+    AutoDeductionJob,
+    AutoDeductionRetryJob,
+    // Sprint 15 FIX-11 — SettlementJob was implemented but never wired
+    // (the `@Cron('0 3 * * *')` decorator only fires for providers Nest
+    // actually constructs). Registering here so daily settlement runs.
+    SettlementJob,
+    // Sprint 16 (S16-10) — generic payment reminder scheduler.
+    PaymentReminderJob,
   ],
 })
 export class SchedulerModule {}

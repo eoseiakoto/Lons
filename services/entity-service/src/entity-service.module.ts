@@ -19,6 +19,7 @@ import { AnonymizationModule } from './anonymization/anonymization.module';
 import { PlatformConfigModule } from './platform-config/platform-config.module';
 import { MerchantModule } from './merchant/merchant.module';
 import { PlanTierModule } from './plan-tier/plan-tier.module';
+import { BnplCreditLineModule } from './bnpl-credit-line/bnpl-credit-line.module';
 
 @Module({
   imports: [
@@ -44,6 +45,8 @@ import { PlanTierModule } from './plan-tier/plan-tier.module';
     // tracking, metrics). Requires `RedisClientModule.forRoot()` to be
     // registered at the app composition root so REDIS_CLIENT resolves.
     PlanTierModule,
+    // Sprint 15 (S15-1 + S15-2) — per-customer BNPL credit lines.
+    BnplCreditLineModule,
   ],
   exports: [
     AuthModule,
@@ -63,6 +66,7 @@ import { PlanTierModule } from './plan-tier/plan-tier.module';
     PlatformConfigModule,
     MerchantModule,
     PlanTierModule,
+    BnplCreditLineModule,
   ],
 })
 export class EntityServiceModule {}

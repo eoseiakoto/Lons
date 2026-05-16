@@ -19,7 +19,7 @@ import type { Request } from 'express';
 
 import { Public } from '@lons/entity-service';
 import { PrismaService } from '@lons/database';
-import { EventBusService } from '@lons/common';
+import { AuditAction, EventBusService } from '@lons/common';
 import { EventType, IWalletBalanceInsufficientEvent } from '@lons/event-contracts';
 
 /**
@@ -56,6 +56,7 @@ export class WalletWebhookController {
 
   @Post(':provider/insufficient-balance')
   @HttpCode(HttpStatus.ACCEPTED)
+  @AuditAction('wallet_webhook.insufficient_balance', 'wallet_webhook')
   @ApiOperation({ summary: 'Wallet provider reports an insufficient-balance event' })
   @ApiResponse({ status: 202, description: 'Event accepted; drawdown processing happens asynchronously' })
   @ApiResponse({ status: 401, description: 'HMAC signature invalid' })
@@ -98,6 +99,7 @@ export class WalletWebhookController {
 
   @Post(':provider/transaction-notification')
   @HttpCode(HttpStatus.ACCEPTED)
+  @AuditAction('wallet_webhook.transaction_notification', 'wallet_webhook')
   @ApiOperation({ summary: 'Wallet provider reports a credit/debit on the wallet' })
   @ApiResponse({ status: 202, description: 'Event accepted' })
   @ApiResponse({ status: 401, description: 'HMAC signature invalid' })

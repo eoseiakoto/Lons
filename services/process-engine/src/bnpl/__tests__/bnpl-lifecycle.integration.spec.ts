@@ -180,11 +180,44 @@ function makeWorld(opts: {
         return settlement;
       }),
     },
+    // Sprint 15 (S15-9): origination now requires a subscription +
+    // BnplCreditLine. Provide enough headroom for the lifecycle test.
+    subscription: {
+      findFirst: jest.fn(async () => ({
+        id: 'sub-1',
+        tenantId: TENANT,
+        customerId: CUSTOMER,
+        productId: PRODUCT,
+        status: 'active',
+      })),
+    },
+    bnplCreditLine: {
+      findFirst: jest.fn(async () => ({
+        id: 'cl-1',
+        tenantId: TENANT,
+        customerId: CUSTOMER,
+        subscriptionId: 'sub-1',
+        productId: PRODUCT,
+        approvedLimit: '10000.0000',
+        availableLimit: '10000.0000',
+        status: 'active',
+        deletedAt: null,
+      })),
+      update: jest.fn(async () => ({})),
+      findUniqueOrThrow: jest.fn(async () => ({
+        id: 'cl-1',
+        availableLimit: '10000.0000',
+        approvedLimit: '10000.0000',
+      })),
+    },
     $transaction: jest.fn(async (ops: any) => {
       if (typeof ops === 'function') {
         const txClient = {
           bnplTransaction: prisma.bnplTransaction,
           installmentSchedule: prisma.installmentSchedule,
+          bnplCreditLine: prisma.bnplCreditLine,
+          // FIX-7: atomic UPDATE WHERE returns affected count.
+          $executeRawUnsafe: jest.fn(async () => 1),
         };
         return ops(txClient);
       }
@@ -359,6 +392,116 @@ describe('BNPL lifecycle integration (FIX 24)', () => {
       expect(result.refundedToCustomer).toBe('0.0000'); // No paid amounts to reimburse
       // Transaction stays approved (only `full` flips to `refunded`).
       expect(world.state().transaction.status).toBe(BnplTransactionStatus.approved);
+    });
+  });
+
+  // ────────────────────────────────────────────────────────────────────
+  // Sprint 16 (S16-BA-12) — concurrent deduction integration test.
+  //
+  // Backstop for the FIX-7 (Sprint 15) atomic UPDATE WHERE behaviour.
+  // Two purchases for ~80% of available limit each race against the
+  // same credit line. Postgres' row-level UPDATE WHERE guarantees
+  // serial execution: exactly ONE must succeed; the other rolls back
+  // with `BNPL_INSUFFICIENT_CREDIT_LIMIT`.
+  //
+  // The mock here simulates the conditional UPDATE by short-circuiting
+  // the second $executeRawUnsafe call to return `0` (affected rows)
+  // when the running balance would go negative. That's what real
+  // Postgres does in production via `WHERE available_limit >= $1`.
+  // ────────────────────────────────────────────────────────────────────
+  describe('Sprint 16 (S16-BA-12) — concurrent deduction (FIX-7 backstop)', () => {
+    it('rejects the second concurrent purchase when both would exhaust availableLimit', async () => {
+      const world = makeWorld();
+
+      // Wire the mock prisma to simulate a real "available = 500"
+      // credit line. The first UPDATE succeeds (returns 1), drops
+      // available to 100; the second sees insufficient headroom and
+      // returns 0 — driving the resolver to throw.
+      const availableLimitRef = { current: '500.0000' };
+      (world.prisma.bnplCreditLine.findFirst as jest.Mock).mockImplementation(
+        async () => ({
+          id: 'cl-concurrent',
+          tenantId: TENANT,
+          customerId: CUSTOMER,
+          subscriptionId: 'sub-concurrent',
+          productId: PRODUCT,
+          approvedLimit: '500.0000',
+          availableLimit: availableLimitRef.current,
+          status: 'active',
+          deletedAt: null,
+        }),
+      );
+      (world.prisma.bnplCreditLine.findUniqueOrThrow as jest.Mock).mockImplementation(
+        async () => ({
+          id: 'cl-concurrent',
+          availableLimit: availableLimitRef.current,
+          approvedLimit: '500.0000',
+        }),
+      );
+
+      // Hijack $transaction to simulate the atomic UPDATE WHERE.
+      (world.prisma.$transaction as jest.Mock).mockImplementation(
+        async (ops: any) => {
+          if (typeof ops === 'function') {
+            const txClient = {
+              bnplTransaction: world.prisma.bnplTransaction,
+              installmentSchedule: world.prisma.installmentSchedule,
+              bnplCreditLine: world.prisma.bnplCreditLine,
+              $executeRawUnsafe: jest.fn(async (_sql: string, amount: string) => {
+                // Atomic UPDATE … WHERE available_limit >= amount:
+                // return 1 (affected) if there's headroom, 0 otherwise.
+                const current = Number(availableLimitRef.current);
+                const requested = Number(amount);
+                if (current >= requested) {
+                  availableLimitRef.current = (current - requested).toFixed(4);
+                  return 1;
+                }
+                return 0;
+              }),
+            };
+            return ops(txClient);
+          }
+          return Array.isArray(ops) ? ops.map(() => ({})) : ops;
+        },
+      );
+
+      // Two purchases of 400 each — sum 800, but only 500 available.
+      const [result1, result2] = await Promise.allSettled([
+        world.originationService.initiate(TENANT, {
+          merchantCode: 'ACME',
+          customerId: CUSTOMER,
+          purchaseAmount: '400',
+          currency: 'GHS',
+          numberOfInstallments: 3,
+          purchaseRef: 'order-concurrent-1',
+          idempotencyKey: 'idem-concurrent-1',
+        }),
+        world.originationService.initiate(TENANT, {
+          merchantCode: 'ACME',
+          customerId: CUSTOMER,
+          purchaseAmount: '400',
+          currency: 'GHS',
+          numberOfInstallments: 3,
+          purchaseRef: 'order-concurrent-2',
+          idempotencyKey: 'idem-concurrent-2',
+        }),
+      ]);
+
+      const successes = [result1, result2].filter((r) => r.status === 'fulfilled');
+      const failures = [result1, result2].filter((r) => r.status === 'rejected');
+
+      // Exactly one succeeded, exactly one rolled back.
+      expect(successes).toHaveLength(1);
+      expect(failures).toHaveLength(1);
+
+      // The failure carries the structured error code from the
+      // FIX-7 path so a client can recognise the rejection.
+      const failure = failures[0] as PromiseRejectedResult;
+      const failureReason = failure.reason as { message?: string };
+      expect(failureReason.message).toMatch(/Concurrent purchase consumed credit headroom/);
+
+      // Credit line ends at 500 − 400 = 100.
+      expect(availableLimitRef.current).toBe('100.0000');
     });
   });
 });

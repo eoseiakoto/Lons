@@ -514,6 +514,9 @@ model PlatformUser {
   role             PlatformUserRole
   mfaSecret        String?          @map("mfa_secret") @db.VarChar(255)
   mfaEnabled       Boolean          @default(false) @map("mfa_enabled")
+  /// Sprint 15 (S15-6): JSON-encoded array of unused backup codes,
+  /// AES-256-GCM encrypted at rest. Each code is consumed once on use.
+  mfaBackupCodes   String?          @map("mfa_backup_codes") @db.Text
   lastLoginAt      DateTime?        @map("last_login_at") @db.Timestamptz(6)
   lockedUntil      DateTime?        @map("locked_until") @db.Timestamptz(6)
   failedLoginCount Int              @default(0) @map("failed_login_count")
@@ -545,6 +548,9 @@ model User {
   roleId           String     @map("role_id") @db.Uuid
   mfaSecret        String?    @map("mfa_secret") @db.VarChar(255)
   mfaEnabled       Boolean    @default(false) @map("mfa_enabled")
+  /// Sprint 15 (S15-6): JSON-encoded array of unused backup codes,
+  /// AES-256-GCM encrypted at rest. Each code is consumed once on use.
+  mfaBackupCodes   String?    @map("mfa_backup_codes") @db.Text
   lastLoginAt      DateTime?  @map("last_login_at") @db.Timestamptz(6)
   lockedUntil      DateTime?  @map("locked_until") @db.Timestamptz(6)
   failedLoginCount Int        @default(0) @map("failed_login_count")
@@ -664,6 +670,8 @@ model Customer {
   walletMappings   WalletAccountMapping[]
   bnplTransactions BnplTransaction[]
   invoices         Invoice[]
+  bnplCreditLines  BnplCreditLine[]
+  microLoanCreditLimitChanges MicroLoanCreditLimitChange[]
 
   @@unique([tenantId, externalId, externalSource])
   @@index([tenantId])
@@ -803,6 +811,8 @@ model Product {
   creditLines      CreditLine[]
   bnplTransactions BnplTransaction[]
   invoices         Invoice[]
+  bnplCreditLines  BnplCreditLine[]
+  agingBucketConfigs AgingBucketConfig[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -848,8 +858,10 @@ model Subscription {
   createdAt       DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt       DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
 
-  customer Customer @relation(fields: [customerId], references: [id])
-  product  Product  @relation(fields: [productId], references: [id])
+  customer        Customer        @relation(fields: [customerId], references: [id])
+  product         Product         @relation(fields: [productId], references: [id])
+  bnplCreditLine  BnplCreditLine?
+  creditLimitChanges MicroLoanCreditLimitChange[]
 
   @@unique([tenantId, customerId, productId])
   @@index([tenantId])
@@ -1003,6 +1015,12 @@ model RepaymentScheduleEntry {
   paidAmount        Decimal                 @default(0) @map("paid_amount") @db.Decimal(19, 4)
   status            RepaymentScheduleStatus @default(pending)
   paidAt            DateTime?               @map("paid_at") @db.Timestamptz(6)
+  /// Sprint 15 (S15-5): generic auto-deduction retry tracking. Mirrors
+  /// the BNPL InstallmentSchedule pattern for Micro-Loan / Overdraft
+  /// installments handled by AutoDeductionJob.
+  lastDeductionAttemptAt DateTime?           @map("last_deduction_attempt_at") @db.Timestamptz(6)
+  deductionAttemptCount  Int                 @default(0) @map("deduction_attempt_count")
+  nextDeductionRetryAt   DateTime?           @map("next_deduction_retry_at") @db.Timestamptz(6)
   createdAt         DateTime                @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt         DateTime                @updatedAt @map("updated_at") @db.Timestamptz(6)
 
@@ -1012,6 +1030,7 @@ model RepaymentScheduleEntry {
   @@index([tenantId])
   @@index([dueDate])
   @@index([status])
+  @@index([nextDeductionRetryAt])
   @@map("repayment_schedule")
 }
 
@@ -1061,6 +1080,12 @@ model Repayment {
   status             RepaymentStatus     @default(pending)
   failureReason      String?             @map("failure_reason") @db.Text
   receiptNumber      String?             @map("receipt_number") @db.VarChar(50)
+  /// Sprint 16 fixes (FIX-3): replay key set by the GraphQL caller.
+  /// A duplicate `processRepayment` mutation with the same key
+  /// returns the existing row instead of creating a second repayment.
+  /// Nullable so legacy / internal callers without a key still work;
+  /// the partial unique index (migration) keeps NULLs from colliding.
+  idempotencyKey     String?             @map("idempotency_key") @db.VarChar(255)
   completedAt        DateTime?           @map("completed_at") @db.Timestamptz(6)
   createdAt          DateTime            @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt          DateTime            @updatedAt @map("updated_at") @db.Timestamptz(6)
@@ -1068,6 +1093,7 @@ model Repayment {
   contract Contract @relation(fields: [contractId], references: [id])
   customer Customer @relation(fields: [customerId], references: [id])
 
+  @@unique([tenantId, idempotencyKey])
   @@index([tenantId])
   @@index([contractId])
   @@index([customerId])
@@ -1707,6 +1733,90 @@ model CreditLimitChange {
   @@map("credit_limit_changes")
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Sprint 16 (S16-6) — Micro-Loan credit limit audit trail.
+//
+// Append-only audit row written every time a micro-loan subscription's
+// credit limit changes. The existing `CreditLimitChange` model is for
+// overdraft credit lines (FK to CreditLine); micro-loan limits live on
+// `Subscription.creditLimit` and have their own audit table here.
+//
+// No `updated_at` or `deleted_at` — append-only by design.
+// ─────────────────────────────────────────────────────────────────────────
+model MicroLoanCreditLimitChange {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  customerId      String   @map("customer_id") @db.Uuid
+  subscriptionId  String   @map("subscription_id") @db.Uuid
+  previousLimit   Decimal  @map("previous_limit") @db.Decimal(19, 4)
+  newLimit        Decimal  @map("new_limit") @db.Decimal(19, 4)
+  /// `increase`, `decrease`, `suspension`, `restoration`.
+  changeType      String   @map("change_type") @db.VarChar(20)
+  reason          String   @db.Text
+  /// `system` or `manual:<userId>` — mirrors BnplCreditLineAdjustment.
+  triggeredBy     String   @map("triggered_by") @db.VarChar(80)
+  /// Sprint 16 fixes (FIX-1): the identifier that triggered this row
+  /// (e.g. a `repaymentId` for `reviewOnRepayment`, or a `contractId`
+  /// for `reduceOnDefault`). Acts as an idempotency key — duplicate
+  /// event deliveries that re-fire the same trigger are filtered out
+  /// by the calling service before they re-apply the percentage math.
+  /// Nullable for legacy rows + manual operator adjustments.
+  sourceId        String?  @map("source_id") @db.VarChar(255)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id])
+  customer     Customer     @relation(fields: [customerId], references: [id])
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([subscriptionId])
+  @@index([changeType])
+  @@index([createdAt])
+  /// FIX-1: scoped lookup for `(tenantId, sourceId)` — the dedupe
+  /// query in `MicroLoanCreditLimitService.reviewOnRepayment`.
+  @@index([tenantId, sourceId])
+  @@map("micro_loan_credit_limit_changes")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Sprint 16 (S16-11) — Configurable aging bucket thresholds + actions.
+//
+// Previously hardcoded as `DEFAULT_BUCKETS` in
+// `services/process-engine/src/aging/aging.service.ts`. Now stored per
+// tenant (optionally per product) so regulatory jurisdictions with
+// different DPD thresholds can override.
+//
+// `actions` is JSON — see S16-12 for the action-matrix schema.
+// ─────────────────────────────────────────────────────────────────────────
+model AgingBucketConfig {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  /// NULL = tenant-wide default. Product-specific config takes precedence.
+  productId       String?  @map("product_id") @db.Uuid
+  /// e.g., `current`, `watch`, `substandard`, `doubtful`, `default_61_90`, `loss`.
+  bucketName      String   @map("bucket_name") @db.VarChar(50)
+  daysMin         Int      @map("days_min")
+  daysMax         Int      @map("days_max")
+  /// Maps to `ContractStatus` enum (stringly so we can evolve without
+  /// migrating every config row).
+  contractStatus  String   @map("contract_status") @db.VarChar(30)
+  /// Maps to `ContractClassification` enum.
+  classification  String   @db.VarChar(30)
+  sortOrder       Int      @map("sort_order")
+  /// JSON array of `AgingAction` records (S16-12). See
+  /// `services/process-engine/src/aging/aging-action.service.ts` for shape.
+  actions         Json?
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@unique([tenantId, productId, bucketName])
+  @@index([tenantId])
+  @@index([productId])
+  @@map("aging_bucket_configs")
+}
+
 // ============================================================================
 // SPRINT 11 — BNPL (Track B)
 // ============================================================================
@@ -1934,6 +2044,124 @@ enum MerchantSettlementStatus {
   failed
 
   @@map("merchant_settlement_status")
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Sprint 15 (S15-1) — BNPL per-customer credit lines.
+//
+// The existing `Subscription.creditLimit` / `availableLimit` fields are
+// retained for backwards compatibility but lack review scheduling, status
+// lifecycle, and adjustment history. `BnplCreditLine` is the canonical
+// home for these going forward. One credit line per (customer, BNPL
+// subscription); enforced via the unique constraint.
+// ─────────────────────────────────────────────────────────────────────────
+
+enum BnplCreditLineStatus {
+  active
+  suspended
+  closed
+  /// Sprint 16 (S16-FIX-1): credit lines past `expiresAt` transition
+  /// to `expired` rather than `closed` so we preserve the historical
+  /// distinction between "operator/customer-initiated closure" and
+  /// "lapsed without explicit action."
+  expired
+
+  @@map("bnpl_credit_line_status")
+}
+
+model BnplCreditLine {
+  id              String               @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String               @map("tenant_id") @db.Uuid
+  customerId      String               @map("customer_id") @db.Uuid
+  /// `@unique` enables the one-to-one Subscription ↔ BnplCreditLine
+  /// relation. Composite `@@unique([tenantId, customerId, subscriptionId])`
+  /// below also enforces tenant scoping at the DB level.
+  subscriptionId  String               @unique @map("subscription_id") @db.Uuid
+  productId       String               @map("product_id") @db.Uuid
+  /// Maximum credit extended to the customer on this subscription.
+  approvedLimit   Decimal              @map("approved_limit") @db.Decimal(19, 4)
+  /// Remaining headroom (decreases on purchase, increases on principal
+  /// repayment). Capped at `approvedLimit` — never exceeds.
+  availableLimit  Decimal              @map("available_limit") @db.Decimal(19, 4)
+  currency        String               @db.VarChar(3)
+  status          BnplCreditLineStatus @default(active)
+  /// Sprint 16 (S16-FIX-1): when the line first transitioned to `active`.
+  /// Set ONLY on first activation — re-activation after suspension does
+  /// NOT overwrite. Drives regulatory "credit granted on" reporting.
+  activatedAt     DateTime?            @map("activated_at") @db.Timestamptz(6)
+  /// Sprint 16 (S16-FIX-1): hard deadline after which the line cannot
+  /// be used. `BnplCreditLineAdjustmentService` checks this on every
+  /// evaluation and transitions the line to `expired` when passed.
+  expiresAt       DateTime?            @map("expires_at") @db.Timestamptz(6)
+  lastReviewedAt  DateTime?            @map("last_reviewed_at") @db.Timestamptz(6)
+  nextReviewAt    DateTime?            @map("next_review_at") @db.Timestamptz(6)
+  suspendedAt     DateTime?            @map("suspended_at") @db.Timestamptz(6)
+  suspendedReason String?              @map("suspended_reason") @db.Text
+  closedAt        DateTime?            @map("closed_at") @db.Timestamptz(6)
+  closedReason    String?              @map("closed_reason") @db.Text
+  metadata        Json?
+  createdAt       DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime             @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt       DateTime?            @map("deleted_at") @db.Timestamptz(6)
+
+  customer     Customer                  @relation(fields: [customerId], references: [id])
+  subscription Subscription              @relation(fields: [subscriptionId], references: [id])
+  product      Product                   @relation(fields: [productId], references: [id])
+  adjustments  BnplCreditLineAdjustment[]
+
+  @@unique([tenantId, customerId, subscriptionId])
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([subscriptionId])
+  /// FIX-15: every FK must have an index per CLAUDE.md — the `productId`
+  /// scalar was missing a backing index, so the BnplCreditLineAdjustmentService
+  /// trigger-evaluation queries that join on `product` had to seq-scan.
+  @@index([productId])
+  @@index([status])
+  @@index([nextReviewAt])
+  /// Sprint 16 (S16-FIX-1): partial-style index for the daily expiry sweep.
+  /// Prisma can't model `WHERE expires_at IS NOT NULL` partials; the SQL
+  /// migration creates the partial index in addition to this basic one.
+  @@index([expiresAt])
+  @@map("bnpl_credit_lines")
+}
+
+/// Append-only audit trail of every limit change. Created by the
+/// BnplCreditLineAdjustmentService on each adjustment + by manual operator
+/// actions. `triggeredBy` is the actor: `system`, `operator:<userId>`, or
+/// the AdjustmentTrigger enum value (purchase_history, scheduled_review, etc).
+model BnplCreditLineAdjustment {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId        String   @map("tenant_id") @db.Uuid
+  creditLineId    String   @map("credit_line_id") @db.Uuid
+  previousLimit   Decimal  @map("previous_limit") @db.Decimal(19, 4)
+  newLimit        Decimal  @map("new_limit") @db.Decimal(19, 4)
+  /// One of: `increase`, `decrease`, `reset`.
+  adjustmentType  String   @map("adjustment_type") @db.VarChar(50)
+  /// Free-form short code (e.g. `repayment_streak`, `late_payment_streak`,
+  /// `score_drop`, `manual_operator`). Matched against AdjustmentTrigger.
+  reasonCode      String   @map("reason_code") @db.VarChar(50)
+  reasonDetail    String?  @map("reason_detail") @db.Text
+  triggeredBy     String   @map("triggered_by") @db.VarChar(80)
+  /// FIX-3 (Sprint 15): per-CLAUDE.md every mutation accepts an
+  /// idempotencyKey. Duplicate manual adjustments with the same key
+  /// return the existing record instead of double-applying. Nullable so
+  /// system-triggered adjustments (which already cool down on
+  /// reviewFrequencyDays) don't require one.
+  idempotencyKey  String?  @map("idempotency_key") @db.VarChar(255)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  creditLine BnplCreditLine @relation(fields: [creditLineId], references: [id])
+
+  @@index([tenantId])
+  @@index([creditLineId])
+  /// FIX-3 + FIX-15: scoped to `idempotencyKey IS NOT NULL` via the
+  /// migration partial index (Prisma doesn't model that natively; the
+  /// composite unique here is correct for cross-tenant isolation, and
+  /// the per-row NULL behaviour falls out of Postgres's standard
+  /// "NULLs are distinct" semantics).
+  @@unique([tenantId, idempotencyKey])
+  @@map("bnpl_credit_line_adjustments")
 }
 
 // ─────────────────────────────────────────────────────────────────────────

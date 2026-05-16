@@ -33,6 +33,7 @@ describe('AuthService', () => {
     roleId: mockRoleId,
     mfaSecret: null,
     mfaEnabled: false,
+    mfaBackupCodes: null,
     lastLoginAt: null,
     lockedUntil: null,
     failedLoginCount: 0,
@@ -62,6 +63,7 @@ describe('AuthService', () => {
     role: PlatformUserRole.platform_admin,
     mfaSecret: null,
     mfaEnabled: false,
+    mfaBackupCodes: null,
     lastLoginAt: null,
     lockedUntil: null,
     failedLoginCount: 0,
@@ -129,6 +131,9 @@ describe('AuthService', () => {
 
       const result = await service.loginTenantUser(mockTenantId, email, password);
 
+      // S15-6: LoginResult is a union. mfaEnabled=false on the mock so we
+      // narrow to the full-token branch.
+      if (result.requiresMfa) throw new Error('Expected non-MFA login');
       expect(result.accessToken).toBeDefined();
       expect(result.refreshToken).toBeDefined();
       expect(result.user).toEqual({
@@ -237,6 +242,9 @@ describe('AuthService', () => {
 
       const result = await service.loginPlatformUser(email, password);
 
+      // S15-6 narrowing — mock has mfaEnabled=false so this is the
+      // non-MFA login branch.
+      if (result.requiresMfa) throw new Error('Expected non-MFA login');
       expect(result.accessToken).toBeDefined();
       expect(result.refreshToken).toBeDefined();
       expect(result.user.isPlatformAdmin).toBe(true);

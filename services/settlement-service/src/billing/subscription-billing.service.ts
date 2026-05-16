@@ -95,6 +95,25 @@ export class SubscriptionBillingService {
     this.logger.log(
       `Subscription invoice generation complete — generated=${generated}, skippedNoConfig=${skippedNoConfig}, failed=${failed}`,
     );
+
+    // Sprint 15 (S15-BILL-2) — surface tenants that lack a TenantBillingConfig
+    // as a platform alert. The seed migration backfills active tenants but
+    // tenants onboarded after the migration are caught by the same gap.
+    // Operators can dashboard this event and create configs out-of-band.
+    if (skippedNoConfig > 0) {
+      this.eventBus.emitAndBuild(
+        EventType.BILLING_CONFIG_MISSING,
+        'platform',
+        {
+          skippedCount: skippedNoConfig,
+          month: now.toISOString().slice(0, 7),
+        },
+      );
+      this.logger.warn(
+        `${skippedNoConfig} active tenants skipped — no TenantBillingConfig.`,
+      );
+    }
+
     return { generated, skippedNoConfig, failed };
   }
 

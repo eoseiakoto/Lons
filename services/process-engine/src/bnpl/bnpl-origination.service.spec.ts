@@ -41,12 +41,34 @@ function makeMocks(opts: {
   customer?: any;
   product?: any;
   existingDefault?: any;
+  subscription?: any;
+  creditLine?: any;
 } = {}) {
   const installmentCreateMany = jest.fn();
   const txCreate = jest.fn(async (args: any) => ({
     id: TX_ID,
     ...args.data,
   }));
+  // Sprint 15 (S15-9): origination now requires an active Subscription
+  // and BnplCreditLine. Defaults satisfy the gate with $1000 headroom.
+  const defaultSubscription = opts.subscription ?? {
+    id: '99999999-9999-9999-9999-999999999999',
+    tenantId: TENANT,
+    customerId: CUSTOMER,
+    productId: PRODUCT,
+    status: 'active',
+  };
+  const defaultCreditLine = opts.creditLine ?? {
+    id: 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+    tenantId: TENANT,
+    customerId: CUSTOMER,
+    subscriptionId: defaultSubscription?.id,
+    productId: PRODUCT,
+    approvedLimit: '1000.0000',
+    availableLimit: '1000.0000',
+    status: 'active',
+    deletedAt: null,
+  };
   const prisma = {
     bnplTransaction: {
       // First findFirst call (idempotency) returns existingByIdem;
@@ -67,6 +89,13 @@ function makeMocks(opts: {
     product: {
       findFirst: jest.fn().mockResolvedValue(opts.product ?? null),
     },
+    subscription: {
+      findFirst: jest.fn().mockResolvedValue(defaultSubscription),
+    },
+    bnplCreditLine: {
+      findFirst: jest.fn().mockResolvedValue(defaultCreditLine),
+      findUniqueOrThrow: jest.fn().mockResolvedValue(defaultCreditLine),
+    },
     installmentSchedule: {
       createMany: installmentCreateMany,
     },
@@ -75,6 +104,12 @@ function makeMocks(opts: {
       fn({
         bnplTransaction: { create: txCreate },
         installmentSchedule: { createMany: installmentCreateMany },
+        bnplCreditLine: {
+          findUniqueOrThrow: jest.fn().mockResolvedValue(defaultCreditLine),
+          update: jest.fn(),
+        },
+        // FIX-7: atomic UPDATE WHERE returns affected row count.
+        $executeRawUnsafe: jest.fn().mockResolvedValue(1),
       }),
     ),
   };

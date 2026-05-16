@@ -237,4 +237,23 @@ export enum EventType {
   QUOTA_EXCEEDED = 'usage.quota.exceeded',
   PLAN_UPGRADE_REQUESTED = 'plan.upgrade.requested',
   PLAN_TIER_CHANGED = 'plan.tier.changed',
+
+  // ── Sprint 15 — BNPL credit lines + auto-deduction retry + billing ──
+  // BNPL credit limit lifecycle (S15-1, S15-2, S15-3)
+  BNPL_CREDIT_LIMIT_ADJUSTED = 'bnpl.credit_limit.adjusted',
+  BNPL_CREDIT_LIMIT_RESTORED = 'bnpl.credit_limit.restored',
+  BNPL_CREDIT_LINE_CREATED = 'bnpl.credit_line.created',
+  BNPL_CREDIT_LINE_STATUS_CHANGED = 'bnpl.credit_line.status_changed',
+
+  // Auto-deduction retry (S15-5)
+  DEDUCTION_FAILED_PERMANENTLY = 'deduction.failed_permanently',
+
+  // Billing config alert (S15-BILL-2)
+  BILLING_CONFIG_MISSING = 'billing.config.missing',
+
+  // ── Sprint 16 — Micro-Loan + repayment + aging + S16-FIX-1 ─────────
+  MICRO_LOAN_CREDIT_LIMIT_REVIEWED = 'micro_loan.credit_limit.reviewed',
+  MICRO_LOAN_CREDIT_LIMIT_REDUCED = 'micro_loan.credit_limit.reduced',
+  // S16-FIX-1 — BnplCreditLine expiry sweep transition.
+  BNPL_CREDIT_LINE_EXPIRED = 'bnpl.credit_line.expired',
 }

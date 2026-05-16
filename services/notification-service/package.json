@@ -13,6 +13,7 @@
   "dependencies": {
     "@lons/common": "workspace:*",
     "@lons/database": "workspace:*",
+    "@lons/entity-service": "workspace:*",
     "@lons/event-contracts": "workspace:*",
     "@lons/shared-types": "workspace:*",
     "@nestjs/bullmq": "^10.2.3",

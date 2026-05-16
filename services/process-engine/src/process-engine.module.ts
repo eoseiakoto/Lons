@@ -19,6 +19,7 @@ import { CoolingOffModule } from './cooling-off/cooling-off.module';
 import { ExposureModule } from './exposure/exposure.module';
 import { BnplModule } from './bnpl/bnpl.module';
 import { ProcessEngineFactoringModule } from './factoring/factoring.module';
+import { MicroLoanModule } from './micro-loan/micro-loan.module';
 
 @Module({
   imports: [
@@ -42,6 +43,8 @@ import { ProcessEngineFactoringModule } from './factoring/factoring.module';
     ExposureModule,
     BnplModule,
     ProcessEngineFactoringModule,
+    // Sprint 16 (Track A) — micro-loan-specific services + listener.
+    MicroLoanModule,
   ],
   exports: [
     LoanRequestModule,
@@ -61,6 +64,7 @@ import { ProcessEngineFactoringModule } from './factoring/factoring.module';
     ExposureModule,
     BnplModule,
     ProcessEngineFactoringModule,
+    MicroLoanModule,
   ],
 })
 export class ProcessEngineModule {}

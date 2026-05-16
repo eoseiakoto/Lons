@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { PrismaService } from '@lons/database';
+import { AuditService } from '@lons/entity-service';
 import { WebhookSigner } from './webhook-signer';
 
 @Injectable()
@@ -16,6 +17,10 @@ export class WebhookDeliveryService {
     private signer: WebhookSigner,
     private readonly eventEmitter: EventEmitter2,
     @InjectQueue('webhook-delivery') private readonly webhookQueue: Queue,
+    // S16-FIX-6: outbound webhook delivery audit. Optional so existing
+    // tests that wire the service without AuditService keep working;
+    // production wiring (notification-service module) provides it.
+    @Optional() private readonly auditService?: AuditService,
   ) {}
 
   async fanOutEvent(
@@ -104,7 +109,15 @@ export class WebhookDeliveryService {
           },
         });
         this.logger.debug(`Webhook delivered: log=${deliveryLogId}`);
+        await this.auditDeliveryAttempt(log, endpoint, {
+          httpStatus: response.status,
+          success: true,
+        });
       } else {
+        await this.auditDeliveryAttempt(log, endpoint, {
+          httpStatus: response.status,
+          success: false,
+        });
         await this.handleFailure(
           deliveryLogId,
           log.retryCount,
@@ -113,6 +126,11 @@ export class WebhookDeliveryService {
         );
       }
     } catch (error: any) {
+      await this.auditDeliveryAttempt(log, endpoint, {
+        httpStatus: null,
+        success: false,
+        errorMessage: error?.message ?? 'unknown',
+      });
       await this.handleFailure(
         deliveryLogId,
         log.retryCount,
@@ -120,6 +138,75 @@ export class WebhookDeliveryService {
         error.message?.slice(0, 500) ?? 'Unknown error',
       );
     }
+  }
+
+  /**
+   * S16-FIX-6: write an audit-log entry per delivery attempt. Best-effort —
+   * AuditService.log() already swallows its own errors so the primary
+   * delivery flow is never blocked. `actorType: 'system'` because this
+   * runs from the cron/queue, not a user request.
+   */
+  private async auditDeliveryAttempt(
+    log: {
+      id: string;
+      retryCount: number;
+      event: string;
+      payload: { tenantId?: string; data?: { correlationId?: string } } & Record<
+        string,
+        unknown
+      >;
+      webhookEndpointId: string;
+    },
+    endpoint: { url: string },
+    result: {
+      httpStatus: number | null;
+      success: boolean;
+      errorMessage?: string;
+    },
+  ): Promise<void> {
+    if (!this.auditService) return;
+    const tenantId =
+      log.payload?.tenantId ??
+      // Fall back to the endpoint's tenant if the payload was malformed.
+      (await this.resolveEndpointTenant(log.webhookEndpointId));
+    if (!tenantId) return;
+    const correlationId = log.payload?.data?.correlationId;
+    try {
+      await this.auditService.log({
+        tenantId,
+        actorType: 'system',
+        action: 'WEBHOOK_DELIVERY_ATTEMPTED',
+        resourceType: 'WebhookEndpoint',
+        resourceId: log.webhookEndpointId,
+        correlationId,
+        metadata: {
+          deliveryLogId: log.id,
+          url: endpoint.url,
+          httpStatus: result.httpStatus,
+          success: result.success,
+          attempt: log.retryCount + 1,
+          eventType: log.event,
+          errorMessage: result.errorMessage ?? null,
+        },
+      });
+    } catch (err) {
+      // AuditService swallows its own errors; this catch is defence
+      // in depth for any unexpected throw.
+      this.logger.debug(
+        `Webhook delivery audit failed (non-fatal): ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /** S16-FIX-6 helper — resolve tenant when not present in payload. */
+  private async resolveEndpointTenant(
+    endpointId: string,
+  ): Promise<string | undefined> {
+    const ep = await (this.prisma as any).webhookEndpoint.findUnique({
+      where: { id: endpointId },
+      select: { tenantId: true },
+    });
+    return ep?.tenantId;
   }
 
   private async handleFailure(
@@ -145,7 +232,12 @@ export class WebhookDeliveryService {
       // Emit event for SP operator notification
       const exhaustedLog = await (this.prisma as any).webhookDeliveryLog.findUnique({
         where: { id: logId },
-        select: { webhookEndpointId: true, event: true },
+        select: {
+          webhookEndpointId: true,
+          event: true,
+          payload: true,
+          webhookEndpoint: { select: { tenantId: true, url: true } },
+        },
       });
       this.eventEmitter.emit('webhook.delivery_exhausted', {
         endpointId: exhaustedLog?.webhookEndpointId ?? 'unknown',
@@ -154,6 +246,34 @@ export class WebhookDeliveryService {
         lastError: responseBody,
         retryCount: nextRetry,
       });
+
+      // S16-FIX-6: dedicated exhaustion audit entry — distinct action
+      // type from the per-attempt log so dashboards can count exhausted
+      // endpoints directly.
+      if (this.auditService && exhaustedLog?.webhookEndpoint?.tenantId) {
+        try {
+          await this.auditService.log({
+            tenantId: exhaustedLog.webhookEndpoint.tenantId,
+            actorType: 'system',
+            action: 'WEBHOOK_DELIVERY_EXHAUSTED',
+            resourceType: 'WebhookEndpoint',
+            resourceId: exhaustedLog.webhookEndpointId,
+            correlationId: (exhaustedLog.payload as any)?.data?.correlationId,
+            metadata: {
+              deliveryLogId: logId,
+              url: exhaustedLog.webhookEndpoint.url,
+              totalAttempts: nextRetry,
+              lastHttpStatus: httpStatus,
+              lastError: responseBody,
+              eventType: exhaustedLog.event,
+            },
+          });
+        } catch (err) {
+          this.logger.debug(
+            `Webhook exhaustion audit failed (non-fatal): ${(err as Error).message}`,
+          );
+        }
+      }
 
       return;
     }

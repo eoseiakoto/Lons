@@ -538,6 +538,31 @@ async function main() {
     });
     console.log(`  Tenant ID: ${tenant.id}`);
 
+    // S16-BA-14: bootstrap a TenantBillingConfig per demo tenant so the
+    // subscription-invoice cron doesn't silently skip them. Values mirror
+    // the FIX-15 migration backfill (starter/growth/enterprise tiers,
+    // 30-day terms, 25 bps per-disbursement fee). Idempotent via upsert.
+    const SUBSCRIPTION_USD: Record<string, string> = {
+      starter: '99.0000',
+      growth: '499.0000',
+      enterprise: '1999.0000',
+    };
+    await prisma.tenantBillingConfig.upsert({
+      where: { tenantId: tenant.id },
+      update: {},
+      create: {
+        tenantId: tenant.id,
+        planTier: cfg.planTier,
+        subscriptionAmountUsd:
+          SUBSCRIPTION_USD[cfg.planTier as string] ?? '99.0000',
+        billingCurrency: 'USD',
+        paymentTermsDays: 30,
+        contractStartDate: new Date(),
+        perDisbursementBps: '25.00',
+      },
+    });
+    console.log(`  TenantBillingConfig seeded for tenant ${cfg.slug}`);
+
     // ---------------------------------------------------------------------
     // 3. Create roles
     // ---------------------------------------------------------------------
@@ -888,6 +913,33 @@ async function main() {
         },
       });
       subscriptionRecords.push({ id: sub.id, customerId: cust.id, productId: prod.id });
+
+      // Sprint 15 (S15-1.5): Bootstrap a BnplCreditLine for every BNPL
+      // subscription. Defaults match the product max (sensible upper
+      // bound) and 90-day review cadence. Idempotent — re-running the
+      // seed won't duplicate.
+      if (prod.type === 'bnpl') {
+        const existingLine = await prisma.bnplCreditLine.findFirst({
+          where: { tenantId: tenant.id, subscriptionId: sub.id },
+        });
+        if (!existingLine) {
+          const ninetyDaysFromNow = new Date();
+          ninetyDaysFromNow.setUTCDate(ninetyDaysFromNow.getUTCDate() + 90);
+          await prisma.bnplCreditLine.create({
+            data: {
+              tenantId: tenant.id,
+              customerId: cust.id,
+              subscriptionId: sub.id,
+              productId: prod.id,
+              approvedLimit: creditLimit,
+              availableLimit: creditLimit,
+              currency: prod.currency ?? 'USD',
+              status: 'active',
+              nextReviewAt: ninetyDaysFromNow,
+            },
+          });
+        }
+      }
     }
     console.log(`  Created ${subscriptionRecords.length} subscriptions`);
 

@@ -2,8 +2,10 @@ import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 
 import {
   PrismaService,
+  BnplCreditLineStatus,
   BnplTransactionStatus,
   InstallmentStatus,
+  Prisma,
 } from '@lons/database';
 import {
   EventBusService,
@@ -24,6 +26,20 @@ import {
   BNPL_COLLECTION_ADAPTER,
   type BnplCollectionAdapter,
 } from './wallet-collection-adapter';
+
+/**
+ * S15-10 — BNPL late fee config. Pulled from `product.bnplConfig.lateFee`.
+ */
+interface IBnplLateFeeConfig {
+  /** Flat fee amount (Decimal string). Applied once when entering overdue. */
+  flatFee?: string;
+  /** Percentage of overdue installment amount (e.g. `0.05` for 5%). */
+  percentageFee?: number;
+  /** `once` (first overdue only) | `per_bucket` (every aging transition). */
+  applicationMode?: 'once' | 'per_bucket';
+  /** Max cumulative late fee as percent of original installment amount. */
+  maxFeePercent?: number;
+}
 
 export interface EarlySettlementResult {
   /** Decimal-as-string — what the customer paid (already net of discount). */
@@ -171,6 +187,18 @@ export class BnplInstallmentService {
         amount: String(installment.amount),
         paidAt: new Date().toISOString(),
       });
+
+      // S15-3: restore the principal portion to the customer's BNPL
+      // credit line so it can be re-used for future purchases. Best-effort:
+      // failure here is logged but does not break the payment.
+      await this.restoreCreditLimit(
+        tenantId,
+        installment.transaction.customerId,
+        installment.transaction.productId,
+        installment.id,
+        installment.transactionId,
+        String(installment.principalPortion),
+      );
     }
 
     // If this was the last unpaid installment, complete the transaction.
@@ -435,16 +463,39 @@ export class BnplInstallmentService {
         ),
       );
 
+      // S15-10: Late fee calculation. Pulled from
+      // `product.bnplConfig.lateFee` — if absent, the fee stays zero
+      // (backwards-compatible). Both flat and percentage modes are
+      // supported and can be combined. The cumulative fee per installment
+      // is bounded by `maxFeePercent` of the original installment amount.
+      //
+      // `applicationMode = 'once'`: charged only when the installment
+      // first becomes overdue (this is the transition we're handling now —
+      // `inst.daysPastDue === 0` BEFORE the update above).
+      // `applicationMode = 'per_bucket'`: charged at every overdue mark
+      // pass. Use sparingly; combined with a percentage fee it compounds.
+      const lateFeeConfig = this.resolveLateFeeConfig(inst.transaction.product);
+      const lateFeeAmount = this.computeLateFee(
+        inst,
+        lateFeeConfig,
+        /* firstOverdue */ inst.daysPastDue === 0,
+      );
+
+      const updateData: Prisma.InstallmentScheduleUpdateInput = {
+        status: InstallmentStatus.overdue,
+        daysPastDue,
+      };
+      if (isPositive(lateFeeAmount)) {
+        // Fold the late fee into the installment's feePortion + amount so
+        // the customer's owed total reflects what they owe.
+        updateData.feePortion = add(String(inst.feePortion), lateFeeAmount);
+        updateData.amount = add(String(inst.amount), lateFeeAmount);
+      }
       await this.prisma.installmentSchedule.update({
         where: { id: inst.id },
-        data: { status: InstallmentStatus.overdue, daysPastDue },
+        data: updateData,
       });
 
-      // TODO (Sprint 12 — Late Fees): Calculate and apply late fee here.
-      // Pattern: read product.bnplConfig.lateFee (flat or percentage),
-      // create a LedgerEntry, update inst.feePortion. The event below
-      // already carries `lateFeeAmount` so notification-service can tell
-      // the customer what they owe — keep that contract intact.
       this.eventBus.emitAndBuild(EventType.BNPL_INSTALLMENT_OVERDUE, tenantId, {
         transactionId: inst.transactionId,
         installmentId: inst.id,
@@ -453,8 +504,8 @@ export class BnplInstallmentService {
         amount: String(inst.amount),
         daysPastDue,
         // FIX 10: stable contract for the Sprint 12 late-fee work.
-        // Subscribers can rely on this field existing.
-        lateFeeAmount: '0',
+        // S15-10: now populated with the actual late fee applied this pass.
+        lateFeeAmount,
       });
       markedOverdue += 1;
       affectedTransactionIds.add(inst.transactionId);
@@ -1124,6 +1175,194 @@ export class BnplInstallmentService {
       reason,
       operatorId,
     });
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
+  // S15-10 — Late fee calculation
+  // ───────────────────────────────────────────────────────────────────────
+
+  /**
+   * Read late-fee config from `product.bnplConfig.lateFee`. Returns a
+   * normalised view (defaults filled in) or `null` if late fees are not
+   * configured at all on this product.
+   */
+  private resolveLateFeeConfig(
+    product: { bnplConfig: unknown } | null | undefined,
+  ): IBnplLateFeeConfig | null {
+    const config =
+      (product?.bnplConfig as Record<string, unknown> | null | undefined) ??
+      null;
+    const raw = config?.lateFee as IBnplLateFeeConfig | undefined;
+    if (!raw) return null;
+    return {
+      flatFee: typeof raw.flatFee === 'string' ? raw.flatFee : undefined,
+      percentageFee:
+        typeof raw.percentageFee === 'number' ? raw.percentageFee : undefined,
+      applicationMode: raw.applicationMode === 'per_bucket' ? 'per_bucket' : 'once',
+      maxFeePercent:
+        typeof raw.maxFeePercent === 'number' ? raw.maxFeePercent : undefined,
+    };
+  }
+
+  /**
+   * Compute the late fee to add on this overdue-mark pass. Decimal-string
+   * arithmetic throughout — never use float on money (CLAUDE.md). The
+   * `maxFeePercent` cap is enforced against the *original* installment
+   * amount, not the already-fee-padded amount, so a per-bucket cycle
+   * cannot bypass the cap by repeatedly inflating the base.
+   */
+  private computeLateFee(
+    inst: { amount: { toString(): string }; feePortion: { toString(): string } },
+    config: IBnplLateFeeConfig | null,
+    firstOverdue: boolean,
+  ): string {
+    if (!config) return '0';
+    if (config.applicationMode === 'once' && !firstOverdue) return '0';
+
+    let fee = '0';
+    // Subtract the already-applied fee from the base when computing the
+    // percentage portion so that "5% of installment" is always 5% of the
+    // original, not 5% of the inflated amount.
+    const originalAmount = subtract(String(inst.amount), String(inst.feePortion));
+
+    if (config.flatFee) {
+      fee = add(fee, config.flatFee);
+    }
+    if (config.percentageFee && config.percentageFee > 0) {
+      // Precision-preserving order (matches Sprint 14 pattern).
+      const pctFee = bankersRound(
+        divide(multiply(originalAmount, String(config.percentageFee)), '1'),
+        4,
+      );
+      fee = add(fee, pctFee);
+    }
+
+    // Apply cumulative cap.
+    if (config.maxFeePercent && config.maxFeePercent > 0) {
+      const cap = bankersRound(
+        divide(multiply(originalAmount, String(config.maxFeePercent)), '1'),
+        4,
+      );
+      const cumulative = add(String(inst.feePortion), fee);
+      if (compare(cumulative, cap) > 0) {
+        // Trim back to cap.
+        const trimmed = subtract(cap, String(inst.feePortion));
+        return compare(trimmed, '0') > 0 ? bankersRound(trimmed, 4) : '0';
+      }
+    }
+    return bankersRound(fee, 4);
+  }
+
+  // ───────────────────────────────────────────────────────────────────────
+  // S15-3 — Credit limit restoration on installment payment
+  // ───────────────────────────────────────────────────────────────────────
+
+  /**
+   * When an installment is paid in full, return the principal portion to
+   * the customer's `BnplCreditLine.availableLimit` so they can spend it
+   * again. Capped at `approvedLimit`. Best-effort — failure here is
+   * logged but does not roll back the underlying payment.
+   *
+   * Atomic via Prisma `$transaction`: we read the credit line and update
+   * it in one round-trip so concurrent restorations interleave correctly.
+   *
+   * The principal restoration is gated on the credit line being `active`.
+   * `suspended` and `closed` lines do NOT receive restored credit — the
+   * suspension implies the customer's headroom is intentionally frozen.
+   */
+  private async restoreCreditLimit(
+    tenantId: string,
+    customerId: string,
+    productId: string,
+    installmentId: string,
+    transactionId: string,
+    principalPortion: string,
+  ): Promise<void> {
+    // Defensive: principalPortion can be undefined/null in legacy test
+    // fixtures (and theoretically in malformed production data). Bail
+    // out early rather than letting `isPositive` throw on a non-numeric
+    // string.
+    if (principalPortion == null || principalPortion === 'undefined') {
+      return;
+    }
+    if (!isPositive(principalPortion)) {
+      // Nothing to restore (interest-only installment, e.g.).
+      return;
+    }
+
+    try {
+      // Subscription → credit line. The credit line is unique on
+      // subscriptionId, so a single lookup suffices.
+      const subscription = await this.prisma.subscription.findFirst({
+        where: {
+          tenantId,
+          customerId,
+          productId,
+          status: 'active',
+        },
+        select: { id: true },
+      });
+      if (!subscription) {
+        this.logger.debug(
+          `restoreCreditLimit: no active subscription for customer ${customerId.slice(0, 8)}… product ${productId.slice(0, 8)}…; skipping`,
+        );
+        return;
+      }
+
+      await this.prisma.$transaction(async (tx) => {
+        const creditLine = await tx.bnplCreditLine.findFirst({
+          where: {
+            tenantId,
+            subscriptionId: subscription.id,
+            status: BnplCreditLineStatus.active,
+            deletedAt: null,
+          },
+        });
+        if (!creditLine) {
+          this.logger.debug(
+            `restoreCreditLimit: no active credit line for subscription ${subscription.id.slice(0, 8)}…; skipping`,
+          );
+          return;
+        }
+
+        const currentAvailable = String(creditLine.availableLimit);
+        const approved = String(creditLine.approvedLimit);
+        const restored = add(currentAvailable, principalPortion);
+        const newAvailable =
+          compare(restored, approved) > 0 ? approved : restored;
+
+        if (compare(newAvailable, currentAvailable) === 0) {
+          // Already at the cap — nothing to credit.
+          return;
+        }
+
+        await tx.bnplCreditLine.update({
+          where: { id: creditLine.id },
+          data: { availableLimit: newAvailable },
+        });
+
+        this.eventBus.emitAndBuild(
+          EventType.BNPL_CREDIT_LIMIT_RESTORED,
+          tenantId,
+          {
+            creditLineId: creditLine.id,
+            customerId,
+            transactionId,
+            installmentId,
+            restoredAmount: subtract(newAvailable, currentAvailable),
+            newAvailableLimit: newAvailable,
+          },
+        );
+      });
+    } catch (err) {
+      // Best-effort: do not fail the payment if credit-line bookkeeping
+      // breaks. Log loudly so ops can investigate.
+      this.logger.error(
+        `restoreCreditLimit failed for installment ${installmentId}: ${
+          err instanceof Error ? err.message : err
+        }`,
+      );
+    }
   }
 }
 

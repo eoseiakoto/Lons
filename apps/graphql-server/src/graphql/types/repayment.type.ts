@@ -100,6 +100,23 @@ export class RepaymentScheduleEntryType {
   paidAt?: Date;
 }
 
+/**
+ * Sprint 16 (S16-9) — one row of the early-settlement breakdown.
+ * `type` is `debit` (customer owes) or `credit` (customer is refunded).
+ */
+@ObjectType()
+export class EarlySettlementBreakdownItem {
+  @Field()
+  label!: string;
+
+  /** Decimal-as-string. */
+  @Field()
+  amount!: string;
+
+  @Field()
+  type!: string;
+}
+
 @ObjectType()
 export class EarlySettlementQuote {
   @Field()
@@ -122,4 +139,21 @@ export class EarlySettlementQuote {
 
   @Field()
   currency!: string;
+
+  // ── Sprint 16 (S16-9) — extended fields ─────────────────────────────
+  /** Decimal-as-string. `0` when no rebate is configured. */
+  @Field({ nullable: true })
+  interestRebate?: string;
+
+  /** Decimal-as-string. `0` when no fee is configured. */
+  @Field({ nullable: true })
+  settlementFee?: string;
+
+  /** ISO 8601 — quote validity, end of current UTC day. */
+  @Field({ nullable: true })
+  validUntil?: string;
+
+  /** Itemised breakdown. Empty array on legacy quotes. */
+  @Field(() => [EarlySettlementBreakdownItem], { nullable: true })
+  breakdown?: EarlySettlementBreakdownItem[];
 }

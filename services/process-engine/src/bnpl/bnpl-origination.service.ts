@@ -3,6 +3,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import {
   PrismaService,
   Prisma,
+  BnplCreditLineStatus,
   BnplTransactionStatus,
   CustomerStatus,
   ProductType,
@@ -210,6 +211,59 @@ export class BnplOriginationService {
       );
     }
 
+    // 6b) S15-9: BNPL subscription + credit-line check.
+    //
+    // We require an active Subscription for (customer, product) and an
+    // active BnplCreditLine on it. The credit line's availableLimit gates
+    // the purchase. The actual deduction happens inside the $transaction
+    // below so it's atomic with the BnplTransaction.create — a concurrent
+    // purchase that would push availableLimit negative is impossible
+    // because the second update would fail the same-row lookup.
+    //
+    // Tenants that haven't onboarded credit lines yet (legacy seed data
+    // pre-S15) get a `BNPL_NO_CREDIT_LINE` error code that the API layer
+    // surfaces verbatim. Operators bootstrap missing lines via the
+    // `createBnplCreditLine` mutation.
+    const subscription = await this.prisma.subscription.findFirst({
+      where: {
+        tenantId,
+        customerId: input.customerId,
+        productId: product.id,
+        status: 'active',
+      },
+    });
+    if (!subscription) {
+      this.declineEvent(tenantId, input, merchant.id, 'no_active_subscription');
+      throw new ValidationError(
+        `Customer does not have an active BNPL subscription for this product`,
+        { code: 'BNPL_NO_ACTIVE_SUBSCRIPTION' },
+      );
+    }
+
+    const creditLine = await this.prisma.bnplCreditLine.findFirst({
+      where: {
+        tenantId,
+        subscriptionId: subscription.id,
+        status: BnplCreditLineStatus.active,
+        deletedAt: null,
+      },
+    });
+    if (!creditLine) {
+      this.declineEvent(tenantId, input, merchant.id, 'no_credit_line');
+      throw new ValidationError(
+        `Customer does not have an active credit line for this BNPL subscription`,
+        { code: 'BNPL_NO_CREDIT_LINE' },
+      );
+    }
+
+    if (compare(input.purchaseAmount, String(creditLine.availableLimit)) > 0) {
+      this.declineEvent(tenantId, input, merchant.id, 'insufficient_credit_limit');
+      throw new ValidationError(
+        `Purchase amount ${input.purchaseAmount} exceeds available credit limit ${creditLine.availableLimit}`,
+        { code: 'BNPL_INSUFFICIENT_CREDIT_LIMIT' },
+      );
+    }
+
     // 7) Schedule generation.
     // Sprint 12 G5: reads from dedicated `product.bnplConfig` (migration
     // 20260503000000_add_bnpl_config back-filled from overdraftConfig for
@@ -238,7 +292,15 @@ export class BnplOriginationService {
       asOf: new Date(),
     });
 
-    // 8) Create the transaction + installments atomically.
+    // 8) Create the transaction + installments + credit-line deduction
+    // atomically.
+    //
+    // FIX-7: The credit-line deduction uses a conditional `UPDATE … WHERE
+    // available_limit >= $amount` which Postgres serialises per-row at
+    // READ COMMITTED. Two concurrent purchases cannot both pass the
+    // check: the second sees the first's committed `available_limit` (or
+    // blocks on it) and fails its WHERE clause, rolling back the whole
+    // transaction. The previous read-then-update pattern was racy.
     const tx = await this.prisma.$transaction(async (txp) => {
       const created = await txp.bnplTransaction.create({
         data: {
@@ -272,6 +334,35 @@ export class BnplOriginationService {
           dueDate: i.dueDate,
         })),
       });
+
+      // FIX-7: atomic conditional UPDATE. `affectedRows = 0` means the
+      // available_limit dropped below the purchase amount between our
+      // pre-check and this statement (concurrent purchase won the race).
+      // Throwing rolls back the outer $transaction, releasing the just-
+      // created BnplTransaction + InstallmentSchedule rows.
+      const affected = await txp.$executeRawUnsafe(
+        `UPDATE bnpl_credit_lines
+         SET available_limit = available_limit - $1::decimal,
+             updated_at = NOW()
+         WHERE id = $2::uuid
+           AND tenant_id = $3::uuid
+           AND deleted_at IS NULL
+           AND available_limit >= $1::decimal`,
+        input.purchaseAmount,
+        creditLine.id,
+        tenantId,
+      );
+      if (affected === 0) {
+        // Read current state for the error message — fresh read inside
+        // the same tx, so it reflects the committed concurrent purchase.
+        const current = await txp.bnplCreditLine.findUniqueOrThrow({
+          where: { id: creditLine.id },
+        });
+        throw new ValidationError(
+          `Concurrent purchase consumed credit headroom — availableLimit now ${current.availableLimit}`,
+          { code: 'BNPL_INSUFFICIENT_CREDIT_LIMIT' },
+        );
+      }
 
       return created;
     });

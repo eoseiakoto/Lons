@@ -65,6 +65,9 @@ import { FactoringResolver } from './graphql/resolvers/factoring.resolver';
 import { PlanTierResolver } from './graphql/resolvers/plan-tier.resolver';
 import { InvoiceVerificationResolver } from './graphql/resolvers/invoice-verification.resolver';
 import { UsageResolver } from './graphql/resolvers/usage.resolver';
+import { BnplCreditLineResolver } from './graphql/resolvers/bnpl-credit-line.resolver';
+import { BillingResolver } from './graphql/resolvers/billing.resolver';
+import { MicroLoanResolver } from './graphql/resolvers/micro-loan.resolver';
 import { DebugLogService } from './graphql/services/debug-log.service';
 import { GraphqlExceptionFilter } from './filters/graphql-exception.filter';
 import { SubscriptionModule } from './subscriptions/subscription.module';
@@ -147,6 +150,13 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
     PlanTierResolver,
     InvoiceVerificationResolver,
     UsageResolver,
+    // Sprint 15 (S15-1, S15-2) — BNPL credit line GraphQL surface.
+    BnplCreditLineResolver,
+    // Sprint 15 (S15-BILL-1) — billing invoice GraphQL surface (closes
+    // BA findings F-S14-B2 + F-S14-B3 from the Sprint 14 review).
+    BillingResolver,
+    // Sprint 16 (S16-6) — micro-loan credit-limit audit query.
+    MicroLoanResolver,
     // Sprint 14 (S14-9) — bind the PLAN_TIER_CONFIG_SERVICE injection
     // token used by @RequiresPlan's guard. Keeps @lons/common free of
     // an entity-service dependency.

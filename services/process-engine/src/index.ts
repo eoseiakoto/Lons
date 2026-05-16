@@ -24,6 +24,7 @@ export * from './interest-accrual/interest-accrual.service';
 export * from './interest-accrual/interest-accrual.module';
 export * from './aging/aging.service';
 export * from './aging/aging.module';
+export * from './aging/aging-action.service';
 export * from './penalty/penalty.service';
 export * from './penalty/penalty.module';
 export * from './collections/collections.service';
@@ -71,3 +72,6 @@ export * from './factoring/risk-tables';
 export * from './factoring/debtor-payment-matching.service';
 // Sprint 14 (S14-IF-1) — invoice verification queue + actions.
 export * from './factoring/invoice-verification.service';
+
+// Sprint 16 (Track A) — Micro-loan product (micro-loan/).
+export * from './micro-loan';

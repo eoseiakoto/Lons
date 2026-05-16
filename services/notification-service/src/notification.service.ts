@@ -20,7 +20,13 @@ export class NotificationService {
     variables: Record<string, string>;
   }) {
     const channel = params.channel || 'sms';
-    const templates = NOTIFICATION_TEMPLATES[params.eventType];
+    // Sprint 16 fixes (FIX-4): callers can append a `:discriminator`
+    // suffix to `eventType` for per-row dedupe scoping (e.g. the
+    // PaymentReminderJob appends the installmentId). Strip it for the
+    // template lookup so the registry doesn't need to enumerate every
+    // discriminator — the unscoped key is the template identifier.
+    const templateKey = params.eventType.split(':')[0];
+    const templates = NOTIFICATION_TEMPLATES[templateKey];
     if (!templates || !templates[channel]) return null;
 
     const content = renderTemplate(templates[channel], params.variables);

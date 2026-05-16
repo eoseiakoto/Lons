@@ -34,3 +34,4 @@ export * from './platform-config/platform-config.module';
 export * from './merchant/merchant.service';
 export * from './merchant/merchant.module';
 export * from './plan-tier';
+export * from './bnpl-credit-line';

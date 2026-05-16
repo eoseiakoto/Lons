@@ -18,6 +18,7 @@ import type { Request } from 'express';
 
 import { Public } from '@lons/entity-service';
 import { PrismaService } from '@lons/database';
+import { AuditAction } from '@lons/common';
 import { DebtorPaymentMatchingService } from '@lons/process-engine';
 
 import { DebtorPaymentWebhookDto } from './debtor-payment-webhook.dto';
@@ -58,6 +59,7 @@ export class DebtorPaymentWebhookController {
 
   @Post(':provider/debtor-payment')
   @HttpCode(HttpStatus.ACCEPTED)
+  @AuditAction('debtor_payment_webhook.received', 'invoice')
   @ApiOperation({
     summary: 'Payment provider reports a debtor invoice payment',
   })

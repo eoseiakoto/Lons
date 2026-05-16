@@ -1,16 +1,29 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService, Prisma, LoanRequestStatus } from '@lons/database';
+import { Injectable, Optional } from '@nestjs/common';
+import {
+  PrismaService,
+  Prisma,
+  LoanRequestStatus,
+  ProductType,
+} from '@lons/database';
 import { EventBusService, compare } from '@lons/common';
 import { NotFoundError, ValidationError } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
 import { isValidTransition } from './loan-request-state-machine';
+import { MicroLoanOriginationService } from '../micro-loan/micro-loan-origination.service';
 
 @Injectable()
 export class LoanRequestService {
   constructor(
     private prisma: PrismaService,
     private eventBus: EventBusService,
+    /**
+     * Sprint 16 (S16-2) — optional injection so legacy tests that
+     * construct LoanRequestService without the micro-loan module still
+     * work. Production wiring always provides it via ProcessEngineModule.
+     */
+    @Optional()
+    private microLoanOrigination?: MicroLoanOriginationService,
   ) {}
 
   async create(tenantId: string, input: {
@@ -29,6 +42,24 @@ export class LoanRequestService {
         where: { idempotencyKey: input.idempotencyKey },
       });
       if (existing) return existing;
+    }
+
+    // S16-2: micro-loan-specific pre-validation gate. Runs BEFORE
+    // creating the LoanRequest row so the pipeline never enters an
+    // invalid state. The service throws ValidationError with a
+    // structured `code` that the GraphQL exception filter surfaces.
+    if (this.microLoanOrigination) {
+      const product = await this.prisma.product.findFirst({
+        where: { id: input.productId, tenantId },
+        select: { type: true },
+      });
+      if (product?.type === ProductType.micro_loan) {
+        await this.microLoanOrigination.validateLoanRequest(tenantId, {
+          customerId: input.customerId,
+          productId: input.productId,
+          requestedAmount: input.requestedAmount,
+        });
+      }
     }
 
     const loanRequest = await this.prisma.loanRequest.create({

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '@lons/database';
+import { AuditService } from '@lons/entity-service';
 import { ReconciliationService } from '@lons/reconciliation-service';
 
 @Injectable()
@@ -10,6 +11,10 @@ export class ReconciliationJob {
   constructor(
     private prisma: PrismaService,
     private reconciliationService: ReconciliationService,
+    // Sprint 15 (S15-FIX-2) — system-actor audit entries for daily
+    // reconciliation runs so operators can trace any disputed exception
+    // back to a specific job execution.
+    private auditService: AuditService,
   ) {}
 
   @Cron('0 2 * * *') // Daily at 2:00 AM
@@ -34,6 +39,22 @@ export class ReconciliationJob {
           () => this.reconciliationService.runDailyReconciliation(tenant.id, yesterday),
         );
         this.logger.log(`Tenant ${tenant.name}: ${result.totalTxns} txns, ${result.matchedTxns} matched, ${result.exceptionCount} exceptions`);
+        // S15-FIX-2: emit audit entry per tenant per run. Best-effort —
+        // the reconciliation itself has already committed.
+        await this.auditService.log({
+          tenantId: tenant.id,
+          actorType: 'system',
+          action: 'execute.reconciliation',
+          resourceType: 'tenant',
+          resourceId: tenant.id,
+          metadata: {
+            job: 'reconciliation',
+            runDate: yesterday.toISOString(),
+            totalTxns: result.totalTxns,
+            matchedTxns: result.matchedTxns,
+            exceptionCount: result.exceptionCount,
+          },
+        });
       } catch (error) {
         this.logger.error(`Reconciliation failed for tenant ${tenant.name}: ${error}`);
       }
