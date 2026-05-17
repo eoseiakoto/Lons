@@ -271,10 +271,6 @@ export class CustomerCreditSummaryService implements OnModuleInit {
       (sum, s) => add(sum, s.availableLimit?.toString() ?? '0'),
       '0',
     );
-    const totalSubscriptionUtilized = subtract(
-      totalSubscriptionCreditLimit,
-      totalSubscriptionAvailable,
-    );
 
     // Credit line rollup.
     const creditLineLimits = creditLines.reduce(

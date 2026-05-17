@@ -17,9 +17,6 @@ import {
 import { BnplOriginationService } from '../bnpl-origination.service';
 import { MerchantSettlementService } from '../merchant-settlement.service';
 
-const TENANT = '11111111-1111-1111-1111-111111111111';
-const CUSTOMER = '22222222-2222-2222-2222-222222222222';
-
 function makeAdapter(): jest.Mocked<IWalletDisbursementAdapter> {
   return {
     disburse: jest.fn().mockResolvedValue({ success: true, walletRef: 'MOCK-REF-1' }),

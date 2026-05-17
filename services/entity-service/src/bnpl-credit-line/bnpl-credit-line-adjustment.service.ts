@@ -9,7 +9,6 @@ import {
 } from '@lons/database';
 import {
   EventBusService,
-  NotFoundError,
   ValidationError,
   add,
   bankersRound,

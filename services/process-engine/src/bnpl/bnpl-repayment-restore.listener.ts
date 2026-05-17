@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 
 import { PrismaService, BnplCreditLineStatus, ProductType } from '@lons/database';
-import { EventBusService, compare } from '@lons/common';
+import { compare } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
 import { BnplCreditLineService } from '@lons/entity-service';
