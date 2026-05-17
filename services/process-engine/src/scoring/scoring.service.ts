@@ -1,5 +1,7 @@
 import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService, Prisma, ScoringModelType, ScoringContext, ContractStatus } from '@lons/database';
+import { EventBusService } from '@lons/common';
+import { EventType } from '@lons/event-contracts';
 
 import { calculateScore, ScoringInput } from './scorecard/scorecard-engine';
 import { DEFAULT_SCORECARD } from './scorecard/default-scorecard';
@@ -45,6 +47,9 @@ export class ScoringService {
     // still work; the production wiring always provides it.
     @Optional() private readonly scorecardConfigService?: ScorecardConfigService,
     @Optional() private readonly bureauExtractor?: CreditBureauFeatureExtractor,
+    // S17 review fix — emit SCORING_COMPLETED so the entity-service
+    // credit-summary cache invalidates on a fresh score.
+    @Optional() private readonly eventBus?: EventBusService,
   ) {}
 
   async scoreCustomer(
@@ -122,6 +127,14 @@ export class ScoringService {
         product: { connect: { id: productId } },
       },
     });
+
+    // S17 review fix — drop credit-summary cache so the next read
+    // reflects the new score/risk tier rather than the prior TTL window.
+    this.eventBus?.emitAndBuild(
+      EventType.SCORING_COMPLETED,
+      tenantId,
+      { customerId, productId, scoringResultId: scoringResult.id, riskTier: result.riskTier },
+    );
 
     return scoringResult;
   }

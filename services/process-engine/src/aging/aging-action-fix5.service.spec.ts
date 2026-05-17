@@ -113,7 +113,12 @@ describe('AgingActionService — S17-FIX-5 scoped SUSPEND_BORROWING', () => {
     // No error thrown even when count === 0.
   });
 
-  it('no productId passed + scope product → falls back to all scope (backward compat)', async () => {
+  it('no productId passed + scope product → refuses to suspend (S17 review fix)', async () => {
+    // S17 review fix — the original behaviour silently widened the
+    // blast radius to ALL the customer's subscriptions when scope was
+    // 'product' but no productId was passed. That defeats the safety
+    // intent of the product-scope default. Now the handler refuses and
+    // logs an error rather than over-suspending.
     const { service, updateMany } = makeService();
 
     await service.executeActions(
@@ -124,9 +129,6 @@ describe('AgingActionService — S17-FIX-5 scoped SUSPEND_BORROWING', () => {
       undefined, // no productId
     );
 
-    expect(updateMany).toHaveBeenCalledTimes(1);
-    const [call] = updateMany.mock.calls;
-    // Without productId, the filter cannot scope to product — falls back to all-customer.
-    expect(call[0].where.productId).toBeUndefined();
+    expect(updateMany).not.toHaveBeenCalled();
   });
 });

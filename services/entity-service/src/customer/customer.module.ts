@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { EventBusModule } from '@lons/common';
 
 import { PlanTierModule } from '../plan-tier/plan-tier.module';
 import { AuditModule } from '../audit/audit.module';
@@ -15,7 +16,9 @@ import { CustomerCreditSummaryService } from './customer-credit-summary.service'
 @Module({
   // Sprint 14 (S14-10): plan-tier quota enforcement on customer create.
   // S17-8: AuditModule for customer merge audit logging.
-  imports: [PlanTierModule, AuditModule],
+  // S17 review fix: EventBus so merge / financial-data-sync emit
+  // cache-invalidation events the profile/summary listeners consume.
+  imports: [PlanTierModule, AuditModule, EventBusModule],
   providers: [
     CustomerService,
     CustomerConsentService,

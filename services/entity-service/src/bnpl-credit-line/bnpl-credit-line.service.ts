@@ -311,30 +311,105 @@ export class BnplCreditLineService {
     tenantId: string,
     creditLineId: string,
     amount: string,
+    /**
+     * S17 review fix — when supplied, ensures the same key is only ever
+     * applied once. The caller (typically the BNPL repayment listener)
+     * passes `repayment:${repaymentId}` so a redelivered
+     * REPAYMENT_RECEIVED event becomes a no-op rather than a double
+     * credit. The dedup uses the existing `(tenantId, idempotencyKey)`
+     * unique constraint on bnpl_credit_line_adjustments.
+     */
+    idempotencyKey?: string,
   ): Promise<void> {
     if (compare(amount, '0') <= 0) {
       // Nothing to restore — guard against zero/negative principal amounts.
       return;
     }
 
-    await this.prisma.$executeRawUnsafe(
-      `UPDATE bnpl_credit_lines
-       SET available_limit = LEAST(
-         available_limit + $1::DECIMAL(19,4),
-         approved_limit
-       ),
-       updated_at = NOW()
-       WHERE id = $2::UUID
-         AND tenant_id = $3::UUID
-         AND status = 'active'`,
-      amount,
-      creditLineId,
-      tenantId,
-    );
+    // Unkeyed callers retain the original single-statement atomic path.
+    if (!idempotencyKey) {
+      await this.prisma.$executeRawUnsafe(
+        `UPDATE bnpl_credit_lines
+         SET available_limit = LEAST(
+           available_limit + $1::DECIMAL(19,4),
+           approved_limit
+         ),
+         updated_at = NOW()
+         WHERE id = $2::UUID
+           AND tenant_id = $3::UUID
+           AND status = 'active'`,
+        amount,
+        creditLineId,
+        tenantId,
+      );
 
-    this.logger.debug(
-      `restoreAvailableLimit: restored ${amount} to credit line ${creditLineId.slice(0, 8)}…`,
-    );
+      this.logger.debug(
+        `restoreAvailableLimit: restored ${amount} to credit line ${creditLineId.slice(0, 8)}…`,
+      );
+      return;
+    }
+
+    // Idempotent path — fetch limits, write the adjustment row (unique
+    // constraint catches duplicates), then apply the same LEAST cap.
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        const line = await tx.bnplCreditLine.findFirst({
+          where: { id: creditLineId, tenantId, status: 'active' },
+          select: { availableLimit: true, approvedLimit: true },
+        });
+        if (!line) return; // nothing to do; raw UPDATE would have been a no-op
+
+        const prev = line.availableLimit.toString();
+        const approved = line.approvedLimit.toString();
+        // newLimit = min(prev + amount, approved). Decimal-string math.
+        const candidate = (Number(prev) + Number(amount)).toFixed(4);
+        const next = compare(candidate, approved) > 0 ? approved : candidate;
+
+        await tx.bnplCreditLineAdjustment.create({
+          data: {
+            tenantId,
+            creditLineId,
+            previousLimit: prev,
+            newLimit: next,
+            adjustmentType: 'increase',
+            reasonCode: 'advance_payment',
+            reasonDetail: `Principal allocation restore (amount=${amount})`,
+            triggeredBy: 'system:repayment_received',
+            idempotencyKey,
+          },
+        });
+
+        await tx.$executeRawUnsafe(
+          `UPDATE bnpl_credit_lines
+           SET available_limit = LEAST(
+             available_limit + $1::DECIMAL(19,4),
+             approved_limit
+           ),
+           updated_at = NOW()
+           WHERE id = $2::UUID
+             AND tenant_id = $3::UUID
+             AND status = 'active'`,
+          amount,
+          creditLineId,
+          tenantId,
+        );
+      });
+
+      this.logger.debug(
+        `restoreAvailableLimit: restored ${amount} to credit line ${creditLineId.slice(0, 8)}… (key=${idempotencyKey})`,
+      );
+    } catch (err: unknown) {
+      // P2002 = unique constraint violation on (tenantId, idempotencyKey)
+      // → this repayment was already restored. Swallow silently.
+      const code = (err as { code?: string })?.code;
+      if (code === 'P2002') {
+        this.logger.debug(
+          `restoreAvailableLimit replay skipped: key=${idempotencyKey} credit_line=${creditLineId.slice(0, 8)}…`,
+        );
+        return;
+      }
+      throw err;
+    }
   }
 
   /** 90 days from now. Spec default per S15-1.5. */

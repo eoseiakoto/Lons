@@ -88,15 +88,19 @@ export class BnplOriginationService {
     private readonly eventBus: EventBusService,
     private readonly settlementService: MerchantSettlementService,
     /**
-     * S17-FIX-3: shared wallet disbursement adapter from `@lons/common/wallet`.
-     * Used for merchant wallet disbursement in the origination path. Optional so
-     * legacy tests that construct the service with 3 args still pass. The module
-     * registers `SharedMockWalletDisbursementAdapter` as default; Phase 5 swaps
-     * for the real MTN MoMo / M-Pesa adapter via the same token.
+     * S17-FIX-3 (DI-only, scoped down per S17 review): the shared
+     * `IWalletDisbursementAdapter` from `@lons/common/wallet` is wired in
+     * via `WALLET_DISBURSEMENT_ADAPTER` so Phase 5 can swap real adapters
+     * (MTN MoMo, M-Pesa) without touching this service. The actual
+     * disbursement *call* lives in `MerchantSettlementService.dispatch`,
+     * which currently uses its own `MerchantSettlementDispatchAdapter`.
+     * Migrating that call site to the shared interface is deferred —
+     * tracked for Sprint 18+ along with the unified wallet-adapter
+     * resolver. This field is intentionally unused today.
      */
     @Optional()
     @Inject(WALLET_DISBURSEMENT_ADAPTER)
-    private readonly walletDisbursementAdapter?: IWalletDisbursementAdapter,
+    private readonly _walletDisbursementAdapter?: IWalletDisbursementAdapter,
   ) {}
 
   async initiate(

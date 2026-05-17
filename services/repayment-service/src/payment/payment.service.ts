@@ -28,15 +28,20 @@ export class PaymentService {
      */
     @Optional() private scheduleRecalc?: ScheduleRecalculationService,
     /**
-     * S17-FIX-3: shared wallet collection adapter from `@lons/common/wallet`.
-     * Used for debit/collection operations (e.g. auto-debit on manual repayment).
-     * Optional so existing tests that don't need collection still pass.
-     * The module registers SharedMockWalletCollectionAdapter as default;
-     * Phase 5 swaps in the real MTN MoMo / M-Pesa adapter via the same token.
+     * S17-FIX-3 (DI-only, scoped down per S17 review): the shared
+     * `IWalletCollectionAdapter` from `@lons/common/wallet` is wired in
+     * via `WALLET_COLLECTION_ADAPTER` so Phase 5 can swap real adapters
+     * (MTN MoMo, M-Pesa) without touching this service. The actual
+     * collection *call* lives in the per-product auto-collect jobs
+     * (BNPL: `BnplAutoCollectJob`; overdraft: `OverdraftCollectionJob`)
+     * which still use their own collection adapters. Migrating those
+     * call sites to the shared interface is deferred — tracked for
+     * Sprint 18+ along with the unified wallet-adapter resolver.
+     * This field is intentionally unused today.
      */
     @Optional()
     @Inject(WALLET_COLLECTION_ADAPTER)
-    private walletCollectionAdapter?: IWalletCollectionAdapter,
+    private _walletCollectionAdapter?: IWalletCollectionAdapter,
   ) {}
 
   async processPayment(tenantId: string, input: {

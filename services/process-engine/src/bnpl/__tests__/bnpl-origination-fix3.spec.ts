@@ -46,7 +46,7 @@ describe('BnplOriginationService — S17-FIX-3 wallet adapter injection', () => 
     expect(service).toBeDefined();
     // Verify the adapter is stored — access via bracket notation to test
     // private field without TypeScript errors.
-    expect((service as any).walletDisbursementAdapter).toBe(adapter);
+    expect((service as any)._walletDisbursementAdapter).toBe(adapter);
   });
 
   it('WALLET_DISBURSEMENT_ADAPTER token is the canonical Symbol from @lons/common', () => {

@@ -202,6 +202,21 @@ export class AgingActionService {
     scope: SuspendBorrowingScope = 'product',
     productId?: string,
   ): Promise<void> {
+    // S17 review fix — if the action is product-scoped but the caller
+    // didn't pass productId, refuse to suspend at all. Silently widening
+    // to 'all' (the prior behaviour) freezes the customer's other
+    // products, the opposite of what the safer default promises. The
+    // aging.service caller does pass it, so this only fires for new
+    // callers that haven't been updated — and we'd rather they get a
+    // loud log line than a quiet over-suspension.
+    if (scope === 'product' && !productId) {
+      this.logger.error(
+        `suspendBorrowing skipped: scope='product' but no productId provided ` +
+          `(customerId=${customerId.slice(0, 8)}…). Refusing to widen to 'all'.`,
+      );
+      return;
+    }
+
     const where: {
       tenantId: string;
       customerId: string;
@@ -213,9 +228,8 @@ export class AgingActionService {
       status: SubscriptionStatus.active,
     };
 
-    // S17-FIX-5: scope to the triggering product unless 'all' is explicitly
-    // requested or productId is unavailable (legacy caller path).
-    if (scope === 'product' && productId) {
+    if (scope === 'product') {
+      // productId is guaranteed by the guard above.
       where.productId = productId;
     }
 

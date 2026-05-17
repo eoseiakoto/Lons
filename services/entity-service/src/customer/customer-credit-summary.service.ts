@@ -125,15 +125,21 @@ export class CustomerCreditSummaryService implements OnModuleInit {
     }
   }
 
+  // S17 review fix — event names aligned with packages/event-contracts
+  // canonical EventType values. The earlier listener listed several
+  // event names that no producer emits (`repayment.completed`,
+  // `subscription.created/updated`, `credit_line.created/updated`).
+  // Replaced with the equivalents we actually have, plus the three
+  // Sprint 17 cache-invalidation events (`customer.merged`,
+  // `scoring.completed`) that are emitted by the new wiring.
   @OnEvent('contract.created')
   @OnEvent('contract.state_changed')
   @OnEvent('repayment.received')
-  @OnEvent('repayment.completed')
   @OnEvent('scoring.completed')
-  @OnEvent('subscription.created')
-  @OnEvent('subscription.updated')
-  @OnEvent('credit_line.created')
-  @OnEvent('credit_line.updated')
+  @OnEvent('subscription.activated')
+  @OnEvent('subscription.deactivated')
+  @OnEvent('bnpl.credit_line.created')
+  @OnEvent('bnpl.credit_line.status_changed')
   @OnEvent('customer.merged')
   async handleInvalidationEvent(event: unknown): Promise<void> {
     const payload = this.extractCustomerContext(event);

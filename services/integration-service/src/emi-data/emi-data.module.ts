@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '@lons/database';
+import { EventBusModule } from '@lons/common';
 
 import { EMI_DATA_ADAPTER } from './emi-data-adapter.interface';
 import { MockEmiDataAdapter } from './mock-emi-data.adapter';
@@ -16,7 +17,7 @@ import { EmiIntegrationConfigService } from './emi-integration-config.service';
  * via `useClass` / `useFactory`.
  */
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, EventBusModule],
   providers: [
     { provide: EMI_DATA_ADAPTER, useClass: MockEmiDataAdapter },
     EmiDataService,

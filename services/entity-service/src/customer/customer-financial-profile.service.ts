@@ -144,10 +144,14 @@ export class CustomerFinancialProfileService implements OnModuleInit {
    * the listener tolerant — a malformed payload just logs and moves
    * on rather than crashing the event bus.
    */
+  // S17 review fix — event names aligned with packages/event-contracts
+  // canonical EventType values. `repayment.completed`, `customer.merged`,
+  // `customer.financial_data.synced` are emitted by sprint-17 producers;
+  // older events come from prior sprints. Anything not in the enum was
+  // dropped to keep this surface honest.
   @OnEvent('contract.created')
   @OnEvent('contract.state_changed')
   @OnEvent('repayment.received')
-  @OnEvent('repayment.completed')
   @OnEvent('customer.financial_data.synced')
   @OnEvent('customer.merged')
   async handleInvalidationEvent(event: unknown): Promise<void> {

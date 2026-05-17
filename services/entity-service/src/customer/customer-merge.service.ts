@@ -5,7 +5,9 @@ import {
   ValidationError,
   AuditActionType,
   AuditResourceType,
+  EventBusService,
 } from '@lons/common';
+import { EventType } from '@lons/event-contracts';
 
 import { AuditService } from '../audit/audit.service';
 
@@ -86,6 +88,10 @@ export class CustomerMergeService {
   constructor(
     private prisma: PrismaService,
     private auditService: AuditService,
+    // S17 review fix — emit CUSTOMER_MERGED so the financial-profile
+    // and credit-summary caches can drop stale entries on merge rather
+    // than waiting up to 15 minutes for TTL expiry.
+    private eventBus: EventBusService,
   ) {}
 
   async mergeCustomers(
@@ -209,6 +215,18 @@ export class CustomerMergeService {
     this.logger.log(
       `Merged customer ${sourceCustomerId} → ${targetCustomerId} ` +
         `(reparented: ${JSON.stringify(reparented)})`,
+    );
+
+    // S17 review fix — drop downstream caches.
+    this.eventBus.emitAndBuild(
+      EventType.CUSTOMER_MERGED,
+      tenantId,
+      {
+        sourceCustomerId,
+        targetCustomerId,
+        reparented,
+        mergedAt,
+      },
     );
 
     return result;

@@ -259,4 +259,10 @@ export enum EventType {
 
   // ── Sprint 17 FIX-1 — product config change triggers credit line re-eval
   PRODUCT_CONFIG_CHANGED = 'product.config_changed',
+
+  // ── Sprint 17 — cache-invalidation triggers for the customer financial
+  // profile / credit summary services.
+  CUSTOMER_MERGED = 'customer.merged',
+  CUSTOMER_FINANCIAL_DATA_SYNCED = 'customer.financial_data.synced',
+  SCORING_COMPLETED = 'scoring.completed',
 }

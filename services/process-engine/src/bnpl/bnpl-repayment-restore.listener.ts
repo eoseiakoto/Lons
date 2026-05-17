@@ -41,6 +41,7 @@ export class BnplRepaymentRestoreListener {
     const tenantId = event.tenantId;
     const contractId = event.data?.contractId;
     const allocatedPrincipal = event.data?.allocatedPrincipal;
+    const repaymentId = event.data?.repaymentId;
 
     if (!tenantId || !contractId) return;
 
@@ -83,10 +84,15 @@ export class BnplRepaymentRestoreListener {
       });
       if (!creditLine) return;
 
+      // S17 review fix — pass repaymentId as the idempotency key so a
+      // redelivered REPAYMENT_RECEIVED becomes a no-op rather than
+      // a double credit. Falls back to the unkeyed (still atomic, but
+      // not replay-safe) path when the producer didn't include it.
       await this.creditLineService.restoreAvailableLimit(
         tenantId,
         creditLine.id,
         allocatedPrincipal,
+        repaymentId ? `repayment:${repaymentId}` : undefined,
       );
 
       this.logger.debug(

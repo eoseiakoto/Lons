@@ -59,7 +59,7 @@ describe('PaymentService — S17-FIX-3 wallet collection adapter injection', () 
 
     const service = new PaymentService(prisma, eventBus, undefined, adapter);
     expect(service).toBeDefined();
-    expect((service as any).walletCollectionAdapter).toBe(adapter);
+    expect((service as any)._walletCollectionAdapter).toBe(adapter);
   });
 
   it('still works without the adapter (backward-compatible, optional param)', () => {
@@ -69,7 +69,7 @@ describe('PaymentService — S17-FIX-3 wallet collection adapter injection', () 
     // No adapter provided — must not throw.
     const service = new PaymentService(prisma, eventBus);
     expect(service).toBeDefined();
-    expect((service as any).walletCollectionAdapter).toBeUndefined();
+    expect((service as any)._walletCollectionAdapter).toBeUndefined();
   });
 
   it('WALLET_COLLECTION_ADAPTER token is the canonical shared Symbol', () => {

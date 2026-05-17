@@ -1,5 +1,7 @@
-import { Inject, Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { PrismaService, Prisma } from '@lons/database';
+import { EventBusService } from '@lons/common';
+import { EventType } from '@lons/event-contracts';
 
 import { CircuitBreaker } from '../resilience/circuit-breaker';
 import { RetryOptions, withRetry } from '../resilience/retry';
@@ -47,6 +49,11 @@ export class EmiDataService {
     private readonly prisma: PrismaService,
     private readonly cacheTtlMs: number = 60 * 60 * 1000, // 1 hour default
     private readonly retryOptions: RetryOptions = DEFAULT_RETRY,
+    // S17 review fix — emit CUSTOMER_FINANCIAL_DATA_SYNCED after each
+    // sync so the entity-service financial-profile cache invalidates.
+    // Optional so existing unit tests that instantiate EmiDataService
+    // directly continue to work without rewriting their providers list.
+    @Optional() private readonly eventBus?: EventBusService,
   ) {}
 
   /**
@@ -119,6 +126,13 @@ export class EmiDataService {
       `Synced EMI snapshot for tenant=${tenantId} wallet=${this.maskWalletId(
         walletId,
       )}`,
+    );
+
+    // S17 review fix — drop the entity-service financial-profile cache.
+    this.eventBus?.emitAndBuild(
+      EventType.CUSTOMER_FINANCIAL_DATA_SYNCED,
+      tenantId,
+      { customerId, source: 'emi' },
     );
 
     return snapshot;

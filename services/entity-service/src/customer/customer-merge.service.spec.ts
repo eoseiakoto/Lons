@@ -97,8 +97,9 @@ function makeService(opts: {
   } as any;
 
   const auditService = { log: jest.fn(async () => undefined) } as any;
-  const service = new CustomerMergeService(prisma, auditService);
-  return { service, prisma, tx, auditService, $transaction, auditFindFirst };
+  const eventBus = { emitAndBuild: jest.fn() } as any;
+  const service = new CustomerMergeService(prisma, auditService, eventBus);
+  return { service, prisma, tx, auditService, eventBus, $transaction, auditFindFirst };
 }
 
 describe('CustomerMergeService (S17-8)', () => {

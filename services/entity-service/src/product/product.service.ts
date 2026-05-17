@@ -1,6 +1,7 @@
 import { ForbiddenException, Injectable } from '@nestjs/common';
 import { PrismaService, Prisma } from '@lons/database';
-import { NotFoundError, ValidationError } from '@lons/common';
+import { NotFoundError, ValidationError, EventBusService, compare } from '@lons/common';
+import { EventType } from '@lons/event-contracts';
 import * as crypto from 'crypto';
 
 import { PlanTierConfigService } from '../plan-tier/plan-tier-config.service';
@@ -16,6 +17,9 @@ export class ProductService {
     // Sprint 14 (S14-10): plan tier gating at the boundary.
     private planTierConfigService: PlanTierConfigService,
     private quotaEnforcementService: QuotaEnforcementService,
+    // Sprint 17 (S17-FIX-1): emit PRODUCT_CONFIG_CHANGED so the BNPL
+    // credit-line listener can cap existing lines when maxAmount drops.
+    private eventBus: EventBusService,
   ) {}
 
   /**
@@ -309,11 +313,34 @@ export class ProductService {
       }
     }
 
-    return this.prisma.product.update({
+    const updated = await this.prisma.product.update({
       where: { id },
       data: updateData,
       include: { lender: true },
     });
+
+    // S17-FIX-1 — emit PRODUCT_CONFIG_CHANGED when maxAmount drops below
+    // the previous value. The BNPL credit-line listener caps any active
+    // line whose approvedLimit exceeds the new ceiling. We only emit on
+    // a *decrease* because increases never violate existing approvals.
+    if (
+      data.maxAmount !== undefined &&
+      product.maxAmount !== null &&
+      compare(updated.maxAmount?.toString() ?? '0', product.maxAmount.toString()) < 0
+    ) {
+      this.eventBus.emitAndBuild(
+        EventType.PRODUCT_CONFIG_CHANGED,
+        tenantId,
+        {
+          productId: id,
+          newMaxAmount: updated.maxAmount?.toString() ?? '0',
+          previousMaxAmount: product.maxAmount.toString(),
+          changeDescription: `maxAmount reduced from ${product.maxAmount.toString()} to ${updated.maxAmount?.toString() ?? '0'}`,
+        },
+      );
+    }
+
+    return updated;
   }
 
   async activate(tenantId: string, id: string) {
