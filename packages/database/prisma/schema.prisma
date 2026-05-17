@@ -672,6 +672,7 @@ model Customer {
   invoices         Invoice[]
   bnplCreditLines  BnplCreditLine[]
   microLoanCreditLimitChanges MicroLoanCreditLimitChange[]
+  financialData    CustomerFinancialData[]
 
   @@unique([tenantId, externalId, externalSource])
   @@index([tenantId])
@@ -813,6 +814,7 @@ model Product {
   invoices         Invoice[]
   bnplCreditLines  BnplCreditLine[]
   agingBucketConfigs AgingBucketConfig[]
+  scorecardConfigs ScorecardConfig[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -2437,4 +2439,110 @@ model DisbursementFee {
   @@index([billingInvoiceId])
   @@index([tenantId, productType])
   @@map("disbursement_fees")
+}
+
+// ============================================================================
+// Sprint 17 — Scoring/EMI Integration + Entity Management
+// ============================================================================
+
+/// S17-1 / FR-DI-001.1 — Persisted snapshot of EMI-pulled or bureau-pulled
+/// financial data per customer. Decouples the scoring pipeline from live
+/// EMI availability; scoring reads the latest snapshot regardless of
+/// upstream uptime.
+model CustomerFinancialData {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String   @map("tenant_id") @db.Uuid
+  customerId           String   @map("customer_id") @db.Uuid
+  source               String   @db.VarChar(50)
+  sourceProvider       String?  @map("source_provider") @db.VarChar(100)
+  walletId             String?  @map("wallet_id") @db.VarChar(255)
+  currentBalance       Decimal? @map("current_balance") @db.Decimal(19, 4)
+  averageBalance30d    Decimal? @map("average_balance_30d") @db.Decimal(19, 4)
+  averageBalance90d    Decimal? @map("average_balance_90d") @db.Decimal(19, 4)
+  transactionCount30d  Int?     @map("transaction_count_30d")
+  transactionCount90d  Int?     @map("transaction_count_90d")
+  incomeConsistency    Int?     @map("income_consistency")
+  incomeExpenseRatio   Decimal? @map("income_expense_ratio") @db.Decimal(7, 4)
+  currency             String   @db.VarChar(3)
+  rawData              Json?    @map("raw_data")
+  fetchedAt            DateTime @map("fetched_at") @db.Timestamptz(6)
+  createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  customer Customer @relation(fields: [customerId], references: [id])
+
+  @@index([tenantId])
+  @@index([customerId])
+  @@index([customerId, source, fetchedAt])
+  @@map("customer_financial_data")
+}
+
+/// S17-2 / FR-DI-001.2 — Tenant-scoped configuration for EMI integrations.
+/// Credentials live encrypted (AES-256-GCM JSON blob); base URL, field
+/// mappings, retry policy and sync frequency are plain.
+model EmiIntegrationConfig {
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId         String    @map("tenant_id") @db.Uuid
+  name             String    @db.VarChar(255)
+  provider         String    @db.VarChar(100)
+  credentials      String?   @db.Text
+  baseUrl          String?   @map("base_url") @db.VarChar(500)
+  fieldMappings    Json?     @map("field_mappings")
+  syncFrequencyMin Int       @default(360) @map("sync_frequency_min")
+  retryPolicy      Json?     @map("retry_policy")
+  isActive         Boolean   @default(true) @map("is_active")
+  lastSyncAt       DateTime? @map("last_sync_at") @db.Timestamptz(6)
+  lastSyncError    String?   @map("last_sync_error") @db.Text
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt        DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+  @@index([isActive])
+  @@map("emi_integration_configs")
+}
+
+/// S17-4 / FR-CS-001.1 — Persisted scorecard definitions. Resolution
+/// chain at scoring time: product-specific active -> tenant-default
+/// active (productId null) -> hardcoded DEFAULT_SCORECARD fallback.
+model ScorecardConfig {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  productId     String?   @map("product_id") @db.Uuid
+  name          String    @db.VarChar(255)
+  version       String    @db.VarChar(50)
+  config        Json
+  scoreRangeMin Decimal   @default(0) @map("score_range_min") @db.Decimal(7, 2)
+  scoreRangeMax Decimal   @default(1000) @map("score_range_max") @db.Decimal(7, 2)
+  isActive      Boolean   @default(false) @map("is_active")
+  createdBy     String?   @map("created_by") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt     DateTime? @map("deleted_at") @db.Timestamptz(6)
+
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@unique([tenantId, productId, version])
+  @@index([tenantId])
+  @@index([productId])
+  @@index([isActive])
+  @@map("scorecard_configs")
+}
+
+/// S17-8 / FR-CM-001.3 — Configurable customer de-duplication rules.
+/// Tenants seed three defaults (national_id, phone+dob, email+name) at
+/// onboarding; further rules can be added per-tenant.
+model CustomerMatchingRule {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String   @map("tenant_id") @db.Uuid
+  name        String   @db.VarChar(255)
+  matchFields Json     @map("match_fields")
+  priority    Int      @default(0)
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@index([tenantId])
+  @@index([tenantId, isActive, priority])
+  @@map("customer_matching_rules")
 }
