@@ -45,7 +45,13 @@ export class CustomerController {
   @ApiHeader({ name: 'X-Idempotency-Key', required: false, description: 'Idempotency key for duplicate prevention' })
   async create(@Req() req: any, @Body() body: CreateCustomerDto): Promise<any> {
     const tenantId = req.tenantId;
-    return this.customerService.create(tenantId, {
+    // S17-8: create() now returns { customer, isDuplicate, matchedRule }
+    // to surface dedup outcomes. Flatten the customer fields back into
+    // the REST response shape and propagate the dedup metadata as
+    // top-level booleans so clients can distinguish "I created" from
+    // "I matched an existing record". Existing integrations that only
+    // read the customer fields keep working — the new keys are additive.
+    const result = await this.customerService.create(tenantId, {
       externalId: body.externalId,
       fullName: `${body.firstName} ${body.lastName}`,
       phonePrimary: body.phone,
@@ -54,6 +60,11 @@ export class CustomerController {
       nationalId: body.nationalId,
       nationalIdType: body.idType,
     });
+    return {
+      ...result.customer,
+      isDuplicate: result.isDuplicate,
+      matchedRule: result.matchedRule,
+    };
   }
 
   @Get(':id')

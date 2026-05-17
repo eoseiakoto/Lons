@@ -29,7 +29,16 @@ function makeService() {
   const quotaEnforcementService = {
     checkEntityLimit: jest.fn(async () => undefined),
   } as any;
-  const service = new CustomerService(prisma, quotaEnforcementService);
+  // S17-8: CustomerDedupService stub — these search-routing tests don't
+  // exercise dedup; the create() path has its own dedicated spec.
+  const dedupService = {
+    findDuplicate: jest.fn(async () => null),
+  } as any;
+  const service = new CustomerService(
+    prisma,
+    quotaEnforcementService,
+    dedupService,
+  );
   return { service, prisma, findMany, count };
 }
 

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService, Prisma } from '@lons/database';
 import {
   NotFoundError,
@@ -7,13 +7,30 @@ import {
 } from '@lons/common';
 
 import { QuotaEnforcementService } from '../plan-tier/quota-enforcement.service';
+import { CustomerDedupService } from './customer-dedup.service';
+
+/**
+ * S17-8 / FR-CM-001.3 — new shape for `create()`. The previous return
+ * type was the bare `Customer`; we now return a tagged result so callers
+ * can tell whether the customer was created or matched against an
+ * existing record under a dedup rule.
+ */
+export interface CustomerCreateResult {
+  customer: Awaited<ReturnType<PrismaService['customer']['create']>>;
+  isDuplicate: boolean;
+  matchedRule: string | null;
+}
 
 @Injectable()
 export class CustomerService {
+  private readonly logger = new Logger(CustomerService.name);
+
   constructor(
     private prisma: PrismaService,
     // Sprint 14 (S14-10): plan-tier customer-quota enforcement.
     private quotaEnforcementService: QuotaEnforcementService,
+    // S17-8 (FR-CM-001.3): configurable de-duplication.
+    private dedupService: CustomerDedupService,
   ) {}
 
   async create(tenantId: string, data: {
@@ -32,23 +49,42 @@ export class CustomerService {
     city?: string;
     kycLevel?: 'none' | 'tier_1' | 'tier_2' | 'tier_3';
     metadata?: Prisma.InputJsonValue;
-  }) {
+  }): Promise<CustomerCreateResult> {
     // Sprint 14 (S14-10): customer-count quota gate before any DB write.
     // Throws ForbiddenException({ code: 'QUOTA_EXCEEDED', ... }) when
-    // the tenant is at its plan's customer cap.
+    // the tenant is at its plan's customer cap. We still run the gate
+    // BEFORE dedup — a duplicate match is cheap to compute and the
+    // quota check is a single Redis call, but the call order matters for
+    // tenants near the cap (they get a clear quota error rather than
+    // sometimes-success / sometimes-quota depending on duplicate state).
     await this.quotaEnforcementService.checkEntityLimit(tenantId, 'customers');
 
-    // Check for duplicates by externalId
-    const existing = await this.prisma.customer.findFirst({
-      where: { tenantId, externalId: data.externalId, externalSource: data.externalSource, deletedAt: null },
-    });
-    if (existing) {
-      throw new ValidationError('Customer with this external ID already exists', {
-        externalId: data.externalId,
-      });
+    // S17-8 (FR-CM-001.3): configurable matching rules. The dedup
+    // service evaluates rules in priority order and falls back to the
+    // legacy externalId check when no rules are configured for the
+    // tenant. A match here is NOT an error — it's an idempotent re-sync
+    // of the upstream customer record. The caller decides what to do
+    // with the returned `isDuplicate` flag (most just return the
+    // existing customer; a write-through flow may merge new fields).
+    const duplicateResult = await this.dedupService.findDuplicate(
+      tenantId,
+      data,
+    );
+    if (duplicateResult && duplicateResult.match) {
+      this.logger.log(
+        `Duplicate customer found via rule "${duplicateResult.matchedRule}" — ` +
+          `returning existing id=${duplicateResult.match.id}`,
+      );
+      return {
+        customer: duplicateResult.match as Awaited<
+          ReturnType<PrismaService['customer']['create']>
+        >,
+        isDuplicate: true,
+        matchedRule: duplicateResult.matchedRule,
+      };
     }
 
-    return this.prisma.customer.create({
+    const customer = await this.prisma.customer.create({
       data: {
         tenantId,
         externalId: data.externalId,
@@ -69,6 +105,7 @@ export class CustomerService {
         status: 'active',
       },
     });
+    return { customer, isDuplicate: false, matchedRule: null };
   }
 
   async findById(tenantId: string | undefined, id: string) {

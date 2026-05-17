@@ -37,6 +37,32 @@ const SCORING_HISTORY_QUERY = gql`
   }
 `;
 
+/**
+ * S17-10 / FR-CM-003.1 — Aggregated credit-exposure summary across
+ * subscriptions and overdraft credit lines. Cached server-side (5
+ * minute TTL); the resolver is invalidated by repayment / scoring /
+ * subscription events.
+ */
+const CREDIT_SUMMARY_QUERY = gql`
+  query CustomerCreditSummaryAggregate($customerId: ID!) {
+    customerCreditSummary(customerId: $customerId) {
+      customerId
+      currentScore
+      scoreModelVersion
+      riskTier
+      totalCreditLimit
+      totalExposure
+      totalUtilizedCredit
+      totalAvailableCredit
+      activeContracts
+      overdueContracts
+      worstDelinquency
+      totalOutstandingBalance
+      lastScoreDate
+    }
+  }
+`;
+
 interface TabCreditSummaryProps {
   customer: any;
   customerId: string;
@@ -138,6 +164,14 @@ export function TabCreditSummary({ customer, customerId }: TabCreditSummaryProps
     skip: !customerId,
   });
 
+  // S17-10 — pull the aggregated credit exposure summary alongside the
+  // scoring history. Independent query so each renders as it arrives.
+  const { data: summaryData } = useQuery(CREDIT_SUMMARY_QUERY, {
+    variables: { customerId },
+    skip: !customerId,
+  });
+  const creditSummary = summaryData?.customerCreditSummary ?? null;
+
   const scoringResults = data?.customerScoringHistory ?? [];
   const latestResult = scoringResults.length > 0 ? scoringResults[0] : null;
 
@@ -179,6 +213,77 @@ export function TabCreditSummary({ customer, customerId }: TabCreditSummaryProps
 
   return (
     <div className="space-y-6">
+      {/* S17-10 — Aggregated exposure summary header. Renders only
+          when the aggregate query has resolved (cache-backed, so the
+          first paint is usually instant). Sits above the per-metric
+          cards so operators see the total picture at a glance. */}
+      {creditSummary ? (
+        <div className="card p-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div>
+              <p className="text-xs font-medium text-[color:var(--text-tertiary)] uppercase mb-1">
+                Total Credit Limit
+              </p>
+              <p className="text-xl font-bold">
+                {formatMoney(creditSummary.totalCreditLimit, currency)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-[color:var(--text-tertiary)] uppercase mb-1">
+                Utilized
+              </p>
+              <p className="text-xl font-bold">
+                {formatMoney(creditSummary.totalUtilizedCredit, currency)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-[color:var(--text-tertiary)] uppercase mb-1">
+                Available
+              </p>
+              <p className="text-xl font-bold text-[color:var(--status-success-text)]">
+                {formatMoney(creditSummary.totalAvailableCredit, currency)}
+              </p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-[color:var(--text-tertiary)] uppercase mb-1">
+                Worst DPD
+              </p>
+              <p
+                className={
+                  creditSummary.worstDelinquency === 'current'
+                    ? 'text-xl font-bold text-[color:var(--status-success-text)]'
+                    : creditSummary.worstDelinquency === 'overdue'
+                      ? 'text-xl font-bold text-[color:var(--status-warning-text)]'
+                      : 'text-xl font-bold text-[color:var(--status-error-text)]'
+                }
+              >
+                {creditSummary.worstDelinquency.replace(/_/g, ' ')}
+              </p>
+            </div>
+          </div>
+          <div className="mt-4 flex items-center gap-6 text-xs text-[color:var(--text-tertiary)]">
+            <span>
+              <strong className="text-[color:var(--text-primary)]">
+                {creditSummary.activeContracts}
+              </strong>{' '}
+              active
+            </span>
+            <span>
+              <strong className="text-[color:var(--text-primary)]">
+                {creditSummary.overdueContracts}
+              </strong>{' '}
+              overdue
+            </span>
+            <span>
+              Outstanding:{' '}
+              <strong className="text-[color:var(--text-primary)]">
+                {formatMoney(creditSummary.totalOutstandingBalance, currency)}
+              </strong>
+            </span>
+          </div>
+        </div>
+      ) : null}
+
       {/* Top metric cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="card p-6 text-center">
