@@ -70,11 +70,15 @@ export interface CustomerFinancialProfile {
  * `contract.written_off`) they should be added here AND to the
  * `@OnEvent` decorator list on `handleInvalidationEvent` below.
  */
+// S18-FIX-1A: Removed 'repayment.completed' — no such event exists in
+// packages/event-contracts/src/events.enum.ts (the canonical event is
+// 'repayment.received'). The dead entry was misleading and implied an
+// @OnEvent handler that never existed. The actual handlers are the five
+// events listed below.
 export const FINANCIAL_PROFILE_INVALIDATION_EVENTS = [
   'contract.created',
   'contract.state_changed',
   'repayment.received',
-  'repayment.completed',
   'customer.financial_data.synced',
   'customer.merged',
 ] as const;

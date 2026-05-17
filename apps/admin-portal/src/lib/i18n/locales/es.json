@@ -15,7 +15,9 @@
     "messages": "Mensajes",
     "platform": "Plataforma",
     "tenants": "Inquilinos",
-    "feedback": "Comentarios"
+    "feedback": "Comentarios",
+    "factoring": "Factoraje",
+    "verificationQueue": "Cola de verificación"
   },
   "sidebar": {
     "adminPortal": "Portal Admin",

@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService, Prisma } from '@lons/database';
 import {
   AuditActionType,
@@ -129,6 +129,8 @@ export const REPLAY_SECRET_SENTINEL = '<not-retrievable-on-replay>';
 
 @Injectable()
 export class TenantOnboardingService {
+  // S18-FIX-1B: structured logger for audit-log failures (replaces console.error).
+  private readonly logger = new Logger(TenantOnboardingService.name);
   // EnvKeyProvider has no internal state once `getKey()` resolves; a single
   // module-level instance avoids re-reading the env var on every onboard.
   private readonly keyProvider: IKeyProvider = createKeyProvider();
@@ -291,10 +293,12 @@ export class TenantOnboardingService {
     } catch (err) {
       // Audit-log failure must never block onboarding (the tenant +
       // user + key are already committed). Log and move on.
-      // eslint-disable-next-line no-console
-      console.error(
-        `tenant_onboarded audit log failed for ${txResult.tenant.id}: ${(err as Error).message}`,
-      );
+      // S18-FIX-1B: route through structured logger so the error surfaces
+      // in centralized log aggregation. console.error bypassed this pipeline.
+      this.logger.error('Failed to write onboarding audit log', {
+        error: (err as Error).message,
+        tenantId: txResult.tenant.id,
+      });
     }
 
     return {

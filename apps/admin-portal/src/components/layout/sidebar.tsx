@@ -28,6 +28,8 @@ import {
   Sun,
   Moon,
   Briefcase,
+  ClipboardCheck,
+  DollarSign,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n/i18n-context';
@@ -46,6 +48,8 @@ const navigationKeys = [
   { key: 'nav.collections', href: '/collections', icon: AlertTriangle },
   { key: 'nav.screening', href: '/screening', icon: Shield },
   { key: 'nav.reports', href: '/reports', icon: BarChart3 },
+  // Sprint 18 (S18-4) — Settlement & Reconciliation Dashboard.
+  { key: 'nav.settlements', href: '/settlements', icon: DollarSign },
 ];
 
 const platformNavigationKeys = [
@@ -162,6 +166,42 @@ export function Sidebar() {
             </Link>
           );
         })}
+
+        {/* S14-11: Factoring section — Verification Queue */}
+        <div className="mt-6 mb-2 px-3">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[color:var(--text-tertiary)]">
+            {t('nav.factoring')}
+          </span>
+        </div>
+        {(() => {
+          const href = '/loans/factoring/queue';
+          const isActive = pathname.startsWith(href);
+          return (
+            <Link
+              href={href}
+              className={cn(
+                'relative flex items-center gap-3 px-3 py-2 rounded-lg mb-0.5 text-sm font-medium transition-colors duration-150',
+                isActive ? 'text-[color:var(--accent-primary-deep)] font-semibold' : 'nav-item',
+              )}
+            >
+              {isActive && (
+                <motion.span
+                  layoutId="sidebar-active-pill"
+                  className="absolute inset-0 rounded-lg"
+                  style={{ backgroundColor: 'var(--accent-primary-soft)' }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                />
+              )}
+              <ClipboardCheck
+                className={cn(
+                  'relative w-[18px] h-[18px] flex-shrink-0',
+                  isActive && 'text-[color:var(--accent-primary)]',
+                )}
+              />
+              <span className="relative flex-1">{t('nav.verificationQueue')}</span>
+            </Link>
+          );
+        })()}
 
         {user?.role === 'platform_admin' && (
           <>

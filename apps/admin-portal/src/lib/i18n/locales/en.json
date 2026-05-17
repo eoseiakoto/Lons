@@ -15,7 +15,9 @@
     "messages": "Messages",
     "platform": "Platform",
     "tenants": "Tenants",
-    "feedback": "Feedback"
+    "feedback": "Feedback",
+    "factoring": "Factoring",
+    "verificationQueue": "Verification Queue"
   },
   "sidebar": {
     "adminPortal": "Admin Portal",

@@ -17,6 +17,25 @@ import { EventType } from '@lons/event-contracts';
 
 import { BillingInvoiceNumberService } from './billing-invoice-number.service';
 
+// ─── S18-ENH helper types ─────────────────────────────────────────────────
+
+export interface BillingHistoryFilters {
+  subscriptionId?: string;
+  dateFrom?: Date;
+  dateTo?: Date;
+  type?: 'subscription' | 'usage' | 'revenue_share';
+}
+
+export interface EstimatedFees {
+  baseFee: string;
+  transactionFees: string;
+  totalEstimated: string;
+  currency: string;
+  disbursementCount?: number;
+  periodStart?: Date;
+  periodEnd?: Date;
+}
+
 /**
  * Sprint 14 (S14-12) — monthly subscription invoice generation.
  *
@@ -271,6 +290,151 @@ export class SubscriptionBillingService {
     });
 
     return updated;
+  }
+
+  // ─── S18-ENH: usage history + next billing date + estimated fees ─────────
+
+  /**
+   * Return billing invoices for a tenant, optionally filtered by type and
+   * date range. Ordered newest-first.
+   */
+  async getBillingHistory(
+    tenantId: string,
+    filters: BillingHistoryFilters,
+  ): Promise<BillingInvoice[]> {
+    const where: Prisma.BillingInvoiceWhereInput = { tenantId };
+
+    if (filters.type) {
+      where.type = filters.type;
+    }
+    if (filters.dateFrom || filters.dateTo) {
+      where.billingPeriodStart = {};
+      if (filters.dateFrom) where.billingPeriodStart.gte = filters.dateFrom;
+      if (filters.dateTo) where.billingPeriodStart.lte = filters.dateTo;
+    }
+
+    return this.prisma.billingInvoice.findMany({
+      where,
+      orderBy: { billingPeriodStart: 'desc' },
+    });
+  }
+
+  /**
+   * Retrieve the active billing plan config for a tenant, or null when
+   * no config exists (new tenant, free-tier, etc.).
+   */
+  async getActivePlan(
+    tenantId: string,
+  ): Promise<Prisma.TenantBillingConfigGetPayload<Record<string, never>> | null> {
+    return this.prisma.tenantBillingConfig.findUnique({
+      where: { tenantId },
+    });
+  }
+
+  /**
+   * Compute the next billing date from the most recent billing invoice.
+   * Returns null when:
+   *   - no plan config exists, or
+   *   - no invoices have been issued yet (returns contract start date + 1 month).
+   *
+   * Logic: find the latest `billingPeriodEnd`; the next cycle starts the
+   * day after, which is equivalent to the start of the following calendar
+   * month (since subscription invoices always cover full calendar months).
+   */
+  calculateNextBillingDate(
+    plan: Prisma.TenantBillingConfigGetPayload<Record<string, never>> | null,
+    latestInvoice?: BillingInvoice | null,
+  ): Date | null {
+    if (!plan) return null;
+
+    if (latestInvoice) {
+      // Next billing date is the day after the last covered period end.
+      // billingPeriodEnd is always the last day of the month (UTC midnight).
+      const end = latestInvoice.billingPeriodEnd;
+      const next = new Date(
+        Date.UTC(end.getUTCFullYear(), end.getUTCMonth() + 1, 1),
+      );
+      return next;
+    }
+
+    // No invoices yet — first bill drops on the 1st of the month after
+    // the contract start date (minimum 1 day after start).
+    const start = plan.contractStartDate;
+    return new Date(
+      Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1),
+    );
+  }
+
+  /**
+   * Estimate fees for the current (unbilled) billing period.
+   *
+   * Base fee: subscription amount from `TenantBillingConfig`.
+   * Transaction fees: count of completed disbursements since the last
+   *   billing invoice's `billingPeriodEnd` × the per-disbursement BPS rate
+   *   applied to the total disbursed amount.
+   *
+   * All arithmetic uses Decimal-string helpers (never Number()).
+   */
+  async estimateCurrentPeriodFees(tenantId: string): Promise<EstimatedFees> {
+    const zero = { baseFee: '0', transactionFees: '0', totalEstimated: '0', currency: 'USD' };
+
+    const plan = await this.getActivePlan(tenantId);
+    if (!plan) return zero;
+
+    const baseFee = bankersRound(String(plan.subscriptionAmountUsd), 4);
+    const currency = plan.billingCurrency;
+
+    // Find the last invoice to establish the period start.
+    const lastInvoice = await this.prisma.billingInvoice.findFirst({
+      where: { tenantId, type: 'subscription' },
+      orderBy: { billingPeriodStart: 'desc' },
+    });
+    const periodStart = lastInvoice
+      ? new Date(
+          Date.UTC(
+            lastInvoice.billingPeriodEnd.getUTCFullYear(),
+            lastInvoice.billingPeriodEnd.getUTCMonth() + 1,
+            1,
+          ),
+        )
+      : plan.contractStartDate;
+    const periodEnd = this.calculateNextBillingDate(plan, lastInvoice);
+
+    // Count + sum disbursements in the current period.
+    const disbursements = await this.prisma.disbursement.findMany({
+      where: {
+        tenantId,
+        status: 'completed',
+        completedAt: { gte: periodStart },
+      },
+      select: { amount: true },
+    });
+
+    const disbursementCount = disbursements.length;
+    let transactionFees = '0';
+
+    if (disbursementCount > 0 && plan.perDisbursementBps) {
+      const bps = String(plan.perDisbursementBps);
+      const totalDisbursed = disbursements.reduce(
+        (acc, d) => add(acc, String(d.amount)),
+        '0',
+      );
+      // Convert basis points to multiplier: bps / 10000
+      const rate = divide(bps, '10000');
+      transactionFees = bankersRound(multiply(totalDisbursed, rate), 4);
+    }
+
+    const totalEstimated = bankersRound(add(baseFee, transactionFees), 4);
+
+    return {
+      baseFee,
+      transactionFees,
+      totalEstimated,
+      currency,
+      disbursementCount,
+      periodStart,
+      periodEnd: periodEnd ?? undefined,
+    };
   }
 
   /**

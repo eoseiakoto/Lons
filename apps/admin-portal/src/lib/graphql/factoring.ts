@@ -676,3 +676,66 @@ export interface IWebhookActivityConnection {
   edges: IWebhookActivityEdge[];
   pageInfo: IPageInfo;
 }
+
+// ─── S14-11: Invoice Verification Queue operations ───────────────────────
+
+export const INVOICE_VERIFICATION_QUEUE_QUERY = gql`
+  ${INVOICE_FIELDS_FRAGMENT}
+  query InvoiceVerificationQueue(
+    $filters: VerificationQueueFiltersInput
+    $pagination: VerificationQueuePaginationInput
+  ) {
+    invoiceVerificationQueue(filters: $filters, pagination: $pagination) {
+      edges {
+        node { ...InvoiceFields }
+        cursor
+      }
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
+        startCursor
+        endCursor
+      }
+      totalCount
+    }
+  }
+`;
+
+export const CLAIM_INVOICE_MUTATION = gql`
+  ${INVOICE_FIELDS_FRAGMENT}
+  mutation ClaimInvoice($invoiceId: ID!) {
+    claimInvoice(invoiceId: $invoiceId) {
+      ...InvoiceFields
+    }
+  }
+`;
+
+export const APPROVE_INVOICE_MUTATION = gql`
+  ${INVOICE_FIELDS_FRAGMENT}
+  mutation ApproveInvoice($invoiceId: ID!, $input: ApproveInvoiceInput!) {
+    approveInvoice(invoiceId: $invoiceId, input: $input) {
+      ...InvoiceFields
+    }
+  }
+`;
+
+export const REJECT_INVOICE_MUTATION = gql`
+  ${INVOICE_FIELDS_FRAGMENT}
+  mutation RejectInvoice($invoiceId: ID!, $input: RejectInvoiceInput!) {
+    rejectInvoice(invoiceId: $invoiceId, input: $input) {
+      ...InvoiceFields
+    }
+  }
+`;
+
+export type VerificationQueueSort = 'createdAt' | 'amount' | 'dueDate';
+
+export interface IVerificationQueueFilters {
+  sellerId?: string;
+  debtorId?: string;
+  minAmount?: string;
+  maxAmount?: string;
+  submittedAfter?: string;
+  submittedBefore?: string;
+  assignedTo?: 'me' | 'unassigned';
+}

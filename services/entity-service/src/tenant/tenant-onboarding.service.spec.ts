@@ -413,3 +413,48 @@ describe('TenantOnboardingService — audit log + idempotency (S17-FIX-9)', () =
     ).rejects.toThrow(/Slug already in use/);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────
+// S18-FIX-1B — audit-log failures route through this.logger.error, not console.error
+// ─────────────────────────────────────────────────────────────────────────
+
+describe('TenantOnboardingService — structured logging on audit failure (S18-FIX-1B)', () => {
+  beforeAll(() => {
+    process.env.ENCRYPTION_KEY = TEST_KEY_B64;
+    if (!process.env.HASH_PEPPER) {
+      process.env.HASH_PEPPER = 'a'.repeat(64);
+    }
+  });
+
+  it('routes audit-log failure through this.logger.error, not console.error', async () => {
+    const { service, auditService } = makeService();
+    auditService.log.mockRejectedValue(new Error('audit DB down'));
+
+    // Spy on console.error to assert it is NOT called.
+    const consoleSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    // Spy on the NestJS Logger prototype's error to assert it IS called.
+    const { Logger } = await import('@nestjs/common');
+    const loggerSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation(() => {});
+
+    await service.onboard({
+      name: 'Acme Bank',
+      slug: 'acme-logger-fix',
+      country: 'GHA',
+      adminName: 'Alice',
+      adminEmail: 'alice@acme.test',
+      adminPasswordHash: 'hashed',
+    });
+
+    expect(consoleSpy).not.toHaveBeenCalled();
+    expect(loggerSpy).toHaveBeenCalledTimes(1);
+    const [message, context] = loggerSpy.mock.calls[0];
+    expect(message).toMatch(/Failed to write onboarding audit log/);
+    expect(context).toMatchObject({
+      error: 'audit DB down',
+      tenantId: 'tenant-uuid-1',
+    });
+
+    consoleSpy.mockRestore();
+    loggerSpy.mockRestore();
+  });
+});

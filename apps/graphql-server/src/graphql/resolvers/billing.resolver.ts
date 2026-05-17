@@ -22,6 +22,12 @@ import {
   BillingInvoiceTypeGql,
   BillingLineItemType,
 } from '../types/billing-invoice.type';
+import {
+  BillingRecordType,
+  BillingPlanSummaryType,
+  EstimatedFeesType,
+  UsageHistoryType,
+} from '../types/usage-history.type';
 
 /**
  * Sprint 15 (S15-BILL-1) — GraphQL surface for billing invoices.
@@ -148,5 +154,85 @@ export class BillingResolver {
       orderBy: { createdAt: 'asc' },
     });
     return rows as unknown as BillingLineItemType[];
+  }
+
+  // ── S18-ENH: usage history + next billing date + estimated fees ──────────
+
+  /**
+   * Billing usage history for the current tenant. Returns:
+   *   - `records`: paginated list of billing invoices (subscription + usage)
+   *   - `nextBillingDate`: next billing cycle start, or null if no plan exists
+   *   - `estimatedFees`: base + transaction fees accumulated in the current period
+   *   - `currentPlan`: active plan config (tier, model, amounts)
+   */
+  @Query(() => UsageHistoryType)
+  @Roles('billing:read')
+  @RequiresPlan('growth')
+  async usageHistory(
+    @CurrentTenant() tenantId: string,
+    @Args('subscriptionId', { type: () => ID, nullable: true })
+    subscriptionId?: string,
+    @Args('dateFrom', { nullable: true }) dateFrom?: string,
+    @Args('dateTo', { nullable: true }) dateTo?: string,
+    @Args('type', { nullable: true }) type?: string,
+  ): Promise<UsageHistoryType> {
+    // 1. Billing records for the period.
+    const records = await this.subscriptionBillingService.getBillingHistory(
+      tenantId,
+      {
+        subscriptionId,
+        dateFrom: dateFrom ? new Date(dateFrom) : undefined,
+        dateTo: dateTo ? new Date(dateTo) : undefined,
+        type: type as 'subscription' | 'usage' | 'revenue_share' | undefined,
+      },
+    );
+
+    // 2. Active plan for next-billing-date computation.
+    const activePlan = await this.subscriptionBillingService.getActivePlan(tenantId);
+
+    // 3. Latest subscription invoice (used by calculateNextBillingDate).
+    const latestInvoice = await this.prisma.billingInvoice.findFirst({
+      where: { tenantId, type: 'subscription' },
+      orderBy: { billingPeriodStart: 'desc' },
+    });
+
+    const nextBillingDate = this.subscriptionBillingService.calculateNextBillingDate(
+      activePlan,
+      latestInvoice,
+    );
+
+    // 4. Estimate fees for the current unbilled period.
+    const estimatedFeesRaw = await this.subscriptionBillingService.estimateCurrentPeriodFees(tenantId);
+
+    const estimatedFees: EstimatedFeesType = {
+      baseFee: estimatedFeesRaw.baseFee,
+      transactionFees: estimatedFeesRaw.transactionFees,
+      totalEstimated: estimatedFeesRaw.totalEstimated,
+      currency: estimatedFeesRaw.currency,
+      disbursementCount: estimatedFeesRaw.disbursementCount,
+      periodStart: estimatedFeesRaw.periodStart,
+      periodEnd: estimatedFeesRaw.periodEnd,
+    };
+
+    const currentPlan: BillingPlanSummaryType | undefined = activePlan
+      ? {
+          id: activePlan.id,
+          planTier: activePlan.planTier,
+          billingModel: activePlan.billingModel,
+          subscriptionAmountUsd: String(activePlan.subscriptionAmountUsd),
+          billingCurrency: activePlan.billingCurrency,
+          paymentTermsDays: activePlan.paymentTermsDays,
+          contractStartDate: activePlan.contractStartDate,
+          contractEndDate: activePlan.contractEndDate ?? undefined,
+        }
+      : undefined;
+
+    return {
+      records: records as unknown as BillingRecordType[],
+      nextBillingDate: nextBillingDate ?? undefined,
+      estimatedFees,
+      currentPlan,
+      totalCount: records.length,
+    };
   }
 }

@@ -301,12 +301,16 @@ describe('ScreeningService', () => {
 
       await service.getScreeningsForReview('tenant-001');
 
+      // S18-FIX-1C: the service calls findMany with include: { customer: true }
+      // so operators can see customer names in the review queue. The test
+      // expectation was missing this include clause, causing a constant failure.
       expect(mockPrisma.screeningResult.findMany).toHaveBeenCalledWith({
         where: {
           tenantId: 'tenant-001',
           status: 'POTENTIAL_MATCH',
           reviewedAt: null,
         },
+        include: { customer: true },
         orderBy: { screenedAt: 'desc' },
         take: 50,
       });

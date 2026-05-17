@@ -15,7 +15,9 @@
     "messages": "Messages",
     "platform": "Plateforme",
     "tenants": "Locataires",
-    "feedback": "Commentaires"
+    "feedback": "Commentaires",
+    "factoring": "Affacturage",
+    "verificationQueue": "File de vérification"
   },
   "sidebar": {
     "adminPortal": "Portail Admin",

@@ -15,7 +15,9 @@
     "messages": "Ujumbe",
     "platform": "Jukwaa",
     "tenants": "Wapangaji",
-    "feedback": "Maoni"
+    "feedback": "Maoni",
+    "factoring": "Factoring",
+    "verificationQueue": "Foleni ya uthibitisho"
   },
   "sidebar": {
     "adminPortal": "Bawaba ya Msimamizi",

@@ -15,7 +15,9 @@
     "messages": "الرسائل",
     "platform": "المنصة",
     "tenants": "المستأجرين",
-    "feedback": "الملاحظات"
+    "feedback": "الملاحظات",
+    "factoring": "التخصيم",
+    "verificationQueue": "قائمة التحقق"
   },
   "sidebar": {
     "adminPortal": "بوابة الإدارة",

@@ -13,7 +13,10 @@
  *   - Cache write + hit + invalidation round-trip.
  *   - Event-driven invalidation handler tolerates malformed payloads.
  */
-import { CustomerFinancialProfileService } from './customer-financial-profile.service';
+import {
+  CustomerFinancialProfileService,
+  FINANCIAL_PROFILE_INVALIDATION_EVENTS,
+} from './customer-financial-profile.service';
 
 const TENANT_ID = '11111111-1111-1111-1111-111111111111';
 const CUSTOMER_ID = '22222222-2222-2222-2222-222222222222';
@@ -205,5 +208,35 @@ describe('CustomerFinancialProfileService (S17-9)', () => {
     expect(
       await redis.get(`fin_profile:${TENANT_ID}:${CUSTOMER_ID}`),
     ).not.toBeNull();
+  });
+});
+
+// S18-FIX-1A — const / decorator alignment guard.
+// This describe block enforces that FINANCIAL_PROFILE_INVALIDATION_EVENTS
+// exactly matches the @OnEvent decorators on handleInvalidationEvent.
+// If either changes without the other, this test fails immediately.
+describe('FINANCIAL_PROFILE_INVALIDATION_EVENTS alignment (S18-FIX-1A)', () => {
+  // The five @OnEvent decorators wired to handleInvalidationEvent in the
+  // service file (contract.created, contract.state_changed,
+  // repayment.received, customer.financial_data.synced, customer.merged).
+  // This list must stay in sync with the decorators above the handler.
+  const DECORATED_EVENTS = [
+    'contract.created',
+    'contract.state_changed',
+    'repayment.received',
+    'customer.financial_data.synced',
+    'customer.merged',
+  ] as const;
+
+  it('contains exactly the events that have @OnEvent handlers — no more, no less', () => {
+    const constEvents = [...FINANCIAL_PROFILE_INVALIDATION_EVENTS].sort();
+    const decoratorEvents = [...DECORATED_EVENTS].sort();
+    expect(constEvents).toEqual(decoratorEvents);
+  });
+
+  it('does NOT contain repayment.completed (no such event is emitted)', () => {
+    expect(FINANCIAL_PROFILE_INVALIDATION_EVENTS).not.toContain(
+      'repayment.completed',
+    );
   });
 });
