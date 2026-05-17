@@ -9,8 +9,20 @@ import { ReconciliationReport } from '@/components/reports/reconciliation-report
 import { CustomerAcquisitionReport } from '@/components/reports/customer-acquisition-report';
 import { ProductPerformanceReport } from '@/components/reports/product-performance-report';
 import { CollectionsReport } from '@/components/reports/collections-report';
+import { ReportExportButtons } from '@/components/reports/report-export-buttons';
 import { Breadcrumb } from '@/components/ui/breadcrumb';
 import { useI18n } from '@/lib/i18n';
+
+// S18-3 — server-side export type per slug. Slugs without a matching
+// export are omitted; the bar isn't shown for those reports.
+const EXPORT_TYPE_FOR_SLUG: Record<string, 'disbursement' | 'repayment' | 'portfolio' | 'collections' | 'settlement'> = {
+  disbursement: 'disbursement',
+  repayment: 'repayment',
+  'portfolio-quality': 'portfolio',
+  'product-performance': 'portfolio',
+  collections: 'collections',
+  revenue: 'settlement',
+};
 
 const reportComponents: Record<string, React.ComponentType> = {
   disbursement: DisbursementReport,
@@ -48,5 +60,15 @@ export default function ReportTypePage() {
     );
   }
 
-  return <ReportComponent />;
+  const exportType = EXPORT_TYPE_FOR_SLUG[type];
+  return (
+    <div>
+      {exportType && (
+        <div className="flex justify-end mb-3">
+          <ReportExportButtons reportType={exportType} />
+        </div>
+      )}
+      <ReportComponent />
+    </div>
+  );
 }

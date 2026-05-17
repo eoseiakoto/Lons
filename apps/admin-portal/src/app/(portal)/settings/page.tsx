@@ -9,6 +9,8 @@ import {
   Building2,
   Plug,
   Banknote,
+  KeyRound,
+  CreditCard,
 } from 'lucide-react';
 import { useI18n } from '@/lib/i18n/i18n-context';
 import { PageBackdrop } from '@/components/dashboard/page-backdrop';
@@ -59,6 +61,22 @@ export default function SettingsPage() {
       href: '/settings/lenders',
       icon: Banknote,
       eyebrow: t('settings.overview.eyebrow.capital'),
+    },
+    // Sprint 18 (S18-5) — API key management.
+    {
+      name: t('settings.overview.apiKeysCard.title') || 'API Keys',
+      description: t('settings.overview.apiKeysCard.description') || 'Manage programmatic access credentials.',
+      href: '/settings/api-keys',
+      icon: KeyRound,
+      eyebrow: t('settings.overview.eyebrow.security') || 'Security',
+    },
+    // Sprint 18 (S18-11) — Billing & plan management.
+    {
+      name: t('settings.overview.billingCard.title') || 'Billing & Plan',
+      description: t('settings.overview.billingCard.description') || 'View your plan tier, usage, and request upgrades.',
+      href: '/settings/billing',
+      icon: CreditCard,
+      eyebrow: t('settings.overview.eyebrow.subscription') || 'Subscription',
     },
   ];
 

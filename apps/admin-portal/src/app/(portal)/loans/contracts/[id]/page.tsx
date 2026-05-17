@@ -12,6 +12,9 @@ import {
   X,
   Check,
   Calendar,
+  Banknote,
+  Settings2,
+  Gift,
 } from 'lucide-react';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { formatMoney, formatDate, formatDateTime } from '@/lib/utils';
@@ -19,6 +22,7 @@ import { useToast } from '@/components/ui/toast';
 import { useI18n } from '@/lib/i18n';
 import { PageBackdrop } from '@/components/dashboard/page-backdrop';
 import { ProgressBar } from '@/components/ui/progress-bar';
+import { SlideOver } from '@/components/ui/slide-over';
 
 const CONTRACT_QUERY = gql`
   query Contract($id: ID!) {
@@ -47,6 +51,62 @@ const CANCEL_COOLING_OFF = gql`
   }
 `;
 
+// Sprint 18 (S18-2) — operator write operations on a live contract.
+const RECORD_MANUAL_PAYMENT = gql`
+  mutation RecordManualPayment(
+    $contractId: ID!
+    $input: ManualPaymentInput!
+    $idempotencyKey: String!
+  ) {
+    recordManualPayment(
+      contractId: $contractId
+      input: $input
+      idempotencyKey: $idempotencyKey
+    ) {
+      id
+      amount
+      status
+    }
+  }
+`;
+
+const RESTRUCTURE_CONTRACT = gql`
+  mutation RestructureContract(
+    $contractId: ID!
+    $input: RestructureContractInput!
+    $idempotencyKey: String
+  ) {
+    restructureContract(
+      contractId: $contractId
+      input: $input
+      idempotencyKey: $idempotencyKey
+    ) {
+      id
+      tenorDays
+      interestRate
+      maturityDate
+    }
+  }
+`;
+
+const WAIVE_PENALTIES = gql`
+  mutation WaivePenalties(
+    $contractId: ID!
+    $input: WaivePenaltiesInput!
+    $idempotencyKey: String
+  ) {
+    waivePenalties(
+      contractId: $contractId
+      input: $input
+      idempotencyKey: $idempotencyKey
+    ) {
+      id
+      outstandingPenalties
+      totalOutstanding
+    }
+  }
+`;
+
 interface Installment {
   id: string;
   installmentNumber: number;
@@ -68,6 +128,13 @@ export default function ContractDetailPage() {
   const { data, loading, refetch } = useQuery(CONTRACT_QUERY, { variables: { id } });
   const [cancelContract, { loading: cancelling }] = useMutation(CANCEL_COOLING_OFF);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
+
+  // S18-2 — operator write-operation slide-overs.
+  type OpPanel = 'payment' | 'restructure' | 'waive' | null;
+  const [opPanel, setOpPanel] = useState<OpPanel>(null);
+  const [recordManualPayment, { loading: recordingPayment }] = useMutation(RECORD_MANUAL_PAYMENT);
+  const [restructureContract, { loading: restructuring }] = useMutation(RESTRUCTURE_CONTRACT);
+  const [waivePenalties, { loading: waiving }] = useMutation(WAIVE_PENALTIES);
 
   if (loading)
     return <div className="text-sm text-[color:var(--text-tertiary)] py-12 text-center">{t('common.loading')}</div>;
@@ -230,6 +297,53 @@ export default function ContractDetailPage() {
           />
         </div>
       </section>
+
+      {/* S18-2 — operator write operations (manual payment, restructure,
+          waive). Only visible when the contract is in an actionable
+          state; the resolver will reject otherwise. */}
+      {['active', 'performing', 'due', 'overdue', 'delinquent'].includes(c.status) && (
+        <section className="relative z-10 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setOpPanel('payment')}
+            className="px-3 py-1.5 rounded-lg text-[13px] font-medium flex items-center gap-1.5"
+            style={{
+              backgroundColor: 'var(--accent-primary)',
+              color: 'var(--text-on-accent)',
+            }}
+          >
+            <Banknote className="w-3.5 h-3.5" />
+            {t('loans.contractsDetail.recordPayment') || 'Record payment'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpPanel('restructure')}
+            className="px-3 py-1.5 rounded-lg text-[13px] font-medium flex items-center gap-1.5"
+            style={{
+              backgroundColor: 'var(--bg-elevated)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-default)',
+            }}
+          >
+            <Settings2 className="w-3.5 h-3.5" />
+            {t('loans.contractsDetail.restructure') || 'Restructure'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setOpPanel('waive')}
+            disabled={Number(c.outstandingPenalties ?? 0) <= 0}
+            className="px-3 py-1.5 rounded-lg text-[13px] font-medium flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{
+              backgroundColor: 'var(--bg-elevated)',
+              color: 'var(--text-primary)',
+              border: '1px solid var(--border-default)',
+            }}
+          >
+            <Gift className="w-3.5 h-3.5" />
+            {t('loans.contractsDetail.waivePenalties') || 'Waive penalties'}
+          </button>
+        </section>
+      )}
 
       {/* Two-column terms + outstanding */}
       <section className="relative z-10 grid grid-cols-1 lg:grid-cols-2 gap-4">
@@ -455,7 +569,372 @@ export default function ContractDetailPage() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* S18-2 operator slide-overs */}
+      {opPanel === 'payment' && (
+        <ContractManualPaymentPanel
+          contractId={c.id}
+          currency={c.currency}
+          totalOutstanding={c.totalOutstanding ?? '0'}
+          loading={recordingPayment}
+          onClose={() => setOpPanel(null)}
+          onSubmit={async (input) => {
+            try {
+              await recordManualPayment({
+                variables: {
+                  contractId: c.id,
+                  input,
+                  idempotencyKey: `mp:${c.id}:${input.paymentRef}`,
+                },
+              });
+              toast('success', t('loans.contractsDetail.paymentRecorded') || 'Payment recorded');
+              setOpPanel(null);
+              void refetch();
+            } catch (e) {
+              toast('error', (e as Error).message);
+            }
+          }}
+        />
+      )}
+      {opPanel === 'restructure' && (
+        <ContractRestructurePanel
+          tenorDays={c.tenorDays}
+          interestRate={String(c.interestRate ?? '')}
+          maturityDate={c.maturityDate}
+          loading={restructuring}
+          onClose={() => setOpPanel(null)}
+          onSubmit={async (input) => {
+            try {
+              await restructureContract({
+                variables: {
+                  contractId: c.id,
+                  input,
+                  idempotencyKey: `rs:${c.id}:${Date.now()}`,
+                },
+              });
+              toast('success', t('loans.contractsDetail.restructured') || 'Contract restructured');
+              setOpPanel(null);
+              void refetch();
+            } catch (e) {
+              toast('error', (e as Error).message);
+            }
+          }}
+        />
+      )}
+      {opPanel === 'waive' && (
+        <ContractWaivePenaltiesPanel
+          currency={c.currency}
+          outstandingPenalties={String(c.outstandingPenalties ?? '0')}
+          loading={waiving}
+          onClose={() => setOpPanel(null)}
+          onSubmit={async (input) => {
+            try {
+              await waivePenalties({
+                variables: {
+                  contractId: c.id,
+                  input,
+                  idempotencyKey: `pw:${c.id}:${Date.now()}`,
+                },
+              });
+              toast('success', t('loans.contractsDetail.penaltyWaived') || 'Penalties waived');
+              setOpPanel(null);
+              void refetch();
+            } catch (e) {
+              toast('error', (e as Error).message);
+            }
+          }}
+        />
+      )}
     </div>
+  );
+}
+
+// ── S18-2 slide-over panels ─────────────────────────────────────────
+
+function ContractManualPaymentPanel({
+  contractId: _contractId,
+  currency,
+  totalOutstanding,
+  loading,
+  onClose,
+  onSubmit,
+}: {
+  contractId: string;
+  currency: string;
+  totalOutstanding: string;
+  loading?: boolean;
+  onClose: () => void;
+  onSubmit: (input: {
+    amount: string;
+    currency: string;
+    paymentMethod: string;
+    paymentRef: string;
+    paymentDate?: Date;
+    notes?: string;
+  }) => Promise<void> | void;
+}) {
+  const [amount, setAmount] = useState(totalOutstanding);
+  const [method, setMethod] = useState('cash');
+  const [paymentRef, setPaymentRef] = useState('');
+  const [notes, setNotes] = useState('');
+  return (
+    <SlideOver title="Record payment" subtitle={currency} onClose={onClose}>
+      <div className="space-y-4 text-sm">
+        <PanelField label="Amount">
+          <input
+            type="text"
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="panel-input"
+          />
+          <p className="panel-hint">Outstanding: {totalOutstanding}</p>
+        </PanelField>
+        <PanelField label="Method">
+          <select value={method} onChange={(e) => setMethod(e.target.value)} className="panel-input">
+            <option value="cash">Cash</option>
+            <option value="bank_transfer">Bank transfer</option>
+            <option value="cheque">Cheque</option>
+            <option value="mobile_money">Mobile money</option>
+          </select>
+        </PanelField>
+        <PanelField label="Reference">
+          <input
+            type="text"
+            value={paymentRef}
+            onChange={(e) => setPaymentRef(e.target.value)}
+            placeholder="Bank txn id, cheque number..."
+            className="panel-input"
+          />
+        </PanelField>
+        <PanelField label="Notes">
+          <textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className="panel-input min-h-[80px]"
+          />
+        </PanelField>
+        <div className="flex gap-2 pt-2">
+          <button onClick={onClose} disabled={loading} className="panel-btn-secondary flex-1">
+            Cancel
+          </button>
+          <button
+            onClick={() =>
+              onSubmit({
+                amount,
+                currency,
+                paymentMethod: method,
+                paymentRef,
+                notes: notes || undefined,
+              })
+            }
+            disabled={loading || !amount || !paymentRef.trim()}
+            className="panel-btn-primary flex-1"
+          >
+            {loading ? 'Working…' : 'Record payment'}
+          </button>
+        </div>
+      </div>
+      <PanelStyles />
+    </SlideOver>
+  );
+}
+
+function ContractRestructurePanel({
+  tenorDays,
+  interestRate,
+  maturityDate,
+  loading,
+  onClose,
+  onSubmit,
+}: {
+  tenorDays: number;
+  interestRate: string;
+  maturityDate: string;
+  loading?: boolean;
+  onClose: () => void;
+  onSubmit: (input: {
+    newTenorDays?: number;
+    newInterestRate?: string;
+    newMaturityDate?: Date;
+    restructureReason: string;
+  }) => Promise<void> | void;
+}) {
+  const [tenor, setTenor] = useState('');
+  const [rate, setRate] = useState('');
+  const [maturity, setMaturity] = useState('');
+  const [reason, setReason] = useState('');
+  return (
+    <SlideOver title="Restructure contract" onClose={onClose}>
+      <div className="space-y-4 text-sm">
+        <p className="text-[12px] text-[color:var(--text-tertiary)]">
+          Current: {tenorDays}d · {interestRate}% · matures {formatDate(maturityDate)}
+        </p>
+        <PanelField label="New tenor (days)">
+          <input
+            type="number"
+            min={1}
+            value={tenor}
+            onChange={(e) => setTenor(e.target.value)}
+            placeholder={String(tenorDays)}
+            className="panel-input"
+          />
+        </PanelField>
+        <PanelField label="New interest rate (%)">
+          <input
+            type="text"
+            inputMode="decimal"
+            value={rate}
+            onChange={(e) => setRate(e.target.value)}
+            placeholder={interestRate}
+            className="panel-input"
+          />
+        </PanelField>
+        <PanelField label="New maturity date">
+          <input
+            type="date"
+            value={maturity}
+            onChange={(e) => setMaturity(e.target.value)}
+            className="panel-input"
+          />
+        </PanelField>
+        <PanelField label="Reason">
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="panel-input min-h-[100px]"
+          />
+        </PanelField>
+        <div className="flex gap-2 pt-2">
+          <button onClick={onClose} disabled={loading} className="panel-btn-secondary flex-1">
+            Cancel
+          </button>
+          <button
+            onClick={() =>
+              onSubmit({
+                newTenorDays: tenor ? parseInt(tenor, 10) : undefined,
+                newInterestRate: rate || undefined,
+                newMaturityDate: maturity ? new Date(maturity) : undefined,
+                restructureReason: reason,
+              })
+            }
+            disabled={loading || !reason.trim() || (!tenor && !rate && !maturity)}
+            className="panel-btn-primary flex-1"
+          >
+            {loading ? 'Working…' : 'Restructure'}
+          </button>
+        </div>
+      </div>
+      <PanelStyles />
+    </SlideOver>
+  );
+}
+
+function ContractWaivePenaltiesPanel({
+  currency,
+  outstandingPenalties,
+  loading,
+  onClose,
+  onSubmit,
+}: {
+  currency: string;
+  outstandingPenalties: string;
+  loading?: boolean;
+  onClose: () => void;
+  onSubmit: (input: { waiverAmount: string; waiverReason: string }) => Promise<void> | void;
+}) {
+  const [amount, setAmount] = useState(outstandingPenalties);
+  const [reason, setReason] = useState('');
+  return (
+    <SlideOver title="Waive penalties" subtitle={currency} onClose={onClose}>
+      <div className="space-y-4 text-sm">
+        <p className="text-[12px] text-[color:var(--text-tertiary)]">
+          Outstanding penalties: {outstandingPenalties} {currency}
+        </p>
+        <PanelField label="Waiver amount">
+          <input
+            type="text"
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            className="panel-input"
+          />
+        </PanelField>
+        <PanelField label="Reason">
+          <textarea
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            className="panel-input min-h-[100px]"
+          />
+        </PanelField>
+        <div className="flex gap-2 pt-2">
+          <button onClick={onClose} disabled={loading} className="panel-btn-secondary flex-1">
+            Cancel
+          </button>
+          <button
+            onClick={() => onSubmit({ waiverAmount: amount, waiverReason: reason })}
+            disabled={loading || !amount || !reason.trim()}
+            className="panel-btn-primary flex-1"
+          >
+            {loading ? 'Working…' : 'Waive'}
+          </button>
+        </div>
+      </div>
+      <PanelStyles />
+    </SlideOver>
+  );
+}
+
+function PanelField({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label className="block text-[12px] font-medium text-[color:var(--text-secondary)] mb-1.5">
+        {label}
+      </label>
+      {children}
+    </div>
+  );
+}
+
+function PanelStyles() {
+  return (
+    <style jsx>{`
+      :global(.panel-input) {
+        width: 100%;
+        border-radius: 6px;
+        border: 1px solid var(--border-subtle);
+        background: var(--bg-card);
+        color: var(--text-primary);
+        padding: 8px 12px;
+        font-size: 14px;
+      }
+      :global(.panel-hint) {
+        font-size: 11px;
+        color: var(--text-tertiary);
+        margin-top: 4px;
+      }
+      :global(.panel-btn-primary) {
+        background: var(--accent-primary);
+        color: var(--text-on-accent);
+        border: none;
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+      :global(.panel-btn-primary:disabled) { opacity: 0.5; cursor: not-allowed; }
+      :global(.panel-btn-secondary) {
+        background: var(--bg-elevated);
+        color: var(--text-primary);
+        border: 1px solid var(--border-default);
+        border-radius: 6px;
+        padding: 8px 16px;
+        font-size: 14px;
+        font-weight: 500;
+        cursor: pointer;
+      }
+    `}</style>
   );
 }
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { gql, useQuery, useLazyQuery, useMutation } from '@apollo/client';
 import {
   ClipboardList,
@@ -449,6 +450,7 @@ function ApplicationDetailDrawer({
 
 export default function ApplicationsPage() {
   const { t } = useI18n();
+  const router = useRouter();
   const [selectedRequest, setSelectedRequest] = useState<LoanRequest | null>(null);
   const [statusFilter, setStatusFilter] = useState('manual_review');
 
@@ -518,6 +520,9 @@ export default function ApplicationsPage() {
           options={[
             { value: '', label: t('common.allStatuses') },
             { value: 'manual_review', label: t('loans.applications.filter.manualReview') },
+            // S18-1 — surface 'escalated' so seniors can pick up
+            // escalated requests from the same queue.
+            { value: 'escalated', label: t('loans.applications.filter.escalated') },
             { value: 'pending', label: t('loans.applications.filter.pending') },
             { value: 'approved', label: t('loans.applications.filter.approved') },
             { value: 'rejected', label: t('loans.applications.filter.rejected') },
@@ -566,7 +571,15 @@ export default function ApplicationsPage() {
                 requests.map((r, i) => (
                   <tr
                     key={r.id}
-                    onClick={() => setSelectedRequest(r)}
+                    onClick={(e) => {
+                      // S18-1 — chevron click opens legacy drawer; row
+                      // click navigates to the new review detail page.
+                      if ((e.target as HTMLElement).closest('[data-row-action="drawer"]')) {
+                        setSelectedRequest(r);
+                      } else {
+                        router.push(`/loans/applications/${r.id}`);
+                      }
+                    }}
                     style={{ animationDelay: `${Math.min(i, 12) * 25}ms` }}
                     className="table-row-enter border-b border-[color:var(--border-subtle)] last:border-b-0 hover:bg-[color:var(--bg-hover)] cursor-pointer transition-colors"
                   >

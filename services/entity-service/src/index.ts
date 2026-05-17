@@ -3,6 +3,8 @@ export * from './auth';
 export * from './tenant/tenant.service';
 export * from './tenant/tenant-onboarding.service';
 export * from './tenant/tenant.module';
+// Sprint 18 (S18-11) — plan tier upgrade request service.
+export * from './tenant/upgrade-request.service';
 export * from './user/user.service';
 export * from './user/user.module';
 export * from './role/role.service';

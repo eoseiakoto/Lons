@@ -6,7 +6,11 @@ const VALID_TRANSITIONS: Record<string, string[]> = {
   [LoanRequestStatus.pre_qualified]: [LoanRequestStatus.scored, LoanRequestStatus.rejected],
   [LoanRequestStatus.scored]: [LoanRequestStatus.approved, LoanRequestStatus.rejected, LoanRequestStatus.manual_review],
   [LoanRequestStatus.approved]: [LoanRequestStatus.offer_sent],
-  [LoanRequestStatus.manual_review]: [LoanRequestStatus.approved, LoanRequestStatus.rejected],
+  // S18-1 — operators can escalate a manual_review request to a higher-
+  // tier approver; the senior operator can then approve / reject /
+  // de-escalate back to manual_review.
+  [LoanRequestStatus.manual_review]: [LoanRequestStatus.approved, LoanRequestStatus.rejected, LoanRequestStatus.escalated],
+  [LoanRequestStatus.escalated]: [LoanRequestStatus.approved, LoanRequestStatus.rejected, LoanRequestStatus.manual_review],
   [LoanRequestStatus.offer_sent]: [LoanRequestStatus.accepted, LoanRequestStatus.declined, LoanRequestStatus.expired],
   [LoanRequestStatus.accepted]: [LoanRequestStatus.contract_created],
   [LoanRequestStatus.contract_created]: [LoanRequestStatus.disbursing],
