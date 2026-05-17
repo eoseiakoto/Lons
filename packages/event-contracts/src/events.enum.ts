@@ -256,4 +256,7 @@ export enum EventType {
   MICRO_LOAN_CREDIT_LIMIT_REDUCED = 'micro_loan.credit_limit.reduced',
   // S16-FIX-1 — BnplCreditLine expiry sweep transition.
   BNPL_CREDIT_LINE_EXPIRED = 'bnpl.credit_line.expired',
+
+  // ── Sprint 17 FIX-1 — product config change triggers credit line re-eval
+  PRODUCT_CONFIG_CHANGED = 'product.config_changed',
 }

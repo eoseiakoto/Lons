@@ -288,6 +288,55 @@ export class BnplCreditLineService {
     });
   }
 
+  // ─── S17-FIX-2: revolving credit restoration ─────────────────────────
+
+  /**
+   * Restore `availableLimit` by the repaid principal amount.
+   *
+   * Only BNPL credit lines are revolving — calling this on a non-BNPL or
+   * non-active line is a no-op at the SQL level (the `status = 'active'`
+   * predicate filters it out). Callers are still expected to perform a
+   * product-type check before calling so we don't silently swallow a
+   * misconfigured event.
+   *
+   * The `LEAST(available_limit + amount, approved_limit)` cap in the SQL
+   * ensures `availableLimit` never exceeds `approvedLimit`, even when
+   * concurrent restorations race. The UPDATE is atomic — no TOCTOU risk.
+   *
+   * @param tenantId  Tenant context — required for RLS.
+   * @param creditLineId  The BNPL credit line to restore.
+   * @param amount  Decimal string — the principal portion of the repayment.
+   */
+  async restoreAvailableLimit(
+    tenantId: string,
+    creditLineId: string,
+    amount: string,
+  ): Promise<void> {
+    if (compare(amount, '0') <= 0) {
+      // Nothing to restore — guard against zero/negative principal amounts.
+      return;
+    }
+
+    await this.prisma.$executeRawUnsafe(
+      `UPDATE bnpl_credit_lines
+       SET available_limit = LEAST(
+         available_limit + $1::DECIMAL(19,4),
+         approved_limit
+       ),
+       updated_at = NOW()
+       WHERE id = $2::UUID
+         AND tenant_id = $3::UUID
+         AND status = 'active'`,
+      amount,
+      creditLineId,
+      tenantId,
+    );
+
+    this.logger.debug(
+      `restoreAvailableLimit: restored ${amount} to credit line ${creditLineId.slice(0, 8)}…`,
+    );
+  }
+
   /** 90 days from now. Spec default per S15-1.5. */
   private defaultNextReviewDate(): Date {
     const d = new Date();

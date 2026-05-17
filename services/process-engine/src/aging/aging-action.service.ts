@@ -23,9 +23,24 @@ export type AgingActionType =
   | 'ESCALATE_TO_COLLECTIONS'
   | 'REPORT_TO_BUREAU';
 
+/**
+ * S17-FIX-5: SUSPEND_BORROWING scope. Seeded configs without a `scope` field
+ * get the safer default (`'product'`) — only the triggering product's
+ * subscriptions are suspended rather than all the customer's subscriptions.
+ */
+export type SuspendBorrowingScope = 'product' | 'all';
+
 export interface AgingAction {
   type: AgingActionType;
   config: Record<string, unknown>;
+  /**
+   * S17-FIX-5: optional scope for SUSPEND_BORROWING actions.
+   * `'product'` (default) — suspends only subscriptions for the
+   * product that triggered the aging transition.
+   * `'all'` — suspends all active subscriptions for the customer
+   * (the previous blanket behaviour, now opt-in).
+   */
+  scope?: SuspendBorrowingScope;
 }
 
 /**
@@ -67,6 +82,14 @@ export class AgingActionService {
     contractId: string,
     customerId: string,
     bucketConfig: AgingBucketConfig,
+    /**
+     * S17-FIX-5: the product that triggered the aging transition. Used by
+     * SUSPEND_BORROWING to scope the suspension to this product's
+     * subscriptions when `action.scope === 'product'` (default).
+     * Callers that don't yet pass productId can omit it — the handler
+     * falls back to `'all'` scope only when productId is absent.
+     */
+    productId?: string,
   ): Promise<void> {
     const actions = this.parseActions(bucketConfig.actions);
     if (actions.length === 0) return;
@@ -86,7 +109,8 @@ export class AgingActionService {
             await this.applyPenalty(tenantId, contractId, action.config);
             break;
           case 'SUSPEND_BORROWING':
-            await this.suspendBorrowing(tenantId, customerId);
+            // S17-FIX-5: use scope from action config; default to 'product'.
+            await this.suspendBorrowing(tenantId, customerId, action.scope, productId);
             break;
           case 'ESCALATE_TO_COLLECTIONS':
             await this.escalateToCollections(
@@ -157,22 +181,52 @@ export class AgingActionService {
   }
 
   /**
-   * Hard-suspend ALL active subscriptions for the customer. This is
-   * the only handler that mutates DB state directly — suspension is
-   * synchronous (cannot be undone by an event consumer failure).
+   * Suspend active subscriptions for the customer.
+   *
+   * S17-FIX-5: scope controls which subscriptions are affected:
+   *   - `'product'` (default) — suspends only subscriptions for the
+   *     product that triggered the aging transition (`productId`).
+   *     Requires `productId` to be passed; falls back to `'all'` scope
+   *     when `productId` is absent (backward-compatible with callers that
+   *     haven't yet been updated to pass the product context).
+   *   - `'all'` — suspends ALL active subscriptions for the customer
+   *     (previous blanket behaviour — now an explicit opt-in via the
+   *     `scope: 'all'` field on the bucket config action).
+   *
+   * This is the only handler that mutates DB state directly — suspension
+   * is synchronous so it cannot be rolled back by an event consumer failure.
    */
   private async suspendBorrowing(
     tenantId: string,
     customerId: string,
+    scope: SuspendBorrowingScope = 'product',
+    productId?: string,
   ): Promise<void> {
+    const where: {
+      tenantId: string;
+      customerId: string;
+      status: SubscriptionStatus;
+      productId?: string;
+    } = {
+      tenantId,
+      customerId,
+      status: SubscriptionStatus.active,
+    };
+
+    // S17-FIX-5: scope to the triggering product unless 'all' is explicitly
+    // requested or productId is unavailable (legacy caller path).
+    if (scope === 'product' && productId) {
+      where.productId = productId;
+    }
+
     await this.prisma.subscription.updateMany({
-      where: {
-        tenantId,
-        customerId,
-        status: SubscriptionStatus.active,
-      },
+      where,
       data: { status: SubscriptionStatus.suspended },
     });
+
+    this.logger.debug(
+      `suspendBorrowing: scope=${scope} productId=${productId?.slice(0, 8) ?? 'n/a'} customerId=${customerId.slice(0, 8)}…`,
+    );
   }
 
   private async escalateToCollections(
@@ -214,6 +268,10 @@ export class AgingActionService {
    * Defensive parse — JSONB column can hold anything. Skips entries
    * that don't have a recognised `type` so a hand-edited config row
    * never crashes the aging job.
+   *
+   * S17-FIX-5: also extracts the optional `scope` field for
+   * SUSPEND_BORROWING actions. Unrecognised scope values are ignored
+   * and the default ('product') applies.
    */
   private parseActions(raw: unknown): AgingAction[] {
     if (!Array.isArray(raw)) return [];
@@ -224,12 +282,21 @@ export class AgingActionService {
       'ESCALATE_TO_COLLECTIONS',
       'REPORT_TO_BUREAU',
     ]);
+    const validScopes = new Set<SuspendBorrowingScope>(['product', 'all']);
     return raw
       .filter((a): a is Record<string, unknown> => typeof a === 'object' && a !== null)
       .filter((a) => validTypes.has(a.type as AgingActionType))
-      .map((a) => ({
-        type: a.type as AgingActionType,
-        config: (a.config as Record<string, unknown>) ?? {},
-      }));
+      .map((a) => {
+        const rawScope = a.scope as string | undefined;
+        const scope: SuspendBorrowingScope | undefined =
+          rawScope && validScopes.has(rawScope as SuspendBorrowingScope)
+            ? (rawScope as SuspendBorrowingScope)
+            : undefined;
+        return {
+          type: a.type as AgingActionType,
+          config: (a.config as Record<string, unknown>) ?? {},
+          scope,
+        };
+      });
   }
 }

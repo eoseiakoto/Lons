@@ -87,6 +87,32 @@ export const NOTIFICATION_TEMPLATES: Record<string, Record<string, string>> = {
     in_app: 'Your installment of {{currency}} {{amount}} is due today.',
   },
 
+  // ── Sprint 17 FIX-4 — post-overdue payment reminder templates ─────────
+  // Sent by PaymentReminderJob's overdue pass at 1, 3, and 7 days past due.
+  // Variables available: customerName, amount, currency, dueDate,
+  // installmentNumber, daysPastDue, contractId.
+  //
+  // Idempotency: eventType is `payment_overdue_reminder.{daysPastDue}:{entryId}`
+  // to prevent duplicate sends per (entry, daysPastDue) combination.
+  'payment_overdue_reminder.1': {
+    sms: 'Hi {{customerName}}, your payment of {{currency}} {{amount}} was due yesterday. Please pay now to avoid penalties.',
+    email: 'Hi {{customerName}}, your payment of {{currency}} {{amount}} was due yesterday. Please pay immediately to avoid additional penalties.',
+    push: 'Payment overdue: {{currency}} {{amount}} — 1 day past due',
+    in_app: 'Your payment of {{currency}} {{amount}} was due yesterday. Please pay now.',
+  },
+  'payment_overdue_reminder.3': {
+    sms: 'Hi {{customerName}}, your payment of {{currency}} {{amount}} is 3 days overdue. A penalty may apply if not paid soon.',
+    email: 'Hi {{customerName}}, your payment of {{currency}} {{amount}} is now 3 days overdue. Please pay immediately to avoid escalating penalties.',
+    push: 'Payment 3 days overdue: {{currency}} {{amount}}',
+    in_app: 'Your payment of {{currency}} {{amount}} is 3 days overdue. Please pay now.',
+  },
+  'payment_overdue_reminder.7': {
+    sms: 'Hi {{customerName}}, your payment of {{currency}} {{amount}} is 7 days overdue. Your account may be escalated to collections.',
+    email: 'Hi {{customerName}}, your payment of {{currency}} {{amount}} is now 7 days overdue. Failure to pay may result in your account being referred to collections.',
+    push: 'Payment 7 days overdue: {{currency}} {{amount}} — collections risk',
+    in_app: 'Your payment of {{currency}} {{amount}} is 7 days overdue. Your account may be escalated to collections.',
+  },
+
   // Micro-loan-specific templates — used when a product's
   // notificationConfig references these keys explicitly. The
   // PaymentReminderJob resolves `templateKey` from the product

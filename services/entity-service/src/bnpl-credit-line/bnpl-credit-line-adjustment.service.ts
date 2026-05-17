@@ -28,6 +28,9 @@ export enum AdjustmentTrigger {
   CREDIT_SCORE_CHANGE = 'credit_score_change',
   SCHEDULED_REVIEW = 'scheduled_review',
   MANUAL = 'manual',
+  // S17-FIX-1: applied when a product's maxAmount / minAmount config
+  // changes and existing credit lines exceed the new ceiling.
+  PRODUCT_CONFIG_CHANGE = 'product_config_change',
 }
 
 export interface IBnplCreditLimitRules {
@@ -211,6 +214,10 @@ export class BnplCreditLineAdjustmentService {
         // Manual adjustments use `adjustCreditLimit` directly; the
         // evaluateAndAdjust path is a no-op for MANUAL.
         return null;
+      case AdjustmentTrigger.PRODUCT_CONFIG_CHANGE:
+        // Handled via evaluateProductConfigChange — not valid as a
+        // per-line trigger through evaluateAndAdjust.
+        return null;
     }
 
     if (evaluation.action === 'none') {
@@ -331,6 +338,111 @@ export class BnplCreditLineAdjustmentService {
     );
 
     return result;
+  }
+
+  // ─── S17-FIX-1: product config change evaluator ─────────────────────
+
+  /**
+   * When a product's `maxAmount` is reduced, any ACTIVE credit lines for
+   * that product whose `approvedLimit` exceeds the new max are capped and
+   * an adjustment record is written.
+   *
+   * Called by the event handler that subscribes to `PRODUCT_CONFIG_CHANGED`.
+   * Returns the list of adjustment records created (one per affected line;
+   * empty when no lines needed reduction).
+   */
+  async evaluateProductConfigChange(
+    tenantId: string,
+    productId: string,
+    configChange: {
+      /** Decimal string — the new product.maxAmount. */
+      newMaxAmount: string;
+      /** Human-readable description of what changed. */
+      changeDescription?: string;
+    },
+  ): Promise<BnplCreditLineAdjustment[]> {
+    const { newMaxAmount, changeDescription } = configChange;
+
+    // Find all ACTIVE credit lines for the product that exceed the new max.
+    const affectedLines = await this.prisma.bnplCreditLine.findMany({
+      where: {
+        tenantId,
+        productId,
+        status: BnplCreditLineStatus.active,
+        deletedAt: null,
+      },
+    });
+
+    const adjustments: BnplCreditLineAdjustment[] = [];
+
+    for (const line of affectedLines) {
+      const currentApproved = String(line.approvedLimit);
+
+      // Only reduce — never increase via this path (increases come from
+      // normal evaluation triggers like PURCHASE_HISTORY / CREDIT_SCORE_CHANGE).
+      if (compare(currentApproved, newMaxAmount) <= 0) {
+        // Already at or below the new max — no change needed.
+        continue;
+      }
+
+      const currentAvailable = String(line.availableLimit);
+      // Scale availableLimit proportionally so utilisation ratio stays
+      // constant (same logic as adjustCreditLimit decrease path).
+      const newAvailable = this.scaleAvailable(
+        currentAvailable,
+        currentApproved,
+        newMaxAmount,
+      );
+
+      const adj = await this.prisma.$transaction(async (tx) => {
+        await tx.bnplCreditLine.update({
+          where: { id: line.id },
+          data: {
+            approvedLimit: newMaxAmount,
+            availableLimit: newAvailable,
+            lastReviewedAt: new Date(),
+          },
+        });
+
+        return tx.bnplCreditLineAdjustment.create({
+          data: {
+            tenantId,
+            creditLineId: line.id,
+            previousLimit: currentApproved,
+            newLimit: newMaxAmount,
+            adjustmentType: 'decrease',
+            reasonCode: 'product_config_change',
+            reasonDetail:
+              changeDescription ??
+              `Product maxAmount reduced to ${newMaxAmount}; existing limit was ${currentApproved}`,
+            triggeredBy: AdjustmentTrigger.PRODUCT_CONFIG_CHANGE,
+          },
+        });
+      });
+
+      this.eventBus.emitAndBuild(
+        EventType.BNPL_CREDIT_LIMIT_ADJUSTED,
+        tenantId,
+        {
+          creditLineId: line.id,
+          customerId: line.customerId,
+          subscriptionId: line.subscriptionId,
+          previousLimit: currentApproved,
+          newLimit: newMaxAmount,
+          adjustmentType: 'decrease',
+          reasonCode: 'product_config_change',
+          triggeredBy: AdjustmentTrigger.PRODUCT_CONFIG_CHANGE,
+        },
+      );
+
+      adjustments.push(adj);
+    }
+
+    this.logger.log(
+      `evaluateProductConfigChange: ${adjustments.length} credit line(s) reduced for product ${productId.slice(0, 8)}… (newMax=${newMaxAmount})`,
+    );
+
+    return adjustments;
   }
 
   // ─── Trigger evaluation helpers ─────────────────────────────────────

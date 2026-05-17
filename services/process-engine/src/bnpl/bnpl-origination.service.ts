@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Inject, Optional } from '@nestjs/common';
 
 import {
   PrismaService,
@@ -18,6 +18,8 @@ import {
   ValidationError,
   isPositive,
   compare,
+  IWalletDisbursementAdapter,
+  WALLET_DISBURSEMENT_ADAPTER,
 } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
@@ -85,6 +87,16 @@ export class BnplOriginationService {
     private readonly prisma: PrismaService,
     private readonly eventBus: EventBusService,
     private readonly settlementService: MerchantSettlementService,
+    /**
+     * S17-FIX-3: shared wallet disbursement adapter from `@lons/common/wallet`.
+     * Used for merchant wallet disbursement in the origination path. Optional so
+     * legacy tests that construct the service with 3 args still pass. The module
+     * registers `SharedMockWalletDisbursementAdapter` as default; Phase 5 swaps
+     * for the real MTN MoMo / M-Pesa adapter via the same token.
+     */
+    @Optional()
+    @Inject(WALLET_DISBURSEMENT_ADAPTER)
+    private readonly walletDisbursementAdapter?: IWalletDisbursementAdapter,
   ) {}
 
   async initiate(

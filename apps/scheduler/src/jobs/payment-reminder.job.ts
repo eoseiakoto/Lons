@@ -18,6 +18,15 @@ interface IReminderConfig {
   schedule: IReminderEntry[];
 }
 
+// S17-FIX-4: post-overdue reminder config
+interface IOverdueReminderConfig {
+  /**
+   * Days-past-due offsets at which to send escalating overdue reminders.
+   * Defaults to [1, 3, 7] when absent from product notificationConfig.
+   */
+  overdueSchedule: number[];
+}
+
 /**
  * Sprint 16 (S16-10) — generic payment reminder scheduler for all
  * installment-based loan products (micro-loan, BNPL, factoring).
@@ -56,6 +65,13 @@ export class PaymentReminderJob {
       { daysBefore: 0, channel: 'sms', templateKey: 'payment_reminder.due_today' },
     ],
   };
+
+  /**
+   * S17-FIX-4 — default post-overdue reminder schedule. Escalating
+   * notifications at 1, 3, and 7 days past due. Products can override via
+   * `product.notificationConfig.paymentReminders.overdueSchedule`.
+   */
+  private static readonly DEFAULT_OVERDUE_SCHEDULE: number[] = [1, 3, 7];
 
   constructor(
     private readonly prisma: PrismaService,
@@ -221,6 +237,98 @@ export class PaymentReminderJob {
       }
     }
 
+    // ── S17-FIX-4: post-overdue pass ────────────────────────────────────
+    // Second pass: find overdue installments and send escalating reminders
+    // at 1, 3, and 7 days past due. Uses the same idempotency mechanism as
+    // the pre-due pass but with a separate discriminator prefix so the two
+    // sets of rows don't collide.
+    const overdue = await this.prisma.repaymentScheduleEntry.findMany({
+      where: {
+        tenantId,
+        status: {
+          in: [
+            RepaymentScheduleStatus.overdue,
+            RepaymentScheduleStatus.pending,
+            RepaymentScheduleStatus.partial,
+          ],
+        },
+        // Entries that were due before today (strictly past due).
+        dueDate: { lt: today },
+      },
+      include: {
+        contract: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                type: true,
+                notificationConfig: true,
+                currency: true,
+              },
+            },
+            customer: {
+              select: { id: true, fullName: true },
+            },
+          },
+        },
+      },
+    });
+
+    for (const entry of overdue) {
+      const overdueSchedule = this.resolveOverdueSchedule(
+        entry.contract.product.notificationConfig,
+      );
+
+      const daysPastDue = Math.floor(
+        (today.getTime() - new Date(entry.dueDate).getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
+
+      // Only fire at the configured day offsets.
+      if (!overdueSchedule.includes(daysPastDue)) continue;
+
+      const templateEventType = `payment_overdue_reminder.${daysPastDue}`;
+      const dedupeEventType = `${templateEventType}:${entry.id}`;
+
+      const alreadySent = await this.prisma.notification.findFirst({
+        where: {
+          tenantId,
+          customerId: entry.contract.customer.id,
+          contractId: entry.contractId,
+          eventType: dedupeEventType,
+          status: { in: ['sent', 'pending', 'delivered'] },
+        },
+      });
+      if (alreadySent) {
+        skipped += 1;
+        continue;
+      }
+
+      try {
+        await this.notificationService.sendNotification(tenantId, {
+          customerId: entry.contract.customer.id,
+          contractId: entry.contractId,
+          eventType: dedupeEventType,
+          channel: 'sms',
+          variables: {
+            amount: String(entry.totalAmount),
+            currency: entry.contract.product.currency,
+            dueDate: entry.dueDate.toISOString().split('T')[0],
+            customerName: entry.contract.customer.fullName ?? '',
+            installmentNumber: String(entry.installmentNumber),
+            daysPastDue: String(daysPastDue),
+          },
+        });
+        sent += 1;
+      } catch (err) {
+        this.logger.warn(
+          `Failed to send ${dedupeEventType} for entry ${entry.id}: ${(err as Error).message}`,
+        );
+        skipped += 1;
+      }
+    }
+    // ── end S17-FIX-4 ───────────────────────────────────────────────────
+
     return { sent, skipped };
   }
 
@@ -257,5 +365,27 @@ export class PaymentReminderJob {
       enabled: typeof raw.enabled === 'boolean' ? raw.enabled : true,
       schedule,
     };
+  }
+
+  /**
+   * S17-FIX-4 — resolve the post-overdue reminder schedule from the
+   * product's `notificationConfig.paymentReminders.overdueSchedule`.
+   * Defaults to `[1, 3, 7]` when absent or malformed. Each element is
+   * a positive integer representing days past due.
+   */
+  private resolveOverdueSchedule(notificationConfig: unknown): number[] {
+    const cfg = (notificationConfig as Record<string, unknown> | null) ?? null;
+    const reminders = cfg?.paymentReminders as Record<string, unknown> | undefined;
+    if (!reminders || typeof reminders !== 'object') {
+      return PaymentReminderJob.DEFAULT_OVERDUE_SCHEDULE;
+    }
+    const raw = reminders.overdueSchedule;
+    if (
+      Array.isArray(raw) &&
+      raw.every((v) => typeof v === 'number' && v > 0)
+    ) {
+      return raw as number[];
+    }
+    return PaymentReminderJob.DEFAULT_OVERDUE_SCHEDULE;
   }
 }

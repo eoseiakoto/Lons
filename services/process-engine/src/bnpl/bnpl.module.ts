@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '@lons/database';
-import { EventBusModule } from '@lons/common';
+import { EventBusModule, WalletAdaptersModule } from '@lons/common';
 
 import { BnplOriginationService } from './bnpl-origination.service';
 import { MerchantSettlementService } from './merchant-settlement.service';
@@ -11,9 +11,22 @@ import {
   BNPL_COLLECTION_ADAPTER,
   MockBnplCollectionAdapter,
 } from './wallet-collection-adapter';
+import { BnplRepaymentRestoreListener } from './bnpl-repayment-restore.listener';
+import { BnplCreditLineModule } from '@lons/entity-service';
 
 @Module({
-  imports: [PrismaModule, EventBusModule],
+  imports: [
+    PrismaModule,
+    EventBusModule,
+    // S17-FIX-3: shared wallet adapters from @lons/common. Registers
+    // SharedMockWalletDisbursementAdapter and SharedMockWalletCollectionAdapter
+    // under WALLET_DISBURSEMENT_ADAPTER / WALLET_COLLECTION_ADAPTER tokens.
+    // Phase 5 will call WalletAdaptersModule.register({ liveAdapters: [...] }).
+    WalletAdaptersModule.register(),
+    // S17-FIX-2: BnplCreditLineModule provides BnplCreditLineService which
+    // the repayment restore listener needs to call restoreAvailableLimit.
+    BnplCreditLineModule,
+  ],
   providers: [
     BnplOriginationService,
     MerchantSettlementService,
@@ -25,6 +38,9 @@ import {
     // adapter via the same DI token.
     MockBnplCollectionAdapter,
     { provide: BNPL_COLLECTION_ADAPTER, useExisting: MockBnplCollectionAdapter },
+    // S17-FIX-2: subscribes to REPAYMENT_RECEIVED and restores BNPL
+    // credit line availableLimit when allocatedPrincipal > 0.
+    BnplRepaymentRestoreListener,
   ],
   exports: [
     BnplOriginationService,

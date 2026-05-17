@@ -1,6 +1,16 @@
-import { Injectable, Optional } from '@nestjs/common';
+import { Injectable, Optional, Inject } from '@nestjs/common';
 import { PrismaService, Prisma, RepaymentStatus, RepaymentMethodType, ContractStatus } from '@lons/database';
-import { EventBusService, NotFoundError, ValidationError, add, subtract, compare, bankersRound } from '@lons/common';
+import {
+  EventBusService,
+  NotFoundError,
+  ValidationError,
+  add,
+  subtract,
+  compare,
+  bankersRound,
+  IWalletCollectionAdapter,
+  WALLET_COLLECTION_ADAPTER,
+} from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
 import { allocatePayment, OutstandingAmounts } from '../waterfall/waterfall-allocator';
@@ -17,6 +27,16 @@ export class PaymentService {
      * Production wiring always provides it via RepaymentServiceModule.
      */
     @Optional() private scheduleRecalc?: ScheduleRecalculationService,
+    /**
+     * S17-FIX-3: shared wallet collection adapter from `@lons/common/wallet`.
+     * Used for debit/collection operations (e.g. auto-debit on manual repayment).
+     * Optional so existing tests that don't need collection still pass.
+     * The module registers SharedMockWalletCollectionAdapter as default;
+     * Phase 5 swaps in the real MTN MoMo / M-Pesa adapter via the same token.
+     */
+    @Optional()
+    @Inject(WALLET_COLLECTION_ADAPTER)
+    private walletCollectionAdapter?: IWalletCollectionAdapter,
   ) {}
 
   async processPayment(tenantId: string, input: {
