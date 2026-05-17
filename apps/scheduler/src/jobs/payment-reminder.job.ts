@@ -18,15 +18,6 @@ interface IReminderConfig {
   schedule: IReminderEntry[];
 }
 
-// S17-FIX-4: post-overdue reminder config
-interface IOverdueReminderConfig {
-  /**
-   * Days-past-due offsets at which to send escalating overdue reminders.
-   * Defaults to [1, 3, 7] when absent from product notificationConfig.
-   */
-  overdueSchedule: number[];
-}
-
 /**
  * Sprint 16 (S16-10) — generic payment reminder scheduler for all
  * installment-based loan products (micro-loan, BNPL, factoring).
@@ -304,12 +295,22 @@ export class PaymentReminderJob {
         continue;
       }
 
+      // S17-FIX-BA-4 — resolve channel from product notificationConfig
+      // rather than hardcoding 'sms'. The pre-due pass already routes
+      // through reminder.channel; the overdue pass had been silently
+      // forcing SMS even on products configured for email/push,
+      // racking up per-SMS fees on the wrong channel.
+      const overdueChannel = this.resolveOverdueChannel(
+        entry.contract.product.notificationConfig,
+        daysPastDue,
+      );
+
       try {
         await this.notificationService.sendNotification(tenantId, {
           customerId: entry.contract.customer.id,
           contractId: entry.contractId,
           eventType: dedupeEventType,
-          channel: 'sms',
+          channel: overdueChannel,
           variables: {
             amount: String(entry.totalAmount),
             currency: entry.contract.product.currency,
@@ -372,6 +373,11 @@ export class PaymentReminderJob {
    * product's `notificationConfig.paymentReminders.overdueSchedule`.
    * Defaults to `[1, 3, 7]` when absent or malformed. Each element is
    * a positive integer representing days past due.
+   *
+   * S17-FIX-BA-4 — the schedule also accepts the enriched object form
+   * `{ days: N, channel?: 'sms' | 'email' | 'push' }[]` so per-day
+   * channel overrides can travel alongside the day offsets. The
+   * number-only form remains supported for backward compatibility.
    */
   private resolveOverdueSchedule(notificationConfig: unknown): number[] {
     const cfg = (notificationConfig as Record<string, unknown> | null) ?? null;
@@ -380,12 +386,71 @@ export class PaymentReminderJob {
       return PaymentReminderJob.DEFAULT_OVERDUE_SCHEDULE;
     }
     const raw = reminders.overdueSchedule;
+    // Number-only form: `[1, 3, 7]`.
     if (
       Array.isArray(raw) &&
       raw.every((v) => typeof v === 'number' && v > 0)
     ) {
       return raw as number[];
     }
+    // Object form: `[{ days: 1, channel: 'sms' }, ...]`. Extract day
+    // offsets only — channel resolution is a separate concern handled
+    // by `resolveOverdueChannel`.
+    if (
+      Array.isArray(raw) &&
+      raw.every(
+        (v) =>
+          v &&
+          typeof v === 'object' &&
+          typeof (v as { days?: unknown }).days === 'number' &&
+          ((v as { days: number }).days) > 0,
+      )
+    ) {
+      return (raw as { days: number }[]).map((v) => v.days);
+    }
     return PaymentReminderJob.DEFAULT_OVERDUE_SCHEDULE;
+  }
+
+  /**
+   * S17-FIX-BA-4 — resolve the notification channel for an overdue
+   * reminder. Fallback chain:
+   *
+   *   1. per-day override on `paymentReminders.overdueSchedule[]`
+   *      (object form `{ days: N, channel: X }`)
+   *   2. product `notificationConfig.defaultChannel`
+   *   3. `'sms'` as the absolute fallback
+   *
+   * The hardcoded `'sms'` in the overdue pass was silently charging
+   * tenants for SMS even when they had explicitly configured another
+   * channel — a quiet billing leak. The fix routes channel selection
+   * through the same product config the pre-due pass already honours.
+   */
+  private resolveOverdueChannel(
+    notificationConfig: unknown,
+    daysPastDue: number,
+  ): string {
+    const cfg = (notificationConfig as Record<string, unknown> | null) ?? null;
+    if (!cfg) return 'sms';
+
+    const reminders = cfg.paymentReminders as Record<string, unknown> | undefined;
+    const raw = reminders?.overdueSchedule;
+    if (Array.isArray(raw)) {
+      const match = raw.find(
+        (v): v is { days: number; channel?: string } =>
+          !!v &&
+          typeof v === 'object' &&
+          typeof (v as { days?: unknown }).days === 'number' &&
+          (v as { days: number }).days === daysPastDue,
+      );
+      if (match && typeof match.channel === 'string' && match.channel.length > 0) {
+        return match.channel;
+      }
+    }
+
+    const defaultChannel = cfg.defaultChannel;
+    if (typeof defaultChannel === 'string' && defaultChannel.length > 0) {
+      return defaultChannel;
+    }
+    return 'sms';
   }
 }

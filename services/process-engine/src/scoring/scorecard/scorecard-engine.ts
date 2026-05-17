@@ -24,15 +24,39 @@ export interface ScoringOutput {
   recommendedLimit: string;
   contributingFactors: Record<string, { value: number | string | null | undefined; points: number; weight: number; weightedScore: string }>;
   confidence: string;
+  /**
+   * S17-FIX-BA-2 — names of factors that were excluded from the score
+   * because their input value was null/undefined AND the factor's
+   * weight was > 0. A null on a zero-weight factor is harmless and is
+   * NOT reported here. Empty array when nothing was skipped.
+   */
+  skippedFactors: string[];
 }
 
 export function calculateScore(scorecard: ScorecardConfig, inputs: ScoringInput, baseAmount: string): ScoringOutput {
   const contributingFactors: ScoringOutput['contributingFactors'] = {};
+  const skippedFactors: string[] = [];
   let totalWeightedPoints = '0.0000';
   let totalWeight = 0;
 
   for (const factor of scorecard.factors) {
     const value = inputs[factor.name];
+
+    // S17-FIX-BA-2 — null means "no data available", NOT "zero". If
+    // the factor has any weight, treating null as 0 would push the
+    // customer into the lowest band and silently penalise everyone
+    // who hasn't synced EMI/bureau data yet. Skip the factor entirely
+    // — it contributes nothing to the score AND nothing to the
+    // totalWeight denominator, so the normalisation is over the
+    // factors that actually had data. Zero-weight factors stay on
+    // the legacy "value-coerced-to-0" path so default-scorecard
+    // behaviour is unchanged (backward compatible per FIX-BA-2
+    // exit criterion).
+    if ((value === null || value === undefined) && factor.weight > 0) {
+      skippedFactors.push(factor.name);
+      continue;
+    }
+
     const numericValue = value !== null && value !== undefined ? Number(value) : 0;
 
     let points = 0;
@@ -85,5 +109,5 @@ export function calculateScore(scorecard: ScorecardConfig, inputs: ScoringInput,
 
   const confidence = totalWeight > 0 ? bankersRound(divide(String(totalWeight), '100'), 4) : '0.0000';
 
-  return { score, riskTier, recommendedLimit, contributingFactors, confidence };
+  return { score, riskTier, recommendedLimit, contributingFactors, confidence, skippedFactors };
 }

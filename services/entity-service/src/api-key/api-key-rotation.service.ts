@@ -1,12 +1,22 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '@lons/database';
+import { AuditActionType, AuditResourceType } from '@lons/common';
 import * as crypto from 'crypto';
+
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class ApiKeyRotationService {
   private readonly logger = new Logger(ApiKeyRotationService.name);
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    // S17-FIX-BA-3 — FR-SEC-002.3 mandates audit trail for credential
+    // lifecycle events. Both rotation and revocation now write an
+    // entry via AuditService — never including key values or hashes,
+    // only IDs and lifecycle metadata.
+    private auditService: AuditService,
+  ) {}
 
   async rotateApiKey(
     tenantId: string,
@@ -58,6 +68,21 @@ export class ApiKeyRotationService {
 
     this.logger.log(`Rotated API key ${apiKeyId} → ${newApiKey.id} with ${gracePeriodHours}h grace period`);
 
+    // S17-FIX-BA-3 — audit trail for the rotation. IDs + grace period
+    // only; never the key/secret plaintext or hashes.
+    await this.auditService.log({
+      tenantId,
+      actorType: 'system',
+      action: AuditActionType.API_KEY_ROTATED,
+      resourceType: AuditResourceType.API_KEY,
+      resourceId: apiKeyId,
+      metadata: {
+        previousKeyId: apiKeyId,
+        newKeyId: newApiKey.id,
+        gracePeriodHours,
+      },
+    });
+
     return { id: newApiKey.id, key: newKey, secret: newSecret, name: existingKey.name, createdAt: newApiKey.createdAt };
   }
 
@@ -70,12 +95,25 @@ export class ApiKeyRotationService {
       throw new NotFoundException(`API key ${apiKeyId} not found or already revoked`);
     }
 
+    const revokedAt = new Date();
     await (this.prisma as any).apiKey.update({
       where: { id: apiKeyId },
-      data: { revokedAt: new Date() },
+      data: { revokedAt },
     });
 
     this.logger.log(`Revoked API key ${apiKeyId}`);
+
+    // S17-FIX-BA-3 — audit trail for the revocation.
+    await this.auditService.log({
+      tenantId,
+      actorType: 'system',
+      action: AuditActionType.API_KEY_REVOKED,
+      resourceType: AuditResourceType.API_KEY,
+      resourceId: apiKeyId,
+      metadata: {
+        revokedAt: revokedAt.toISOString(),
+      },
+    });
   }
 
   async listActiveKeys(tenantId: string) {

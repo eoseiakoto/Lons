@@ -188,4 +188,112 @@ describe('PaymentReminderJob — S17-FIX-4 post-overdue pass', () => {
     expect(call[1].eventType).toMatch(/^payment_overdue_reminder\.2:/);
     expect(result.sent).toBe(1);
   });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // S17-FIX-BA-4 — overdue reminders resolve channel from product config
+  // ─────────────────────────────────────────────────────────────────────
+
+  describe('FIX-BA-4 overdue channel resolution', () => {
+    it('falls back to sms when no notificationConfig exists', async () => {
+      const { job, notificationService } = makeJob({
+        overdueEntries: [makeEntry({ dueDate: daysAgo(1) })], // notificationConfig: null
+      });
+
+      await job.runForTenant(TENANT_ID);
+
+      expect(notificationService.sendNotification).toHaveBeenCalledTimes(1);
+      const call = notificationService.sendNotification.mock.calls[0];
+      expect(call[1].channel).toBe('sms');
+    });
+
+    it('uses product defaultChannel when no per-day override is set', async () => {
+      const { job, notificationService } = makeJob({
+        overdueEntries: [
+          makeEntry({
+            dueDate: daysAgo(1),
+            contract: {
+              product: {
+                id: PRODUCT_ID,
+                type: 'bnpl',
+                notificationConfig: { defaultChannel: 'email' },
+                currency: 'GHS',
+              },
+              customer: { id: CUSTOMER_ID, fullName: 'Test Customer' },
+            },
+          }),
+        ],
+      });
+
+      await job.runForTenant(TENANT_ID);
+
+      expect(notificationService.sendNotification).toHaveBeenCalledTimes(1);
+      expect(notificationService.sendNotification.mock.calls[0][1].channel).toBe('email');
+    });
+
+    it('uses per-day override from overdueSchedule object form', async () => {
+      const { job, notificationService } = makeJob({
+        overdueEntries: [
+          makeEntry({
+            dueDate: daysAgo(3),
+            contract: {
+              product: {
+                id: PRODUCT_ID,
+                type: 'bnpl',
+                notificationConfig: {
+                  defaultChannel: 'sms',
+                  paymentReminders: {
+                    overdueSchedule: [
+                      { days: 1, channel: 'push' },
+                      { days: 3, channel: 'email' },
+                      { days: 7, channel: 'sms' },
+                    ],
+                  },
+                },
+                currency: 'GHS',
+              },
+              customer: { id: CUSTOMER_ID, fullName: 'Test Customer' },
+            },
+          }),
+        ],
+      });
+
+      await job.runForTenant(TENANT_ID);
+
+      expect(notificationService.sendNotification).toHaveBeenCalledTimes(1);
+      expect(notificationService.sendNotification.mock.calls[0][1].channel).toBe('email');
+    });
+
+    it('per-day override absent → falls through to defaultChannel', async () => {
+      const { job, notificationService } = makeJob({
+        overdueEntries: [
+          makeEntry({
+            dueDate: daysAgo(1),
+            contract: {
+              product: {
+                id: PRODUCT_ID,
+                type: 'bnpl',
+                notificationConfig: {
+                  defaultChannel: 'push',
+                  // 1 DPD is in the schedule but has no channel override.
+                  paymentReminders: {
+                    overdueSchedule: [
+                      { days: 1 }, // no channel field
+                      { days: 3, channel: 'email' },
+                    ],
+                  },
+                },
+                currency: 'GHS',
+              },
+              customer: { id: CUSTOMER_ID, fullName: 'Test Customer' },
+            },
+          }),
+        ],
+      });
+
+      await job.runForTenant(TENANT_ID);
+
+      expect(notificationService.sendNotification).toHaveBeenCalledTimes(1);
+      expect(notificationService.sendNotification.mock.calls[0][1].channel).toBe('push');
+    });
+  });
 });

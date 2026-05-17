@@ -37,6 +37,13 @@ interface ScoringMetadata {
   scoredAt: string;
   /** Fraction (0-1) of scorecard features that had real data (not fallback). */
   dataCompletenessRatio: number;
+  /**
+   * S17-FIX-BA-2 — names of factors the scorecard engine excluded from
+   * the score because the input was null AND the factor's weight > 0.
+   * Surfaced on the persisted scoringResult so analytics / underwriting
+   * can tell which features actually contributed.
+   */
+  skippedFactors: string[];
 }
 
 @Injectable()
@@ -105,6 +112,9 @@ export class ScoringService {
       emiDataAge: emiDataAgeHours,
       scoredAt: new Date().toISOString(),
       dataCompletenessRatio: this.computeCompletenessRatio(features, emiPresent, bureauPresent),
+      // S17-FIX-BA-2 — bubble the scorecard engine's null-skip list up
+      // to the persisted scoringResult.
+      skippedFactors: result.skippedFactors,
     };
     const featuresWithMeta = { ...features, _metadata: metadata as unknown as ScoringInput[string] };
 
@@ -113,15 +123,19 @@ export class ScoringService {
         tenantId,
         modelType: ScoringModelType.rule_based,
         modelVersion: scorecard.version,
-        score: Number(result.score),
+        // S17-FIX-BA-1 — pass Decimal-as-string straight through to
+        // Prisma. The earlier Number() cast would silently lose
+        // precision on values > 2^53, and recommendedLimit is monetary
+        // (DECIMAL(19,4)) so it has the full range to worry about.
+        score: result.score,
         scoreRangeMin: scorecard.scoreRange.min,
         scoreRangeMax: scorecard.scoreRange.max,
         probabilityDefault: null,
         riskTier: result.riskTier as 'low' | 'medium' | 'high' | 'critical',
-        recommendedLimit: Number(result.recommendedLimit),
+        recommendedLimit: result.recommendedLimit,
         contributingFactors: result.contributingFactors as unknown as Prisma.InputJsonValue,
         inputFeatures: featuresWithMeta as unknown as Prisma.InputJsonValue,
-        confidence: Number(result.confidence),
+        confidence: result.confidence,
         context: context as ScoringContext,
         customer: { connect: { id: customerId } },
         product: { connect: { id: productId } },
@@ -193,7 +207,15 @@ export class ScoringService {
 
     let transactionFrequency = 15; // fallback for customers with no EMI data
     let incomeConsistency = 60; // fallback
-    let averageBalance: number | null = null;
+    // S17-FIX-BA-1 — keep monetary averageBalance as Decimal string;
+    // dropping precision via Number() would be wrong for a value that
+    // lives in a DECIMAL(19,4) column. The scorecard engine's band
+    // matching still uses Number() internally for the coarse integer
+    // thresholds (50/200/500) on this factor — acceptable because the
+    // thresholds are integer points where double precision can't
+    // diverge; the boundary tightening is deferred to the Sprint 19
+    // scoring hardening pass.
+    let averageBalance: string | null = null;
     let emiPresent = false;
     let emiDataAgeHours: number | null = null;
 
@@ -202,7 +224,7 @@ export class ScoringService {
       transactionFrequency = latestEmi.transactionCount30d ?? 15;
       incomeConsistency = latestEmi.incomeConsistency ?? 60;
       averageBalance = latestEmi.averageBalance30d
-        ? Number(latestEmi.averageBalance30d)
+        ? latestEmi.averageBalance30d.toString()
         : null;
       emiDataAgeHours =
         (Date.now() - latestEmi.fetchedAt.getTime()) / (1000 * 60 * 60);

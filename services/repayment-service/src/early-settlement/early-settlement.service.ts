@@ -146,10 +146,20 @@ export class EarlySettlementService {
       ),
       settlementFee,
     );
-    const totalSettlementAmount = bankersRound(
+    let totalSettlementAmount = bankersRound(
       subtract(subtotal, interestRebate),
       4,
     );
+
+    // S17-FIX-BA-5 (S16 carry-forward) — floor at zero. A 100% rebate
+    // on a contract where unearned interest exceeds the outstanding
+    // balance would otherwise produce a negative settlement quote —
+    // an obligation to PAY the customer to settle, which is
+    // commercially nonsensical. The breakdown still carries the
+    // rebate line for transparency.
+    if (compare(totalSettlementAmount, '0') < 0) {
+      totalSettlementAmount = '0.0000';
+    }
 
     // Quote validity — end of current UTC day. The customer must
     // re-quote tomorrow because outstanding amounts change with

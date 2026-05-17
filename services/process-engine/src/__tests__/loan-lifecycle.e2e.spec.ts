@@ -522,7 +522,10 @@ describe('Loan Lifecycle E2E: Request to Disbursement', () => {
       String(requestedAmount),
     );
     expect(scoringResult).toBeDefined();
-    expect(scoringResult.score).toBeGreaterThanOrEqual(600);
+    // S17-FIX-BA-1 — scoringResult.score is now a Decimal string from
+    // Prisma (no Number() cast on write). Compare numerically by
+    // coercing here at the test boundary.
+    expect(Number(scoringResult.score)).toBeGreaterThanOrEqual(600);
 
     // Transition to scored
     const scoredRequest = await loanRequestService.transitionStatus(

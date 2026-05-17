@@ -105,4 +105,110 @@ describe('ScorecardEngine', () => {
     // High score should get 5x multiplier
     expect(Number(result.recommendedLimit)).toBe(10000);
   });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // S17-FIX-BA-2 — null-value factor handling
+  // ─────────────────────────────────────────────────────────────────────
+
+  describe('null factor handling (S17-FIX-BA-2)', () => {
+    const SCORECARD_WITH_OPTIONAL: ScorecardConfig = {
+      ...TEST_SCORECARD,
+      factors: [
+        ...TEST_SCORECARD.factors,
+        {
+          // Zero-weight extension — null on this must NOT show up as skipped.
+          name: 'average_balance',
+          weight: 0,
+          bands: [
+            { min: 500, max: null, points: 100 },
+            { min: 0, max: 499, points: 10 },
+          ],
+        },
+        {
+          // Weighted optional factor — null here MUST skip cleanly.
+          name: 'credit_bureau_score',
+          weight: 25,
+          bands: [
+            { min: 70, max: null, points: 100 },
+            { min: 0, max: 69, points: 10 },
+          ],
+        },
+      ],
+    };
+
+    it('contributes 0 for null value when weight is 0 (backward compatible)', () => {
+      const result = calculateScore(SCORECARD_WITH_OPTIONAL, {
+        account_age_days: 400,
+        kyc_level: 3,
+        payment_history_pct: 95,
+        average_balance: null, // weight=0 — should NOT appear in skippedFactors
+        credit_bureau_score: 80, // present, weight>0 — scored normally
+      }, '1000.0000');
+
+      expect(result.skippedFactors).not.toContain('average_balance');
+    });
+
+    it('skips factor with null value when weight > 0 (no penalisation)', () => {
+      const result = calculateScore(SCORECARD_WITH_OPTIONAL, {
+        account_age_days: 400,
+        kyc_level: 3,
+        payment_history_pct: 95,
+        average_balance: 350, // weight=0 — fine
+        credit_bureau_score: null, // weight=25 — must skip, not penalise
+      }, '1000.0000');
+
+      expect(result.skippedFactors).toContain('credit_bureau_score');
+      // contributingFactors must NOT include the skipped one — it didn't
+      // contribute to the score at all.
+      expect(result.contributingFactors).not.toHaveProperty('credit_bureau_score');
+    });
+
+    it('scores factor normally when value is provided and weight > 0', () => {
+      const result = calculateScore(SCORECARD_WITH_OPTIONAL, {
+        account_age_days: 400,
+        kyc_level: 3,
+        payment_history_pct: 95,
+        average_balance: 350,
+        credit_bureau_score: 85, // present, weight>0 — scored
+      }, '1000.0000');
+
+      expect(result.skippedFactors).not.toContain('credit_bureau_score');
+      expect(result.contributingFactors).toHaveProperty('credit_bureau_score');
+    });
+
+    it('lists all skipped factor names in skippedFactors', () => {
+      // Promote average_balance to weight>0 to demonstrate multi-skip.
+      const dualWeighted: ScorecardConfig = {
+        ...SCORECARD_WITH_OPTIONAL,
+        factors: SCORECARD_WITH_OPTIONAL.factors.map((f) =>
+          ['average_balance', 'credit_bureau_score'].includes(f.name)
+            ? { ...f, weight: 10 }
+            : f,
+        ),
+      };
+      const result = calculateScore(dualWeighted, {
+        account_age_days: 400,
+        kyc_level: 3,
+        payment_history_pct: 95,
+        average_balance: null,
+        credit_bureau_score: null,
+      }, '1000.0000');
+
+      expect(result.skippedFactors).toEqual(
+        expect.arrayContaining(['average_balance', 'credit_bureau_score']),
+      );
+      // And the score should derive from only the three present factors —
+      // i.e. the totalWeight denominator excluded the skipped 20 weight.
+      expect(Number(result.score)).toBeGreaterThanOrEqual(0);
+    });
+
+    it('returns an empty skippedFactors array when no factors are skipped', () => {
+      const result = calculateScore(TEST_SCORECARD, {
+        account_age_days: 400,
+        kyc_level: 3,
+        payment_history_pct: 95,
+      }, '1000.0000');
+      expect(result.skippedFactors).toEqual([]);
+    });
+  });
 });

@@ -351,4 +351,79 @@ describe('EarlySettlementService.calculateEarlySettlementAmount', () => {
       expect(labels).not.toContain('Early settlement fee');
     });
   });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // S17-FIX-BA-5 (S16 carry-forward) — settlement total floor at zero
+  // ─────────────────────────────────────────────────────────────────────
+
+  describe('settlement total floor', () => {
+    it('floors totalSettlementAmount at zero when rebate exceeds subtotal', async () => {
+      // 100% rebate on a contract whose unearned interest exceeds the
+      // outstanding principal. Pre-fix this produced a negative quote
+      // ("platform pays customer to settle"). Post-fix it floors at 0.
+      const { service } = makeService(
+        makeContract({
+          outstandingPrincipal: '100',
+          outstandingInterest: '50',
+          outstandingFees: '0',
+          outstandingPenalties: '0',
+          feeStructure: {
+            earlySettlement: { allowed: true, interestRebatePercent: '100' },
+          },
+          schedule: [
+            {
+              status: 'pending',
+              dueDate: new Date(Date.now() + 30 * 86_400_000),
+              // Unearned interest of 500 dwarfs the 150 outstanding
+              // total — the raw subtract would be -350.
+              interestAmount: '500',
+            },
+          ],
+        }),
+      );
+
+      const quote = await service.calculateEarlySettlementAmount(
+        TENANT_ID,
+        CONTRACT_ID,
+      );
+
+      // Floor — never negative.
+      expect(quote.totalSettlementAmount).toBe('0.0000');
+
+      // FIX-BA-5 exit criterion #9: breakdown still shows the rebate
+      // line for operator transparency even when the total floored.
+      const labels = quote.breakdown.map((b) => b.label);
+      expect(labels).toContain('Interest rebate');
+    });
+
+    it('does not floor when settlement total is positive (normal case)', async () => {
+      const { service } = makeService(
+        makeContract({
+          outstandingPrincipal: '1000',
+          outstandingInterest: '100',
+          outstandingFees: '50',
+          outstandingPenalties: '15',
+          feeStructure: {
+            earlySettlement: { allowed: true, interestRebatePercent: '50' },
+          },
+          schedule: [
+            {
+              status: 'pending',
+              dueDate: new Date(Date.now() + 30 * 86_400_000),
+              interestAmount: '200',
+            },
+          ],
+        }),
+      );
+
+      const quote = await service.calculateEarlySettlementAmount(
+        TENANT_ID,
+        CONTRACT_ID,
+      );
+
+      // Pre-fix math: 1000 + 100 + 50 + 15 - 100 = 1065 — positive,
+      // floor is a no-op.
+      expect(Number(quote.totalSettlementAmount)).toBeGreaterThan(0);
+    });
+  });
 });
