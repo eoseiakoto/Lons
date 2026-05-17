@@ -11,6 +11,11 @@ import {
 import { EventBusService, add, subtract, multiply, divide, bankersRound } from '@lons/common';
 import { LedgerService } from '../ledger.service';
 import { SettlementService } from '../settlement.service';
+import { RevenueDistributionService } from '../distribution/revenue-distribution.service';
+import { PercentageSplitStrategy } from '../distribution/strategies/percentage-split.strategy';
+import { TieredStrategy } from '../distribution/strategies/tiered.strategy';
+import { FixedFeeStrategy } from '../distribution/strategies/fixed-fee.strategy';
+import { WaterfallStrategy } from '../distribution/strategies/waterfall.strategy';
 
 /**
  * Integration test: Full Post-Processing Pipeline
@@ -366,7 +371,20 @@ describe('Post-Processing Integration Pipeline', () => {
       settlementLine: settlementLineModel,
       tenant: tenantModel,
       product: productModel,
-      disbursement: disbursementModel,
+      disbursement: {
+        ...disbursementModel,
+        // S18-9 — SettlementService.getMonthlyDisbursementVolume() calls
+        // disbursement.aggregate to fetch the SP's monthly volume for the
+        // tiered model. Return zero by default; legacy-path settlements
+        // ignore the value anyway.
+        aggregate: jest.fn().mockResolvedValue({ _sum: { amount: null } }),
+      },
+      // S18-9 — distribution config lookup. Default: no rows → legacy
+      // fallback path → bit-identical with the pre-S18 settlement logic.
+      revenueDistributionConfig: {
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
+      },
       reconciliationRun: makeModelMock(store.reconciliationRuns),
       reconciliationException: makeModelMock(store.reconciliationExceptions),
       // $transaction: execute the callback with the same prisma mock
@@ -377,6 +395,13 @@ describe('Post-Processing Integration Pipeline', () => {
       providers: [
         LedgerService,
         SettlementService,
+        // S18-9 — strategies + dispatcher must be present so SettlementService
+        // can inject RevenueDistributionService.
+        PercentageSplitStrategy,
+        TieredStrategy,
+        FixedFeeStrategy,
+        WaterfallStrategy,
+        RevenueDistributionService,
         { provide: PrismaService, useValue: prisma },
         {
           provide: EventBusService,

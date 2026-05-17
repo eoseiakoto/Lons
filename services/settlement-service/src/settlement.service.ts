@@ -3,6 +3,8 @@ import { PrismaService, RepaymentStatus, SettlementStatus } from '@lons/database
 import { EventBusService, NotFoundError, ValidationError, add, bankersRound, percentage, subtract } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 
+import { RevenueDistributionService } from './distribution/revenue-distribution.service';
+
 @Injectable()
 export class SettlementService {
   private readonly logger = new Logger('SettlementService');
@@ -10,7 +12,33 @@ export class SettlementService {
   constructor(
     private prisma: PrismaService,
     private eventBus: EventBusService,
+    // S18-9 — replaces the hardcoded platform/SP percentage_split with a
+    // dispatcher that resolves tenant/product config (product → tenant
+    // default → legacy fallback). Per-product lender splits below still
+    // run on `product.revenueSharing` for backwards compat.
+    private readonly revenueDistribution: RevenueDistributionService,
   ) {}
+
+  /**
+   * S18-9 — disbursement volume for the tiered model. The tiered strategy
+   * needs the SP's completed-disbursement total over the settlement window
+   * so it can pick the correct rate band. Returned as a Decimal string.
+   */
+  private async getMonthlyDisbursementVolume(
+    tenantId: string,
+    periodStart: Date,
+    periodEnd: Date,
+  ): Promise<string> {
+    const result = await this.prisma.disbursement.aggregate({
+      where: {
+        tenantId,
+        status: 'completed',
+        completedAt: { gte: periodStart, lte: periodEnd },
+      },
+      _sum: { amount: true },
+    });
+    return result._sum?.amount?.toString() ?? '0';
+  }
 
   async calculateSettlement(tenantId: string, periodStart: Date, periodEnd: Date) {
     // Step 1: Get all completed repayments in period
@@ -47,7 +75,11 @@ export class SettlementService {
     });
     const platformFeePercent = String(tenant?.platformFeePercent ?? '0');
 
-    // Step 4: Calculate Lōns platform fee (% of interest income ONLY)
+    // Step 4: Calculate Lōns platform fee (% of interest income ONLY).
+    // This is the *legacy* number — only used when the tenant has no
+    // RevenueDistributionConfig row. The new engine operates on
+    // totalRevenue, not totalInterestRevenue, so opting into a config row
+    // means the platform fee base widens from interest-only to total.
     const platformFeeAmount = bankersRound(percentage(totalInterestRevenue, platformFeePercent), 4);
 
     // Step 5: Create SettlementRun. Prisma's Decimal columns accept string —
@@ -76,36 +108,78 @@ export class SettlementService {
       netAmount: string;
     }[] = [];
 
-    // Line 1: Platform fee (Lōns revenue) — % of interest income
-    lines.push({
-      tenantId,
-      settlementRunId: settlementRun.id,
-      partyType: 'platform',
-      partyId: 'lons-platform',
-      grossRevenue: totalInterestRevenue,
-      sharePercentage: platformFeePercent,
-      shareAmount: platformFeeAmount,
-      deductions: '0',
-      netAmount: platformFeeAmount,
+    // S18-9 — Try the new distribution engine first. If the tenant has
+    // opted in to any RevenueDistributionConfig (product- or tenant-
+    // level), the engine returns lines and we use them. Otherwise we
+    // fall back to the legacy percentage_split (platform % of interest +
+    // SP remainder) to keep pre-S18 tenants behaviourally unchanged.
+    const distribution = await this.revenueDistribution.distribute(tenantId, null, {
+      totalRevenue,
+      periodStart,
+      periodEnd,
+      monthlyDisbursementVolume: await this.getMonthlyDisbursementVolume(
+        tenantId,
+        periodStart,
+        periodEnd,
+      ),
     });
 
-    // Line 2: SP net revenue (everything minus platform fee)
-    const spNetRevenue = add(totalRevenue, `-${platformFeeAmount}`);
-    const spSharePercentage = subtract('100', platformFeePercent);
-    lines.push({
-      tenantId,
-      settlementRunId: settlementRun.id,
-      partyType: 'sp',
-      partyId: tenantId,
-      grossRevenue: totalRevenue,
-      sharePercentage: spSharePercentage,
-      shareAmount: spNetRevenue,
-      deductions: '0',
-      netAmount: spNetRevenue,
-    });
+    if (distribution.source === 'legacy') {
+      // Legacy path: platform fee is % of *interest* (not total). Keep
+      // bit-identical with the pre-S18 implementation so tenants who
+      // haven't onboarded the new config see zero accounting drift.
+      lines.push({
+        tenantId,
+        settlementRunId: settlementRun.id,
+        partyType: 'platform',
+        partyId: 'lons-platform',
+        grossRevenue: totalInterestRevenue,
+        sharePercentage: platformFeePercent,
+        shareAmount: platformFeeAmount,
+        deductions: '0',
+        netAmount: platformFeeAmount,
+      });
 
-    // Step 7: SP internal splits (optional, per-product)
-    // Group repayments by product
+      const spNetRevenue = add(totalRevenue, `-${platformFeeAmount}`);
+      const spSharePercentage = subtract('100', platformFeePercent);
+      lines.push({
+        tenantId,
+        settlementRunId: settlementRun.id,
+        partyType: 'sp',
+        partyId: tenantId,
+        grossRevenue: totalRevenue,
+        sharePercentage: spSharePercentage,
+        shareAmount: spNetRevenue,
+        deductions: '0',
+        netAmount: spNetRevenue,
+      });
+    } else {
+      // New model path: persist whatever the strategy produced. The
+      // engine has already applied banker's rounding per leg.
+      for (const line of distribution.lines) {
+        lines.push({
+          tenantId,
+          settlementRunId: settlementRun.id,
+          partyType: line.partyType,
+          partyId: line.partyId,
+          grossRevenue: line.grossRevenue,
+          sharePercentage: line.sharePercentage,
+          shareAmount: line.shareAmount,
+          deductions: '0',
+          netAmount: line.shareAmount,
+        });
+      }
+    }
+
+    // Step 7: SP internal splits (optional, per-product).
+    //
+    // S18-9 note: this loop runs in BOTH the legacy and new-model paths
+    // because product-level lender splits live on `product.revenueSharing`
+    // and are independent of the tenant-level distribution model.
+    // Operators wiring a new RevenueDistributionConfig that already names
+    // a lender party (e.g. fixed_fee with a lender fee) should set
+    // `product.revenueSharing.lenderSharePercent = 0` (or omit it) to
+    // avoid double-counting lender allocation across both code paths.
     const productGroups = new Map<string, typeof repayments>();
     for (const repayment of repayments) {
       const productId = repayment.contract.product.id;
