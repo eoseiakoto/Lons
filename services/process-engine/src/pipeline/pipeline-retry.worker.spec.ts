@@ -83,6 +83,11 @@ describe('PipelineRetryWorker', () => {
     };
     disbursementService = {
       initiateDisbursement: jest.fn().mockResolvedValue({}),
+      // S18 code-review fix B1 — worker now resumes the existing
+      // disbursement row instead of calling initiateDisbursement
+      // (which would create a fresh row + re-run AML + double-charge
+      // plan-tier quota).
+      retryDisbursementForContract: jest.fn().mockResolvedValue({}),
     };
   });
 
@@ -174,11 +179,14 @@ describe('PipelineRetryWorker', () => {
       );
     });
 
-    it('invokes DisbursementService.initiateDisbursement for DISBURSEMENT', async () => {
+    it('invokes DisbursementService.retryDisbursementForContract for DISBURSEMENT (B1 fix)', async () => {
       await makeWorker().process(
         makeJob({ step: PipelineStep.DISBURSEMENT }) as any,
       );
-      expect(disbursementService.initiateDisbursement).toHaveBeenCalledWith(
+      // S18 code-review fix B1 — must NOT call initiateDisbursement
+      // on the retry path (would create a new row + re-charge quota).
+      expect(disbursementService.initiateDisbursement).not.toHaveBeenCalled();
+      expect(disbursementService.retryDisbursementForContract).toHaveBeenCalledWith(
         tenantId,
         'contract-1',
       );

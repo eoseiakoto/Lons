@@ -59,6 +59,8 @@ describe('ContractWriteOperationsService', () => {
         paymentMethod: 'cash',
         paymentRef: 'CASH-123',
         operatorId: OPERATOR,
+        // S18 code-review fix I2 — idempotencyKey is now required.
+        idempotencyKey: 'idem-test-1',
       });
 
       expect(result).toEqual({ id: 'rep-1' });
@@ -69,7 +71,7 @@ describe('ContractWriteOperationsService', () => {
           amount: '200',
           source: 'manual',
           externalRef: 'CASH-123',
-          idempotencyKey: 'manual:CASH-123',
+          idempotencyKey: 'idem-test-1',
         }),
       );
       expect(mocks.eventBus.emitAndBuild).toHaveBeenCalledWith(
@@ -89,6 +91,7 @@ describe('ContractWriteOperationsService', () => {
           paymentMethod: 'cash',
           paymentRef: 'CASH-1',
           operatorId: OPERATOR,
+          idempotencyKey: 'idem-zero',
         }),
       ).rejects.toThrow(ValidationError);
     });
@@ -103,6 +106,7 @@ describe('ContractWriteOperationsService', () => {
           paymentMethod: 'cash',
           paymentRef: '',
           operatorId: OPERATOR,
+          idempotencyKey: 'idem-no-ref',
         }),
       ).rejects.toThrow(ValidationError);
     });
@@ -117,6 +121,7 @@ describe('ContractWriteOperationsService', () => {
           paymentMethod: 'cash',
           paymentRef: 'CASH-2',
           operatorId: OPERATOR,
+          idempotencyKey: 'idem-settled',
         }),
       ).rejects.toThrow(ValidationError);
     });
@@ -131,6 +136,7 @@ describe('ContractWriteOperationsService', () => {
           paymentMethod: 'cash',
           paymentRef: 'CASH-3',
           operatorId: OPERATOR,
+          idempotencyKey: 'idem-unknown',
         }),
       ).rejects.toThrow(NotFoundError);
     });

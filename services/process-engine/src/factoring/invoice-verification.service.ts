@@ -105,9 +105,13 @@ export class InvoiceVerificationService {
           'assignedTo="me" requires currentUserId — pass it from the resolver',
         );
       }
-      where.verifiedBy = filters.currentUserId;
+      // S18 code-review fix I1 — "assigned to" means the claim
+      // (assignedVerifierId), not the verification decision
+      // (verifiedBy). Pre-fix the queue filter pivoted on verifiedBy
+      // and missed claim-only-but-not-yet-decided invoices.
+      where.assignedVerifierId = filters.currentUserId;
     } else if (filters.assignedTo === 'unassigned') {
-      where.verifiedBy = null;
+      where.assignedVerifierId = null;
     }
 
     const items = await this.prisma.invoice.findMany({
@@ -129,11 +133,18 @@ export class InvoiceVerificationService {
   }
 
   /**
-   * Claim an invoice for review. Sets `verifiedBy` to the operator's
-   * user id. Idempotent for the same user; raises a validation error
-   * if another operator has already claimed it (no overrides — the
-   * platform admin can re-assign via DB, intentionally cumbersome to
-   * discourage cross-operator scope creep).
+   * Claim an invoice for review. Sets `assignedVerifierId` to the
+   * operator's user id. Idempotent for the same user; raises a
+   * validation error if another operator has already claimed it (no
+   * overrides — the platform admin can re-assign via DB, intentionally
+   * cumbersome to discourage cross-operator scope creep).
+   *
+   * S18 code-review fix I1 — was previously writing `verifiedBy`,
+   * which is the field stamped at decision time (approve/reject).
+   * Claim and verification are now distinct columns: an invoice can
+   * be claimed by Alice but verified by Bob if Alice hands it off
+   * mid-review. The Phase 0 migration added `assigned_verifier_id`
+   * for exactly this seam.
    */
   async claimInvoice(
     tenantId: string,
@@ -147,22 +158,22 @@ export class InvoiceVerificationService {
       throw new NotFoundError('Invoice', invoiceId);
     }
 
-    if (invoice.verifiedBy === userId) {
+    if (invoice.assignedVerifierId === userId) {
       // No-op re-claim by the same operator.
       return invoice;
     }
-    if (invoice.verifiedBy && invoice.verifiedBy !== userId) {
+    if (invoice.assignedVerifierId && invoice.assignedVerifierId !== userId) {
       // `ConflictError` semantically — but `ValidationError` gives
       // the existing GraphQL filter a clean code+details payload.
       throw new ValidationError(
         'Invoice already claimed by another operator',
-        { invoiceId, claimedBy: invoice.verifiedBy },
+        { invoiceId, claimedBy: invoice.assignedVerifierId },
       );
     }
 
     return this.prisma.invoice.update({
       where: { id: invoiceId },
-      data: { verifiedBy: userId },
+      data: { assignedVerifierId: userId },
     });
   }
 

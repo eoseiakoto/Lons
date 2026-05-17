@@ -63,21 +63,41 @@ export class UpgradeRequestService {
     // Idempotency: if there's already a pending request for the same
     // (tenant, target tier) pair, return it instead of creating a
     // duplicate. Tenants spam the button when nothing visibly happens.
+    //
+    // S18 code-review fix I3 — the pre-fix find-then-create was a
+    // TOCTOU race: two concurrent clicks both passed the lookup and
+    // both wrote a row. The migration adds a partial unique index
+    // upgrade_requests_pending_one_per_tier covering
+    // (tenant_id, requested_tier) WHERE status = 'pending', so a
+    // racing insert raises P2002; we catch it and re-read.
     const existing = await this.prisma.upgradeRequest.findFirst({
       where: { tenantId, requestedTier: input.targetTier, status: 'pending' },
     });
     if (existing) return existing;
 
-    const request = await this.prisma.upgradeRequest.create({
-      data: {
-        tenantId,
-        currentTier: tenant.planTier,
-        requestedTier: input.targetTier,
-        reason: input.reason,
-        status: 'pending',
-        requestedBy: input.requestedBy,
-      },
-    });
+    let request;
+    try {
+      request = await this.prisma.upgradeRequest.create({
+        data: {
+          tenantId,
+          currentTier: tenant.planTier,
+          requestedTier: input.targetTier,
+          reason: input.reason,
+          status: 'pending',
+          requestedBy: input.requestedBy,
+        },
+      });
+    } catch (err: unknown) {
+      // P2002 = unique constraint violation on the partial index →
+      // a concurrent click won. Re-read and return that row.
+      if ((err as { code?: string })?.code === 'P2002') {
+        const winner = await this.prisma.upgradeRequest.findFirst({
+          where: { tenantId, requestedTier: input.targetTier, status: 'pending' },
+        });
+        if (winner) return winner;
+      }
+      throw err;
+    }
 
     this.eventBus.emitAndBuild(EventType.PLAN_UPGRADE_REQUESTED, tenantId, {
       requestId: request.id,

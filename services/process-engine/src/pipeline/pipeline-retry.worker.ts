@@ -206,7 +206,12 @@ export class PipelineRetryWorker extends WorkerHost {
             `Cannot retry disbursement: loan request ${loanRequestId} has no contract`,
           );
         }
-        await this.disbursementService.initiateDisbursement(
+        // S18 code-review fix B1 — call the resume entry point that
+        // operates on the existing Disbursement row. The prior
+        // `initiateDisbursement` call created a fresh row with
+        // retryCount=0 each time, defeating both the S18-8 rollback
+        // trigger AND double-charging the plan-tier quota counter.
+        await this.disbursementService.retryDisbursementForContract(
           tenantId,
           lr.contract.id,
         );

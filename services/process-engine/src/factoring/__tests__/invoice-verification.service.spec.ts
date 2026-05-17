@@ -22,10 +22,13 @@ function makePrisma(invoices: Array<Record<string, unknown>>) {
         return store.filter((inv) => {
           if (args.where.tenantId && inv.tenantId !== args.where.tenantId) return false;
           if (args.where.verificationStatus && inv.verificationStatus !== args.where.verificationStatus) return false;
-          if ((args.where as { verifiedBy?: unknown }).verifiedBy !== undefined) {
-            const wantedBy = (args.where as { verifiedBy?: unknown }).verifiedBy;
-            if (wantedBy === null && inv.verifiedBy !== null) return false;
-            if (typeof wantedBy === 'string' && inv.verifiedBy !== wantedBy) return false;
+          // S18 code-review fix I1 — the queue's "assignedTo" filter
+          // now pivots on assigned_verifier_id (the claim column), not
+          // verified_by (the decision column).
+          if ((args.where as { assignedVerifierId?: unknown }).assignedVerifierId !== undefined) {
+            const wantedBy = (args.where as { assignedVerifierId?: unknown }).assignedVerifierId;
+            if (wantedBy === null && inv.assignedVerifierId !== null) return false;
+            if (typeof wantedBy === 'string' && inv.assignedVerifierId !== wantedBy) return false;
           }
           return true;
         });
@@ -64,6 +67,10 @@ function makePendingInvoice(overrides: Record<string, unknown> = {}) {
     verifiedBy: null,
     verifiedAt: null,
     verificationNotes: null,
+    // S18 code-review fix I1 — claim writes assignedVerifierId,
+    // decisions write verifiedBy. Defaults both to null on a fresh
+    // pending invoice.
+    assignedVerifierId: null,
     sellerId: 's1',
     debtorId: 'd1',
     faceValue: '10000.0000',
@@ -89,8 +96,10 @@ describe('InvoiceVerificationService (S14-IF-1)', () => {
   });
 
   it('queue assignedTo=me filters by current user', async () => {
-    const mine = makePendingInvoice({ verifiedBy: USER_A });
-    const theirs = makePendingInvoice({ verifiedBy: USER_B });
+    // S18 code-review fix I1 — "assigned to me" now pivots on
+    // assignedVerifierId (the claim column), not verifiedBy.
+    const mine = makePendingInvoice({ assignedVerifierId: USER_A });
+    const theirs = makePendingInvoice({ assignedVerifierId: USER_B });
     const prisma = makePrisma([mine, theirs]);
     const service = new InvoiceVerificationService(
       prisma as never,
@@ -106,9 +115,9 @@ describe('InvoiceVerificationService (S14-IF-1)', () => {
     expect((result.items[0] as { id: string }).id).toBe(mine.id);
   });
 
-  it('queue assignedTo=unassigned filters where verifiedBy is null', async () => {
-    const unassigned = makePendingInvoice({ verifiedBy: null });
-    const claimed = makePendingInvoice({ verifiedBy: USER_A });
+  it('queue assignedTo=unassigned filters where assignedVerifierId is null', async () => {
+    const unassigned = makePendingInvoice({ assignedVerifierId: null });
+    const claimed = makePendingInvoice({ assignedVerifierId: USER_A });
     const prisma = makePrisma([unassigned, claimed]);
     const service = new InvoiceVerificationService(
       prisma as never,
@@ -124,7 +133,7 @@ describe('InvoiceVerificationService (S14-IF-1)', () => {
     expect((result.items[0] as { id: string }).id).toBe(unassigned.id);
   });
 
-  it('claim sets verifiedBy', async () => {
+  it('claim sets assignedVerifierId (not verifiedBy)', async () => {
     const invoice = makePendingInvoice();
     const prisma = makePrisma([invoice]);
     const service = new InvoiceVerificationService(
@@ -135,12 +144,12 @@ describe('InvoiceVerificationService (S14-IF-1)', () => {
     await service.claimInvoice(TENANT, invoice.id, USER_A);
     expect(prisma.invoice.update).toHaveBeenCalledWith({
       where: { id: invoice.id },
-      data: { verifiedBy: USER_A },
+      data: { assignedVerifierId: USER_A },
     });
   });
 
   it('claim is idempotent for the same user', async () => {
-    const invoice = makePendingInvoice({ verifiedBy: USER_A });
+    const invoice = makePendingInvoice({ assignedVerifierId: USER_A });
     const prisma = makePrisma([invoice]);
     const service = new InvoiceVerificationService(
       prisma as never,
@@ -152,7 +161,7 @@ describe('InvoiceVerificationService (S14-IF-1)', () => {
   });
 
   it('claim throws when another operator has the invoice', async () => {
-    const invoice = makePendingInvoice({ verifiedBy: USER_B });
+    const invoice = makePendingInvoice({ assignedVerifierId: USER_B });
     const prisma = makePrisma([invoice]);
     const service = new InvoiceVerificationService(
       prisma as never,

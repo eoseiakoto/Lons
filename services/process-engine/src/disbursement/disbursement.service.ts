@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, Inject, Logger, Optional } from '@nestjs/common';
 import { PrismaService, LoanRequestStatus, DisbursementStatus } from '@lons/database';
-import { EventBusService, NotFoundError, add } from '@lons/common';
+import { EventBusService, NotFoundError } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 import { QuotaTrackingService } from '@lons/entity-service';
 
@@ -42,6 +42,43 @@ export class DisbursementService {
     // legacy synchronous retry loop.
     @Optional() private pipelineRetryService?: PipelineRetryService,
   ) {}
+
+  /**
+   * Resume an in-flight disbursement on the latest existing
+   * Disbursement row for the given contract — used by the BullMQ
+   * retry worker (S18-12).
+   *
+   * S18 code-review fix B1 — must NOT call `initiateDisbursement`
+   * from the retry path. That entry point re-runs AML screening,
+   * double-charges plan-tier quota (incrementDisbursement is
+   * idempotency-free at that layer), and creates a fresh
+   * `disbursement` row with retryCount=0 — defeating both the
+   * S18-8 rollback's "max retries reached" trigger and the quota
+   * counter accuracy. Resume in-place on the prior row instead.
+   */
+  async retryDisbursementForContract(tenantId: string, contractId: string): Promise<unknown> {
+    const disbursement = await this.prisma.disbursement.findFirst({
+      where: {
+        tenantId,
+        contractId,
+        status: { in: [DisbursementStatus.pending, DisbursementStatus.failed] },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!disbursement) {
+      throw new NotFoundError(
+        `No pending/failed disbursement found to retry for contract ${contractId}`,
+        contractId,
+      );
+    }
+
+    const contract = await this.prisma.contract.findFirst({
+      where: { id: contractId, tenantId },
+    });
+    if (!contract) throw new NotFoundError('Contract', contractId);
+
+    return this.attemptTransfer(tenantId, disbursement.id, contractId, contract.loanRequestId ?? undefined);
+  }
 
   async initiateDisbursement(tenantId: string, contractId: string) {
     const contract = await this.prisma.contract.findFirst({
@@ -315,26 +352,27 @@ export class DisbursementService {
       // data-model violation (`@@unique([tenantId, customerId, productId])`)
       // so `findUnique` is safe.
       try {
-        const subscription = await this.prisma.subscription.findUnique({
+        // S18 code-review fix B2 — atomic Decimal increment instead of
+        // the prior read-modify-write. Two concurrent restorations (or
+        // a restoration concurrent with a fresh disbursement debit on
+        // the same subscription) would have lost updates with the old
+        // pattern; Prisma's { increment } compiles to a DB-side
+        // UPDATE … SET available_limit = available_limit + $1 which
+        // is atomic under the row lock.
+        const result = await this.prisma.subscription.updateMany({
           where: {
-            tenantId_customerId_productId: {
-              tenantId,
-              customerId: contract.customerId,
-              productId: contract.productId,
-            },
+            tenantId,
+            customerId: contract.customerId,
+            productId: contract.productId,
+            availableLimit: { not: null },
+          },
+          data: {
+            availableLimit: { increment: contract.principalAmount },
           },
         });
-        if (subscription?.availableLimit != null) {
-          const restoredLimit = add(
-            String(subscription.availableLimit),
-            String(contract.principalAmount),
-          );
-          await this.prisma.subscription.update({
-            where: { id: subscription.id },
-            data: { availableLimit: restoredLimit },
-          });
+        if (result.count > 0) {
           this.logger.log(
-            `Restored available limit on subscription ${subscription.id} by ${String(contract.principalAmount)} after disbursement rollback`,
+            `Restored available limit on subscription (tenant=${tenantId} customer=${contract.customerId.slice(0, 8)}… product=${contract.productId.slice(0, 8)}…) by ${String(contract.principalAmount)} after disbursement rollback`,
           );
         }
       } catch (err) {

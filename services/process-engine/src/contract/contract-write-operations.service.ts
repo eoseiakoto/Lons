@@ -112,7 +112,16 @@ export class ContractWriteOperationsService {
       paymentDate?: Date;
       notes?: string;
       operatorId: string;
-      idempotencyKey?: string;
+      /**
+       * S18 code-review fix I2 — required, not optional. The GraphQL
+       * resolver already enforces this; we promote the requirement
+       * down to the service layer so direct in-process callers can't
+       * accidentally rely on the prior `manual:${paymentRef}` fallback.
+       * That fallback was bypassed by any operator typo on paymentRef,
+       * resulting in duplicate repayments. The UI generates a fresh
+       * UUID per form mount.
+       */
+      idempotencyKey: string;
     },
   ) {
     if (!input.amount || compare(input.amount, '0') <= 0) {
@@ -120,6 +129,14 @@ export class ContractWriteOperationsService {
     }
     if (!input.paymentRef || input.paymentRef.trim().length === 0) {
       throw new ValidationError('Payment reference is required for manual payments');
+    }
+    // S18 code-review fix I2 — explicit guard. Type system enforces it
+    // for new TS callers; this catches accidental `idempotencyKey: ''`
+    // and `idempotencyKey: undefined as unknown as string` paths.
+    if (!input.idempotencyKey || input.idempotencyKey.trim().length === 0) {
+      throw new ValidationError(
+        'idempotencyKey is required for manual payments — generate a UUID per form mount',
+      );
     }
 
     const contract = await this.prisma.contract.findFirst({
@@ -145,7 +162,7 @@ export class ContractWriteOperationsService {
       method: input.paymentMethod,
       source: 'manual',
       externalRef: input.paymentRef,
-      idempotencyKey: input.idempotencyKey ?? `manual:${input.paymentRef}`,
+      idempotencyKey: input.idempotencyKey,
     });
 
     this.eventBus.emitAndBuild(EventType.REPAYMENT_RECEIVED, tenantId, {

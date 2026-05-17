@@ -74,6 +74,9 @@ describe('DisbursementService', () => {
             subscription: {
               findUnique: jest.fn(),
               update: jest.fn(),
+              // S18 code-review fix B2 — atomic Prisma { increment }
+              // restore in S18-8 rollback uses updateMany.
+              updateMany: jest.fn().mockResolvedValue({ count: 1 }),
             },
           },
         },
@@ -491,20 +494,30 @@ describe('DisbursementService', () => {
       );
     }, 15000);
 
-    it('restores subscription.availableLimit when a subscription exists', async () => {
+    it('restores subscription.availableLimit atomically via Prisma { increment }', async () => {
+      // S18 code-review fix B2 — restoration is now an atomic
+      // updateMany with `{ increment }`. The where clause uses the
+      // composite (tenantId, customerId, productId) + a non-null
+      // availableLimit guard, so we no longer need a findUnique +
+      // app-side add().
       setupPermanentFailure();
-      jest.spyOn((prisma as any).subscription, 'findUnique').mockResolvedValue({
-        id: 'sub-1',
-        availableLimit: { toString: () => '10000.0000' },
-      } as any);
+      const updateManyMock = jest
+        .spyOn((prisma as any).subscription, 'updateMany')
+        .mockResolvedValue({ count: 1 } as any);
+
       await service.initiateDisbursement(tenantId, contractId);
-      expect((prisma as any).subscription.update).toHaveBeenCalledWith({
-        where: { id: 'sub-1' },
-        data: expect.objectContaining({
-          // 10000 + 5000 (principalAmount) = 15000
-          availableLimit: '15000.0000',
+
+      expect(updateManyMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenantId,
+            availableLimit: { not: null },
+          }),
+          data: expect.objectContaining({
+            availableLimit: { increment: expect.anything() },
+          }),
         }),
-      });
+      );
     }, 15000);
 
     it('does NOT roll back when contract is already performing (partial disbursement)', async () => {
