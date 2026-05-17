@@ -5,9 +5,18 @@ import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EntityServiceModule, AuditService, PlanTierConfigService } from '@lons/entity-service';
-import { ProcessEngineModule, SCREENING_GATE, CREDIT_BUREAU_GATEWAY } from '@lons/process-engine';
+import {
+  ProcessEngineModule,
+  SCREENING_GATE,
+  CREDIT_BUREAU_GATEWAY,
+  PAYMENT_SERVICE_FOR_MANUAL_PAYMENT,
+} from '@lons/process-engine';
 import { ScreeningService, CreditBureauService } from '@lons/integration-service';
-import { RepaymentServiceModule } from '@lons/repayment-service';
+import { RepaymentServiceModule, PaymentService } from '@lons/repayment-service';
+// Sprint 18 (S18-10, S18-3) — new workspace package for portfolio
+// metrics + report export. Track A's report-export.resolver and Track
+// C's portfolio-metrics need these wired in.
+import { AnalyticsServiceModule } from '@lons/analytics-service';
 import { NotificationServiceModule } from '@lons/notification-service';
 import { SettlementServiceModule } from '@lons/settlement-service';
 import { ReconciliationServiceModule } from '@lons/reconciliation-service';
@@ -75,6 +84,13 @@ import { ScorecardResolver } from './graphql/resolvers/scorecard.resolver';
 import { CustomerMergeResolver } from './graphql/resolvers/customer-merge.resolver';
 import { CustomerFinancialProfileResolver } from './graphql/resolvers/customer-financial-profile.resolver';
 import { CustomerCreditSummaryResolver } from './graphql/resolvers/customer-credit-summary.resolver';
+// Sprint 18 Track A — admin-portal operational surfaces.
+import { LoanRequestReviewResolver } from './graphql/resolvers/loan-request-review.resolver';
+import { ContractWriteResolver } from './graphql/resolvers/contract-write.resolver';
+import { ReportExportResolver } from './graphql/resolvers/report-export.resolver';
+import { SettlementDashboardResolver } from './graphql/resolvers/settlement-dashboard.resolver';
+import { ApiKeyManagementResolver } from './graphql/resolvers/api-key-management.resolver';
+import { PlanTierDashboardResolver } from './graphql/resolvers/plan-tier-dashboard.resolver';
 import { DebugLogService } from './graphql/services/debug-log.service';
 import { GraphqlExceptionFilter } from './filters/graphql-exception.filter';
 import { SubscriptionModule } from './subscriptions/subscription.module';
@@ -118,6 +134,8 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
     IntegrationServiceModule,
     RecoveryServiceModule,
     OverdraftServiceModule,
+    // Sprint 18 — portfolio metrics (S18-10) + report export (S18-3).
+    AnalyticsServiceModule,
   ],
   providers: [
     ApiKeyResolver,
@@ -171,6 +189,13 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
     CustomerMergeResolver,
     CustomerFinancialProfileResolver,
     CustomerCreditSummaryResolver,
+    // Sprint 18 Track A — admin-portal operational surfaces.
+    LoanRequestReviewResolver,
+    ContractWriteResolver,
+    ReportExportResolver,
+    SettlementDashboardResolver,
+    ApiKeyManagementResolver,
+    PlanTierDashboardResolver,
     // Sprint 14 (S14-9) — bind the PLAN_TIER_CONFIG_SERVICE injection
     // token used by @RequiresPlan's guard. Keeps @lons/common free of
     // an entity-service dependency.
@@ -197,6 +222,15 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
     {
       provide: CREDIT_BUREAU_GATEWAY,
       useExisting: CreditBureauService,
+    },
+    // Sprint 18 S18-2 — ContractWriteOperationsService is decoupled
+    // from @lons/repayment-service via a structural interface +
+    // symbol token. Bind it here so recordManualPayment can dispatch
+    // to the real PaymentService rather than failing fast with
+    // "PaymentService unavailable".
+    {
+      provide: PAYMENT_SERVICE_FOR_MANUAL_PAYMENT,
+      useExisting: PaymentService,
     },
     {
       provide: 'AUDIT_SERVICE',
