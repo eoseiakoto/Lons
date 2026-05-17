@@ -41,6 +41,7 @@ function makeMockPrisma() {
         id: CUSTOMER_ID,
         createdAt: new Date('2025-06-01'),
         kycLevel: 'tier_2',
+        nationalId: null,
       }),
       findFirst: jest.fn().mockResolvedValue({ id: CUSTOMER_ID, metadata: null }),
     },
@@ -112,6 +113,14 @@ function makeMockPrisma() {
     repaymentScheduleEntry: {
       count: jest.fn().mockResolvedValue(0),
       deleteMany: jest.fn().mockResolvedValue({ count: 2 }),
+    },
+    // Sprint 17 (S17-1 / S17-3) — empty rows ⇒ scoring uses neutral
+    // defaults (15, 60) and bureau path is skipped (no consent row).
+    customerFinancialData: {
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    customerConsent: {
+      findFirst: jest.fn().mockResolvedValue(null),
     },
     repaymentSchedule: {
       count: jest.fn().mockResolvedValue(1),

@@ -244,6 +244,12 @@ function buildMockPrisma() {
     repaymentScheduleEntry: makeModelMock(store.repaymentScheduleEntries),
     disbursement: makeModelMock(store.disbursements),
     ledgerEntry: makeModelMock(store.ledgerEntries),
+    // Sprint 17 (S17-1 / S17-3 / S17-4) — new tables consulted by the
+    // scoring pipeline. Backed by ephemeral maps so this integration
+    // test still passes; behaviour is verified by dedicated unit tests.
+    customerFinancialData: makeModelMock(new Map()),
+    customerConsent: makeModelMock(new Map()),
+    scorecardConfig: makeModelMock(new Map()),
     $connect: jest.fn(),
     $disconnect: jest.fn(),
     $transaction: jest.fn(async (fn: any) => fn()),

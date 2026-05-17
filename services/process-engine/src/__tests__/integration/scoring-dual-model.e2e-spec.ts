@@ -441,6 +441,7 @@ describe('Dual-Model Scoring E2E Integration', () => {
             id: CUSTOMER_ID,
             createdAt: new Date('2025-01-01'),
             kycLevel: 'tier_2',
+            nationalId: null,
           }),
         },
         contract: {
@@ -456,6 +457,14 @@ describe('Dual-Model Scoring E2E Integration', () => {
             ...data,
             createdAt: new Date(),
           })),
+        },
+        // Sprint 17 (S17-1 / S17-3) — scoring now consults these tables.
+        // No rows ⇒ scorer falls back to neutral defaults (15, 60).
+        customerFinancialData: {
+          findFirst: jest.fn().mockResolvedValue(null),
+        },
+        customerConsent: {
+          findFirst: jest.fn().mockResolvedValue(null),
         },
       };
 

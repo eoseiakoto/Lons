@@ -17,3 +17,5 @@ export * from './screening/screening-adapter.resolver';
 export * from './screening/mock-screening.adapter';
 export * from './screening/complyadvantage.adapter';
 export * from './screening/screening.module';
+// Sprint 17 (S17-1 / S17-2) — EMI data-pull integration.
+export * from './emi-data';

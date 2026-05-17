@@ -249,6 +249,12 @@ function buildMockPrisma() {
     repaymentScheduleEntry: makeModelMock(store.repaymentScheduleEntries),
     disbursement: makeModelMock(store.disbursements),
     ledgerEntry: makeModelMock(store.ledgerEntries),
+    // Sprint 17 (S17-1 / S17-3 / S17-6) — scoring and pre-qualification
+    // now consult these. Empty maps ⇒ scoring falls back to neutral
+    // defaults and pre-qual rules skip cleanly.
+    customerFinancialData: makeModelMock(new Map()),
+    customerConsent: makeModelMock(new Map()),
+    scorecardConfig: makeModelMock(new Map()),
     $connect: jest.fn(),
     $disconnect: jest.fn(),
     $transaction: jest.fn(async (fn: any) => fn()),
@@ -268,6 +274,10 @@ function rebuildMockModels(prisma: any): void {
   prisma.repaymentScheduleEntry = makeModelMock(store.repaymentScheduleEntries);
   prisma.disbursement = makeModelMock(store.disbursements);
   prisma.ledgerEntry = makeModelMock(store.ledgerEntries);
+  // Sprint 17 — keep the new tables fresh between rebuilds.
+  prisma.customerFinancialData = makeModelMock(new Map());
+  prisma.customerConsent = makeModelMock(new Map());
+  prisma.scorecardConfig = makeModelMock(new Map());
 }
 
 // ---------------------------------------------------------------------------

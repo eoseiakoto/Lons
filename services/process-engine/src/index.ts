@@ -7,6 +7,12 @@ export * from './pre-qualification/pre-qualification.module';
 export * from './scoring/scoring.service';
 export * from './scoring/scoring.module';
 export * from './scoring/scorecard/scorecard-engine';
+// Sprint 17 (S17-3 / S17-4 / S17-5) — pluggable scorecard config,
+// bureau bridge and feature normalization.
+export * from './scoring/scorecard/default-scorecard';
+export * from './scoring/scorecard/scorecard-config.service';
+export * from './scoring/credit-bureau-feature.extractor';
+export * from './scoring/feature-normalizer';
 export * from './approval/approval.service';
 export * from './approval/approval.module';
 export * from './offer/offer.service';

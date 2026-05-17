@@ -10,9 +10,17 @@ import { MockCreditBureauAdapter } from './credit-bureau/mock-credit-bureau.adap
 import { CREDIT_BUREAU_ADAPTER } from './credit-bureau/credit-bureau.interface';
 import { WebhookService } from './webhook/webhook.service';
 import { ScreeningModule } from './screening/screening.module';
+// Sprint 17 (S17-1 / S17-2) — EMI data-pull integration.
+import { EmiDataModule } from './emi-data/emi-data.module';
 
 @Module({
-  imports: [PrismaModule, EventBusModule, ObservabilityModule, ScreeningModule],
+  imports: [
+    PrismaModule,
+    EventBusModule,
+    ObservabilityModule,
+    ScreeningModule,
+    EmiDataModule,
+  ],
   providers: [
     MtnMomoAdapter,
     MpesaAdapter,
@@ -21,6 +29,14 @@ import { ScreeningModule } from './screening/screening.module';
     { provide: CREDIT_BUREAU_ADAPTER, useClass: MockCreditBureauAdapter },
     WebhookService,
   ],
-  exports: [MtnMomoAdapter, MpesaAdapter, WalletAdapterResolver, CreditBureauService, WebhookService, ScreeningModule],
+  exports: [
+    MtnMomoAdapter,
+    MpesaAdapter,
+    WalletAdapterResolver,
+    CreditBureauService,
+    WebhookService,
+    ScreeningModule,
+    EmiDataModule,
+  ],
 })
 export class IntegrationServiceModule {}

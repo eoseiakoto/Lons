@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService, ContractStatus } from '@lons/database';
 
 import { RuleEvaluationContext, RuleResult } from './rules/rule.interface';
@@ -8,6 +8,10 @@ import { ExposureService } from '../exposure/exposure.service';
 export interface PreQualificationResult {
   qualified: boolean;
   failedRules: { code: string; message: string }[];
+  /** S17-6 — rules that could not be evaluated (e.g. no EMI data yet). */
+  skippedRules?: { type: string; reason: string }[];
+  /** S17-6 — set true when the customer has no EMI snapshot at all. */
+  emiDataMissing?: boolean;
   exposureCheck?: { allowed: boolean; currentExposure: string; maxAllowed: string; headroom: string };
 }
 
@@ -18,6 +22,8 @@ interface EligibilityRuleConfig {
 
 @Injectable()
 export class PreQualificationService {
+  private readonly logger = new Logger('PreQualificationService');
+
   constructor(
     private prisma: PrismaService,
     private exposureService: ExposureService,
@@ -47,6 +53,14 @@ export class PreQualificationService {
       },
     });
 
+    // S17-6 — pre-fetch the most recent EMI snapshot so EMI-driven rules
+    // can read it synchronously. Absent snapshot ⇒ rules skip rather
+    // than auto-reject (FR-PQ-001.2 graceful-handling requirement).
+    const latestEmi = await this.prisma.customerFinancialData.findFirst({
+      where: { tenantId, customerId, source: 'emi' },
+      orderBy: { fetchedAt: 'desc' },
+    });
+
     const context: RuleEvaluationContext = {
       customer: {
         id: customer.id,
@@ -63,18 +77,40 @@ export class PreQualificationService {
       },
       tenantId,
       activeDefaultCount,
+      financialData: latestEmi
+        ? {
+            transactionCount30d: latestEmi.transactionCount30d,
+            transactionCount90d: latestEmi.transactionCount90d,
+            averageBalance30d: latestEmi.averageBalance30d
+              ? latestEmi.averageBalance30d.toString()
+              : null,
+            averageBalance90d: latestEmi.averageBalance90d
+              ? latestEmi.averageBalance90d.toString()
+              : null,
+            fetchedAt: latestEmi.fetchedAt,
+          }
+        : null,
     };
 
     const eligibilityRules = product.eligibilityRules as { rules?: EligibilityRuleConfig[] } | null;
     const ruleConfigs = eligibilityRules?.rules || [];
 
     const failedRules: { code: string; message: string }[] = [];
+    const skippedRules: { type: string; reason: string }[] = [];
 
     for (const ruleConfig of ruleConfigs) {
       const rule = getRule(ruleConfig.type);
       if (!rule) continue;
 
       const result: RuleResult = rule.evaluate(context, ruleConfig);
+      if (result.skipped) {
+        const reason = result.skipReason || 'rule skipped';
+        skippedRules.push({ type: ruleConfig.type, reason });
+        this.logger.warn(
+          `Pre-qualification rule ${ruleConfig.type} skipped for customer=${customerId}: ${reason}`,
+        );
+        continue;
+      }
       if (!result.passed) {
         failedRules.push({
           code: result.failureCode || ruleConfig.type,
@@ -108,6 +144,12 @@ export class PreQualificationService {
       }
     }
 
-    return { qualified: failedRules.length === 0, failedRules, exposureCheck };
+    return {
+      qualified: failedRules.length === 0,
+      failedRules,
+      skippedRules: skippedRules.length > 0 ? skippedRules : undefined,
+      emiDataMissing: !latestEmi,
+      exposureCheck,
+    };
   }
 }
