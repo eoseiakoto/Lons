@@ -1,5 +1,6 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
+import { DEFAULT_SCORECARD } from '@lons/process-engine';
 
 const prisma = new PrismaClient();
 
@@ -696,6 +697,68 @@ async function main() {
 
     // Active products only for subscriptions / loan requests
     const activeProducts = productRecords.filter((p) => p.status === 'active');
+
+    // ---------------------------------------------------------------------
+    // Sprint 17 — Track A: tenant-default scorecard config (S17-4).
+    // Track B: customer de-duplication matching rules (S17-8).
+    //
+    // Both are per-tenant and idempotent (upsert / skipDuplicates).
+    // Without these seeds the services fall back to safe defaults
+    // (hardcoded scorecard, externalId-only dedup) — but production
+    // tenants want first-class rows from day one so the admin portal
+    // lists something and the new dedup behaviour is active.
+    // ---------------------------------------------------------------------
+    console.log('[6.5/8] Sprint 17 seeds — default scorecard + matching rules...');
+    // Prisma upsert refuses null in compound unique keys; check-then-create
+    // is the idempotent pattern when productId is null (tenant-default row).
+    const existingScorecard = await prisma.scorecardConfig.findFirst({
+      where: {
+        tenantId: tenant.id,
+        productId: null,
+        version: DEFAULT_SCORECARD.version,
+      },
+    });
+    if (!existingScorecard) {
+      await prisma.scorecardConfig.create({
+        data: {
+          tenantId: tenant.id,
+          productId: null,
+          name: 'Default Scorecard',
+          version: DEFAULT_SCORECARD.version,
+          config: DEFAULT_SCORECARD as unknown as Prisma.InputJsonValue,
+          scoreRangeMin: DEFAULT_SCORECARD.scoreRange.min,
+          scoreRangeMax: DEFAULT_SCORECARD.scoreRange.max,
+          isActive: true,
+          createdBy: null,
+        },
+      });
+    }
+    console.log(`  Default scorecard (${DEFAULT_SCORECARD.version}) seeded`);
+
+    await prisma.customerMatchingRule.createMany({
+      data: [
+        {
+          tenantId: tenant.id,
+          name: 'National ID',
+          matchFields: ['nationalId'] as unknown as Prisma.InputJsonValue,
+          priority: 1,
+        },
+        {
+          tenantId: tenant.id,
+          name: 'Phone + DOB',
+          matchFields: ['phonePrimary', 'dateOfBirth'] as unknown as Prisma.InputJsonValue,
+          priority: 2,
+        },
+        {
+          tenantId: tenant.id,
+          name: 'Email + Name',
+          matchFields: ['email', 'fullName'] as unknown as Prisma.InputJsonValue,
+          priority: 3,
+        },
+      ],
+      skipDuplicates: true,
+    });
+    console.log('  Customer matching rules (3) seeded');
 
     // ---------------------------------------------------------------------
     // 7. Create customers (20 per tenant) with consents

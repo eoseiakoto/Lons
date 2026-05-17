@@ -129,12 +129,17 @@ export class AgingService {
           // S16-12: execute the matrix of actions configured for the
           // NEW bucket. Only fires when a bucket actually has a backing
           // DB config (DEFAULT_BUCKETS fallback has no actions).
+          //
+          // S17-FIX-5: pass contract.productId so the SUSPEND_BORROWING
+          // handler can scope suspension to the same product by default
+          // (rather than freezing the customer across all products).
           if (bucket.config && this.agingActionService) {
             await this.agingActionService.executeActions(
               tenantId,
               contract.id,
               contract.customerId,
               bucket.config,
+              contract.productId,
             );
           }
         }

@@ -5,8 +5,8 @@ import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
 import { EntityServiceModule, AuditService, PlanTierConfigService } from '@lons/entity-service';
-import { ProcessEngineModule, SCREENING_GATE } from '@lons/process-engine';
-import { ScreeningService } from '@lons/integration-service';
+import { ProcessEngineModule, SCREENING_GATE, CREDIT_BUREAU_GATEWAY } from '@lons/process-engine';
+import { ScreeningService, CreditBureauService } from '@lons/integration-service';
 import { RepaymentServiceModule } from '@lons/repayment-service';
 import { NotificationServiceModule } from '@lons/notification-service';
 import { SettlementServiceModule } from '@lons/settlement-service';
@@ -68,6 +68,13 @@ import { UsageResolver } from './graphql/resolvers/usage.resolver';
 import { BnplCreditLineResolver } from './graphql/resolvers/bnpl-credit-line.resolver';
 import { BillingResolver } from './graphql/resolvers/billing.resolver';
 import { MicroLoanResolver } from './graphql/resolvers/micro-loan.resolver';
+// Sprint 17 (Track A) — EMI integration + scorecard configuration surface.
+import { EmiConfigResolver } from './graphql/resolvers/emi-config.resolver';
+import { ScorecardResolver } from './graphql/resolvers/scorecard.resolver';
+// Sprint 17 (Track B) — customer merge / financial profile / credit summary.
+import { CustomerMergeResolver } from './graphql/resolvers/customer-merge.resolver';
+import { CustomerFinancialProfileResolver } from './graphql/resolvers/customer-financial-profile.resolver';
+import { CustomerCreditSummaryResolver } from './graphql/resolvers/customer-credit-summary.resolver';
 import { DebugLogService } from './graphql/services/debug-log.service';
 import { GraphqlExceptionFilter } from './filters/graphql-exception.filter';
 import { SubscriptionModule } from './subscriptions/subscription.module';
@@ -157,6 +164,13 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
     BillingResolver,
     // Sprint 16 (S16-6) — micro-loan credit-limit audit query.
     MicroLoanResolver,
+    // Sprint 17 Track A — EMI integration + scorecard configuration.
+    EmiConfigResolver,
+    ScorecardResolver,
+    // Sprint 17 Track B — customer merge / financial profile / credit summary.
+    CustomerMergeResolver,
+    CustomerFinancialProfileResolver,
+    CustomerCreditSummaryResolver,
     // Sprint 14 (S14-9) — bind the PLAN_TIER_CONFIG_SERVICE injection
     // token used by @RequiresPlan's guard. Keeps @lons/common free of
     // an entity-service dependency.
@@ -174,6 +188,15 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
     {
       provide: SCREENING_GATE,
       useExisting: ScreeningService,
+    },
+    // Sprint 17 S17-3 — bind process-engine's CreditBureauFeatureExtractor
+    // against integration-service's CreditBureauService without
+    // process-engine taking a runtime dependency on integration-service
+    // (would close the cycle, since integration-service already imports
+    // process-engine for repayment events).
+    {
+      provide: CREDIT_BUREAU_GATEWAY,
+      useExisting: CreditBureauService,
     },
     {
       provide: 'AUDIT_SERVICE',
