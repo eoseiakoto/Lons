@@ -1,5 +1,3 @@
-import { PrismaService } from '@lons/database';
-
 import { PipelineRetryWorker, PipelineRetryJobData } from './pipeline-retry.worker';
 import { PipelineRetryService } from './pipeline-retry.service';
 import { PipelineStepLoggerService } from './pipeline-step-logger.service';
