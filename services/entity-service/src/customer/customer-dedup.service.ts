@@ -75,8 +75,11 @@ export class CustomerDedupService {
     tenantId: string,
     candidateData: CustomerDedupCandidate,
   ): Promise<CustomerDedupMatch | null> {
+    // S17-FIX-6 — soft-deleted rules are skipped. CLAUDE.md forbids
+    // hard deletes on business data; retired rules stay in the table
+    // for audit but must not contribute to matching.
     const rules = await this.prisma.customerMatchingRule.findMany({
-      where: { tenantId, isActive: true },
+      where: { tenantId, isActive: true, deletedAt: null },
       orderBy: { priority: 'asc' },
     });
 

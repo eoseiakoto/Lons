@@ -78,12 +78,12 @@ export class EmiConfigResolver {
     @CurrentTenant() tenantId: string,
     @Args('id', { type: () => ID }) id: string,
   ): Promise<EmiIntegrationConfigType> {
-    await this.emiConfigService.deactivate(tenantId, id);
-    const after = await this.emiConfigService.findById(tenantId, id);
-    if (!after) {
-      throw new Error(`EMI integration config not found after deactivate: ${id}`);
-    }
-    return this.toGraphql(after);
+    // S17-FIX-1B — service.deactivate() now returns the updated row,
+    // so the post-mutation re-fetch is gone. The earlier re-fetch
+    // chained into a findById that filtered `deletedAt: null` and
+    // threw because the old deactivate also stamped deletedAt.
+    const updated = await this.emiConfigService.deactivate(tenantId, id);
+    return this.toGraphql(updated);
   }
 
   @Mutation(() => EmiConnectionTestResult)

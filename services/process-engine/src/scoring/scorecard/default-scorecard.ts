@@ -11,7 +11,12 @@ import { ScorecardConfig } from './scorecard-engine';
  * explicitly opts in by uploading a scorecard with non-zero weights.
  */
 export const DEFAULT_SCORECARD: ScorecardConfig = {
-  version: '1.1',
+  // S17-FIX-7 — bumped 1.1 → 1.2 alongside the bureau-score band fix.
+  // The version is part of the unique key on scorecard_configs, so
+  // re-seeding will insert the new bands as a fresh row rather than
+  // colliding with the prior (broken) row. Operators handle the
+  // activation cut-over manually via the scorecard admin UI.
+  version: '1.2',
   scoreRange: { min: 0, max: 1000 },
   factors: [
     {
@@ -87,13 +92,18 @@ export const DEFAULT_SCORECARD: ScorecardConfig = {
       ],
     },
     {
+      // S17-FIX-7 — bureau scores are normalised to a 0–100 scale
+      // before scoring (via `normalizeBureauScore` in feature-normalizer).
+      // The earlier 0–1000 thresholds left all real-world inputs in the
+      // lowest band once a tenant flipped the weight off zero. Bands
+      // now match the post-normalisation range.
       name: 'credit_bureau_score',
       weight: 0,
       bands: [
-        { min: 700, max: null, points: 100 },
-        { min: 500, max: 699, points: 70 },
-        { min: 300, max: 499, points: 40 },
-        { min: 0, max: 299, points: 10 },
+        { min: 70, max: null, points: 100 },
+        { min: 50, max: 69, points: 70 },
+        { min: 30, max: 49, points: 40 },
+        { min: 0, max: 29, points: 10 },
       ],
     },
     {

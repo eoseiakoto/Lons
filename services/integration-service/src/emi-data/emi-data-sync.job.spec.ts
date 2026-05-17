@@ -99,4 +99,71 @@ describe('EmiDataSyncJob', () => {
     expect(result.succeeded).toBe(1);
     expect(result.errors).toEqual([{ customerId: 'c-1', error: 'db down' }]);
   });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // S17-FIX-8 — sync-status recording on EmiIntegrationConfig
+  // ─────────────────────────────────────────────────────────────────────
+
+  it('FIX-8: passes configId → recordSyncSuccess called after successful batch', async () => {
+    const prisma = {
+      subscription: { findMany: jest.fn().mockResolvedValue([{ customerId: 'c-1' }]) },
+      walletAccountMapping: { findFirst: jest.fn().mockResolvedValue({ walletId: 'w-1' }) },
+      customer: { findFirst: jest.fn() },
+    };
+    const sync = jest.fn().mockResolvedValue({});
+    const recordSuccess = jest.fn();
+    const recordError = jest.fn();
+    const configService = {
+      recordSyncSuccess: recordSuccess,
+      recordSyncError: recordError,
+    } as any;
+    const job = new EmiDataSyncJob(prisma as never, mkSvc(sync), configService);
+
+    await job.runForTenant('t-fix8a', 'config-1');
+
+    expect(recordSuccess).toHaveBeenCalledWith('t-fix8a', 'config-1');
+    expect(recordError).not.toHaveBeenCalled();
+  });
+
+  it('FIX-8: batch-wide failure → recordSyncError + re-throws', async () => {
+    const prisma = {
+      // findMany itself fails — simulates batch-wide DB outage before any
+      // per-customer work happens.
+      subscription: { findMany: jest.fn().mockRejectedValue(new Error('connection refused')) },
+      walletAccountMapping: { findFirst: jest.fn() },
+      customer: { findFirst: jest.fn() },
+    };
+    const sync = jest.fn();
+    const recordSuccess = jest.fn();
+    const recordError = jest.fn();
+    const configService = {
+      recordSyncSuccess: recordSuccess,
+      recordSyncError: recordError,
+    } as any;
+    const job = new EmiDataSyncJob(prisma as never, mkSvc(sync), configService);
+
+    await expect(job.runForTenant('t-fix8b', 'config-2')).rejects.toThrow(/connection refused/);
+
+    expect(recordError).toHaveBeenCalledWith('t-fix8b', 'config-2', 'connection refused');
+    expect(recordSuccess).not.toHaveBeenCalled();
+  });
+
+  it('FIX-8: without configId, sync status recording is skipped (legacy path)', async () => {
+    const prisma = {
+      subscription: { findMany: jest.fn().mockResolvedValue([]) },
+      walletAccountMapping: { findFirst: jest.fn() },
+      customer: { findFirst: jest.fn() },
+    };
+    const sync = jest.fn();
+    const recordSuccess = jest.fn();
+    const configService = {
+      recordSyncSuccess: recordSuccess,
+      recordSyncError: jest.fn(),
+    } as any;
+    const job = new EmiDataSyncJob(prisma as never, mkSvc(sync), configService);
+
+    await job.runForTenant('t-fix8c'); // no configId
+
+    expect(recordSuccess).not.toHaveBeenCalled();
+  });
 });

@@ -4,6 +4,7 @@ import {
   EnvKeyProvider,
   IKeyProvider,
   KEY_PROVIDER_TOKEN,
+  NotFoundError,
   decryptFromString,
   encryptToString,
 } from '@lons/common';
@@ -98,7 +99,7 @@ export class EmiIntegrationConfigService {
     this.logger.log(
       `Created EMI integration config ${created.id} (${created.provider}) tenant=${tenantId}`,
     );
-    return this.toDecrypted(created);
+    return this.projectRow(created, input.credentials ?? null);
   }
 
   async update(
@@ -110,7 +111,7 @@ export class EmiIntegrationConfigService {
       where: { id: configId, tenantId, deletedAt: null },
     });
     if (!existing) {
-      throw new Error(`EMI integration config not found: ${configId}`);
+      throw new NotFoundError('EMI integration config not found', configId);
     }
 
     this.validateFieldMappings(input.fieldMappings);
@@ -135,7 +136,9 @@ export class EmiIntegrationConfigService {
     this.logger.log(
       `Updated EMI integration config ${configId} tenant=${tenantId}`,
     );
-    return this.toDecrypted(updated);
+    // Decrypt the post-update creds so callers get a consistent view.
+    const decrypted = await this.decryptCredentials(updated.credentials);
+    return this.projectRow(updated, decrypted);
   }
 
   /** List all configs (credentials stripped). */
@@ -144,10 +147,18 @@ export class EmiIntegrationConfigService {
       where: { tenantId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
     });
-    return rows.map((r) => this.toDecrypted(r, /* stripCredentials */ true));
+    // List view never returns decrypted credentials — return projection
+    // with credentials = null.
+    return rows.map((r) => this.projectRow(r, null));
   }
 
-  /** Get a single config with credentials decrypted. */
+  /**
+   * Get a single config with credentials decrypted.
+   *
+   * S17-FIX-1A — was previously routed through a sync stub that always
+   * returned null, so admin-portal "edit config" loaded empty credentials.
+   * Now awaits the canonical async decryption helper.
+   */
   async findById(
     tenantId: string,
     configId: string,
@@ -155,24 +166,46 @@ export class EmiIntegrationConfigService {
     const row = await this.prisma.emiIntegrationConfig.findFirst({
       where: { id: configId, tenantId, deletedAt: null },
     });
-    return row ? this.toDecrypted(row) : null;
+    if (!row) return null;
+    const decrypted = await this.decryptCredentials(row.credentials);
+    return this.projectRow(row, decrypted);
   }
 
-  async deactivate(tenantId: string, configId: string): Promise<void> {
+  /**
+   * Deactivate an integration config — stops syncing but keeps the row
+   * visible to operators (and to {@link findById}) for inspection.
+   *
+   * S17-FIX-1B — the previous implementation also set `deletedAt`, which
+   * made the post-mutation `findById` lookup in the GraphQL resolver
+   * always return null (it filters `deletedAt: null`) and throw. Deactivate
+   * and delete are intentionally separate operations now: deactivation
+   * means "stop syncing", deletion (not implemented yet) means "remove
+   * from the system".
+   *
+   * Returns the updated record so callers don't need a separate re-fetch.
+   */
+  async deactivate(
+    tenantId: string,
+    configId: string,
+  ): Promise<EmiIntegrationConfigDecrypted> {
     const existing = await this.prisma.emiIntegrationConfig.findFirst({
       where: { id: configId, tenantId, deletedAt: null },
     });
     if (!existing) {
-      throw new Error(`EMI integration config not found: ${configId}`);
+      throw new NotFoundError('EMI integration config not found', configId);
     }
 
-    await this.prisma.emiIntegrationConfig.update({
+    const updated = await this.prisma.emiIntegrationConfig.update({
       where: { id: configId },
-      data: { isActive: false, deletedAt: new Date() },
+      data: { isActive: false },
     });
     this.logger.log(
       `Deactivated EMI integration config ${configId} tenant=${tenantId}`,
     );
+    // Strip credentials from the deactivation response — operators don't
+    // need the plaintext for this action and we never want the secret
+    // travelling further than the audit-bounded findById path.
+    return this.projectRow(updated, null);
   }
 
   /**
@@ -213,18 +246,28 @@ export class EmiIntegrationConfigService {
     }
   }
 
-  /** Record a successful sync (called by the sync job). */
-  async recordSyncSuccess(configId: string): Promise<void> {
-    await this.prisma.emiIntegrationConfig.update({
-      where: { id: configId },
+  /**
+   * Record a successful sync (called by the sync job).
+   *
+   * S17-FIX-8 — `tenantId` parameter added so the call enforces tenant
+   * isolation at the service boundary (the update uses Prisma's where
+   * filter on both id and tenant_id, mirroring how RLS would see it).
+   */
+  async recordSyncSuccess(tenantId: string, configId: string): Promise<void> {
+    await this.prisma.emiIntegrationConfig.updateMany({
+      where: { id: configId, tenantId },
       data: { lastSyncAt: new Date(), lastSyncError: null },
     });
   }
 
   /** Record a sync failure (called by the sync job). */
-  async recordSyncError(configId: string, error: string): Promise<void> {
-    await this.prisma.emiIntegrationConfig.update({
-      where: { id: configId },
+  async recordSyncError(
+    tenantId: string,
+    configId: string,
+    error: string,
+  ): Promise<void> {
+    await this.prisma.emiIntegrationConfig.updateMany({
+      where: { id: configId, tenantId },
       data: { lastSyncAt: new Date(), lastSyncError: error.slice(0, 1000) },
     });
   }
@@ -277,13 +320,22 @@ export class EmiIntegrationConfigService {
     }
   }
 
-  private toDecrypted(
+  /**
+   * Project a DB row into the API DTO, with already-resolved
+   * credentials. Callers decide whether to pass plaintext (for the
+   * single-row `findById` / `create` / `update` paths) or null (for
+   * `findAll` / `deactivate` — where the list/action view never carries
+   * the secret).
+   *
+   * S17-FIX-1A — replaces the previous `toDecrypted` + sync-stub combo
+   * that silently dropped credentials on the floor.
+   */
+  private projectRow(
     row: {
       id: string;
       tenantId: string;
       name: string;
       provider: string;
-      credentials: string | null;
       baseUrl: string | null;
       fieldMappings: unknown;
       syncFrequencyMin: number;
@@ -294,16 +346,14 @@ export class EmiIntegrationConfigService {
       createdAt: Date;
       updatedAt: Date;
     },
-    stripCredentials = false,
+    decryptedCredentials: Record<string, unknown> | null,
   ): EmiIntegrationConfigDecrypted {
     return {
       id: row.id,
       tenantId: row.tenantId,
       name: row.name,
       provider: row.provider,
-      credentials: stripCredentials
-        ? null
-        : (this.decryptCredentialsSync(row.credentials) as Record<string, unknown> | null),
+      credentials: decryptedCredentials,
       baseUrl: row.baseUrl,
       fieldMappings: (row.fieldMappings as Record<string, unknown> | null) ?? null,
       syncFrequencyMin: row.syncFrequencyMin,
@@ -317,21 +367,10 @@ export class EmiIntegrationConfigService {
   }
 
   /**
-   * Sync wrapper around {@link decryptCredentials} for use in `toDecrypted`.
-   * We accept the trade-off that decryption is awaitable in the async
-   * path; this sync method is only used in the list-projection where
-   * `stripCredentials=true` zeroes the field. For `findById` we call
-   * `decryptCredentials` directly.
-   */
-  private decryptCredentialsSync(encrypted: string | null): null {
-    // Forces callers to use the async path for real decryption.
-    return encrypted === null ? null : null;
-  }
-
-  /**
    * Public async variant — returns decrypted credentials. Use for
-   * `findById` callers that need the plaintext (e.g. when instantiating
-   * a real adapter).
+   * callers that need the plaintext (e.g. when instantiating a real
+   * adapter at runtime). Distinct from `findById` for callers that
+   * specifically want only the secret and not the rest of the config.
    */
   async getDecryptedCredentials(
     tenantId: string,

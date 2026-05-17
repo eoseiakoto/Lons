@@ -1,7 +1,7 @@
 import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from '@lons/database';
-import { REDIS_CLIENT } from '@lons/common';
+import { REDIS_CLIENT, bankersRound, divide, multiply } from '@lons/common';
 import type Redis from 'ioredis';
 
 /**
@@ -275,9 +275,19 @@ export class CustomerFinancialProfileService implements OnModuleInit {
     // Repayment score: integer % of paid vs total scheduled entries.
     // null when no entries exist (avoids misrepresenting a new customer
     // as having a 0% score, which would tank their credit signal).
+    //
+    // S17-FIX-4 — use Decimal-string division + banker's rounding per
+    // CLAUDE.md money rules. The counts themselves are integers, but
+    // routing them through divide()/multiply() keeps the % calculation
+    // identical to the rest of the platform's financial math.
     const repaymentScore =
       totalScheduleEntries > 0
-        ? Math.round((onTimeEntries / totalScheduleEntries) * 100)
+        ? Number(
+            bankersRound(
+              multiply(divide(String(onTimeEntries), String(totalScheduleEntries)), '100'),
+              0,
+            ),
+          )
         : null;
 
     // Default rate: % of total contracts that defaulted. 0 when no
@@ -286,7 +296,12 @@ export class CustomerFinancialProfileService implements OnModuleInit {
     // explicitly — zero is the right business default).
     const defaultRate =
       totalLoans > 0
-        ? Math.round((defaultedContracts / totalLoans) * 100)
+        ? Number(
+            bankersRound(
+              multiply(divide(String(defaultedContracts), String(totalLoans)), '100'),
+              0,
+            ),
+          )
         : 0;
 
     return {

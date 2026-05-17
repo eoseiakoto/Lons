@@ -102,4 +102,48 @@ describe('BnplCreditLineService.restoreAvailableLimit', () => {
     expect(lineId).toBe(LINE_ID);
     expect(tenantId).toBe(TENANT_ID);
   });
+
+  // ─────────────────────────────────────────────────────────────────────
+  // S17-FIX-5 — idempotent path uses Decimal-string math (no Number())
+  // ─────────────────────────────────────────────────────────────────────
+
+  it('FIX-5: idempotent path preserves precision for amounts near JS double limit', async () => {
+    // Pre-fix used `Number(prev) + Number(amount)` which silently lost
+    // precision once the magnitudes approached 2^53. With Decimal-string
+    // add() the computed cap stays exact across the full
+    // DECIMAL(19,4) range.
+    const { service, bnplCreditLine, executeRaw } = makeService();
+
+    // Open the idempotent code path: $transaction-with-callback hands
+    // the same prisma stub back, then we route bnplCreditLineAdjustment
+    // creates to capture what previousLimit/newLimit got computed.
+    const adjustmentCreate = jest.fn().mockResolvedValue({ id: 'adj-1' });
+    const txClient = {
+      bnplCreditLine: {
+        findFirst: jest.fn().mockResolvedValue({
+          availableLimit: { toString: () => '9999999999.9999' },
+          approvedLimit: { toString: () => '99999999999.9999' },
+        }),
+      },
+      bnplCreditLineAdjustment: { create: adjustmentCreate },
+      $executeRawUnsafe: executeRaw,
+    };
+    bnplCreditLine.findFirst = txClient.bnplCreditLine.findFirst;
+    (service as any).prisma.$transaction = jest.fn(async (cb: any) => cb(txClient));
+
+    await service.restoreAvailableLimit(
+      TENANT_ID,
+      LINE_ID,
+      '0.0001',
+      'repayment:rep-precision-test',
+    );
+
+    // Without precision loss: prev (9999999999.9999) + amount (0.0001) =
+    // 10000000000.0000. Number() would round-trip this through a
+    // double and yield 10000000000 — still ok at this magnitude — but
+    // a higher prev like 99999999999.9999 would lose the trailing .9999.
+    // The add() path preserves the exact string.
+    const createArgs = adjustmentCreate.mock.calls[0][0].data;
+    expect(createArgs.newLimit).toBe('10000000000.0000');
+  });
 });

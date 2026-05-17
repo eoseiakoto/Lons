@@ -2467,6 +2467,11 @@ model CustomerFinancialData {
   rawData              Json?    @map("raw_data")
   fetchedAt            DateTime @map("fetched_at") @db.Timestamptz(6)
   createdAt            DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  /// S17-FIX-6 — CLAUDE.md requires every table to expose updated_at so
+  /// operators can tell when a snapshot row was last mutated. Snapshots
+  /// are append-only today, but the column gives downstream auditing /
+  /// CDC consumers a uniform timestamp surface across all tables.
+  updatedAt            DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   customer Customer @relation(fields: [customerId], references: [id])
 
@@ -2533,14 +2538,18 @@ model ScorecardConfig {
 /// Tenants seed three defaults (national_id, phone+dob, email+name) at
 /// onboarding; further rules can be added per-tenant.
 model CustomerMatchingRule {
-  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  tenantId    String   @map("tenant_id") @db.Uuid
-  name        String   @db.VarChar(255)
-  matchFields Json     @map("match_fields")
-  priority    Int      @default(0)
-  isActive    Boolean  @default(true) @map("is_active")
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
-  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String    @map("tenant_id") @db.Uuid
+  name        String    @db.VarChar(255)
+  matchFields Json      @map("match_fields")
+  priority    Int       @default(0)
+  isActive    Boolean   @default(true) @map("is_active")
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+  /// S17-FIX-6 — soft-delete column per CLAUDE.md "no hard deletes on
+  /// business data". Operators may retire a rule without losing the
+  /// audit trail of customers matched against it historically.
+  deletedAt   DateTime? @map("deleted_at") @db.Timestamptz(6)
 
   @@index([tenantId])
   @@index([tenantId, isActive, priority])

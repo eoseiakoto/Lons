@@ -10,6 +10,7 @@ import {
   EventBusService,
   NotFoundError,
   ValidationError,
+  add,
   compare,
 } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
@@ -361,8 +362,11 @@ export class BnplCreditLineService {
 
         const prev = line.availableLimit.toString();
         const approved = line.approvedLimit.toString();
-        // newLimit = min(prev + amount, approved). Decimal-string math.
-        const candidate = (Number(prev) + Number(amount)).toFixed(4);
+        // newLimit = min(prev + amount, approved). Pure Decimal-string
+        // math via @lons/common; the previous Number() conversion would
+        // silently lose precision once values exceed ~9 × 10¹⁵ (JS double
+        // limit) — well within the DECIMAL(19,4) column range.
+        const candidate = add(prev, amount);
         const next = compare(candidate, approved) > 0 ? approved : candidate;
 
         await tx.bnplCreditLineAdjustment.create({

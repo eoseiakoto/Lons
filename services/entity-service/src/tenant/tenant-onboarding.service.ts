@@ -1,9 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService, Prisma } from '@lons/database';
 import {
+  AuditActionType,
+  AuditResourceType,
   ValidationError,
   encryptToString,
   createKeyProvider,
+  maskEmail,
   IKeyProvider,
 } from '@lons/common';
 import * as crypto from 'crypto';
@@ -11,6 +14,7 @@ import * as crypto from 'crypto';
 import { TenantService } from './tenant.service';
 import { PlatformConfigService } from '../platform-config/platform-config.service';
 import { ApiKeyService } from '../api-key/api-key.service';
+import { AuditService } from '../audit/audit.service';
 
 const DEFAULT_SYSTEM_ROLES = [
   {
@@ -81,6 +85,14 @@ export interface OnboardTenantInput {
   adminName: string;
   adminEmail: string;
   adminPasswordHash: string;
+  /**
+   * S17-FIX-9 — caller-supplied replay key. A second call with the same
+   * `(slug, idempotencyKey)` returns the already-onboarded result
+   * instead of throwing "slug in use". Without the key, slug collisions
+   * remain a hard error (the prior call may have come from a different
+   * client and we don't want to confuse those).
+   */
+  idempotencyKey?: string;
 }
 
 /**
@@ -101,7 +113,19 @@ export interface OnboardTenantResult {
   apiCredentials: OnboardTenantApiCredentials;
   /** Plaintext HMAC signing secret — shown exactly once. */
   webhookSigningSecret: string;
+  /**
+   * S17-FIX-9 — true when this result was returned from an
+   * idempotency-replay path rather than a fresh onboarding. In that
+   * case `apiCredentials.clientSecret` and `webhookSigningSecret`
+   * carry the sentinel `'<not-retrievable-on-replay>'` because both
+   * are unrecoverable after the original call. Callers (typically the
+   * onboarding GraphQL resolver) should surface this clearly.
+   */
+  idempotentReplay?: boolean;
 }
+
+/** S17-FIX-9 sentinel for replay paths where the original plaintext is gone. */
+export const REPLAY_SECRET_SENTINEL = '<not-retrievable-on-replay>';
 
 @Injectable()
 export class TenantOnboardingService {
@@ -113,21 +137,34 @@ export class TenantOnboardingService {
     private prisma: PrismaService,
     private tenantService: TenantService,
     private platformConfigService: PlatformConfigService,
-    // S17-7: ApiKeyService.createApiKey is the canonical entry point for
-    // issuing credentials. Re-using it (rather than reaching into the
-    // Prisma model directly) keeps the hashing / quota-enforcement logic
-    // in one place.
+    // S17-7: ApiKeyService is retained so the test-connection /
+    // rotation paths remain available — but in the onboarding hot
+    // path the API key is created inline inside the transaction
+    // (FIX-3) so a partial failure rolls everything back together.
     private apiKeyService: ApiKeyService,
-  ) {}
+    // S17-FIX-9: post-commit TENANT_ONBOARDED audit entry.
+    private auditService: AuditService,
+  ) {
+    // Reference apiKeyService to satisfy noUnusedParameters when the
+    // FIX-3 inline path is the only consumer in this file today.
+    void this.apiKeyService;
+  }
 
   async onboard(input: OnboardTenantInput): Promise<OnboardTenantResult> {
     const schemaName = `tenant_${input.slug.replace(/-/g, '_')}`;
 
-    // Validate slug uniqueness upfront
+    // Slug uniqueness check upfront. S17-FIX-9 — when an idempotencyKey
+    // is supplied AND a prior onboarding wrote a matching audit entry,
+    // return the cached result (with secret sentinels) instead of
+    // throwing. Without the key, slug collisions stay a hard error.
     const existingSlug = await this.prisma.tenant.findUnique({
       where: { slug: input.slug },
     });
     if (existingSlug) {
+      if (input.idempotencyKey) {
+        const replay = await this.findReplay(existingSlug.id, input.idempotencyKey);
+        if (replay) return replay;
+      }
       throw new ValidationError('Slug already in use', { slug: input.slug });
     }
 
@@ -146,10 +183,21 @@ export class TenantOnboardingService {
     const key = await this.keyProvider.getKey();
     const encryptedWebhookSecret = encryptToString(webhookSigningSecret, key);
 
-    // Run tenant + roles + admin user in a transaction. The API key is
-    // issued AFTER the tx commits because `ApiKeyService.createApiKey`
-    // calls the plan-tier quota enforcement service (which reads from
-    // Redis) and we don't want that holding a DB transaction open.
+    // S17-FIX-3: generate API key plaintext + hash OUTSIDE the
+    // transaction (CPU work only, no I/O) so we can hand the row into
+    // the same atomic block as tenant + roles + admin. The original
+    // code created the key AFTER the tx committed, which left orphaned
+    // tenants when ApiKeyService.createApiKey failed.
+    //
+    // Format mirrors ApiKeyService.createApiKey exactly (two separate
+    // credentials — keyHash + secretHash — so disclosing one doesn't
+    // reveal the other). Quota / dedup checks are skipped: a brand-new
+    // tenant has zero keys, and 'Default API Key' is fresh by definition.
+    const apiKeyPlaintext = `lons_${crypto.randomBytes(32).toString('hex')}`;
+    const apiKeySecretPlaintext = `lons_secret_${crypto.randomBytes(32).toString('hex')}`;
+    const apiKeyHash = crypto.createHash('sha256').update(apiKeyPlaintext).digest('hex');
+    const apiKeySecretHash = crypto.createHash('sha256').update(apiKeySecretPlaintext).digest('hex');
+
     const txResult = await this.prisma.$transaction(async (tx) => {
       // 1. Create tenant. The webhook signing key is encrypted-at-rest into
       // the settings JSONB alongside whatever else came in.
@@ -202,28 +250,116 @@ export class TenantOnboardingService {
         include: { role: true },
       });
 
-      return { tenant, roles, adminUser };
+      // 4. (S17-FIX-3) API key — inside the same transaction so a failure
+      // here rolls back the tenant + roles + admin atomically.
+      const apiKey = await tx.apiKey.create({
+        data: {
+          tenantId: tenant.id,
+          name: 'Default API Key',
+          keyHash: apiKeyHash,
+          secretHash: apiKeySecretHash,
+          rateLimitPerMinute: 60,
+        },
+      });
+
+      return { tenant, roles, adminUser, apiKey };
     });
 
-    // 4. Auto-generate API key pair (post-transaction — see comment above).
-    // Failures here leave the tenant created without credentials; the
-    // caller can still rotate via TenantService.rotateWebhookSigningKey
-    // and the standard ApiKey mutations. Audit log captures both states.
-    const apiKey = await this.apiKeyService.createApiKey(txResult.tenant.id, {
-      name: 'Default API Key',
-      rateLimitPerMin: 60,
-    });
+    // 5. (S17-FIX-9) Post-commit audit entry. Uses AuditActionType.CREATE
+    // with metadata.event = 'tenant_onboarded' (mirrors the
+    // CustomerMergeService pattern — keeps the enum slim while still
+    // letting downstream consumers filter on the specific event).
+    // The idempotencyKey lives in metadata so replay detection can
+    // query it via the standard JSON-path operator.
+    try {
+      await this.auditService.log({
+        tenantId: txResult.tenant.id,
+        actorType: 'system',
+        actorId: (txResult.adminUser as { id?: string }).id,
+        action: AuditActionType.CREATE,
+        resourceType: AuditResourceType.TENANT,
+        resourceId: txResult.tenant.id,
+        metadata: {
+          event: 'tenant_onboarded',
+          slug: input.slug,
+          adminEmail: maskEmail(input.adminEmail),
+          apiKeyId: txResult.apiKey.id,
+          webhookKeyGenerated: true,
+          idempotencyKey: input.idempotencyKey ?? null,
+        },
+      });
+    } catch (err) {
+      // Audit-log failure must never block onboarding (the tenant +
+      // user + key are already committed). Log and move on.
+      // eslint-disable-next-line no-console
+      console.error(
+        `tenant_onboarded audit log failed for ${txResult.tenant.id}: ${(err as Error).message}`,
+      );
+    }
 
     return {
       tenant: txResult.tenant,
       roles: txResult.roles,
       adminUser: txResult.adminUser,
       apiCredentials: {
-        clientId: apiKey.id,
-        clientSecret: apiKey.plaintextSecret, // shown only once
-        rateLimitPerMin: apiKey.rateLimitPerMin,
+        clientId: txResult.apiKey.id,
+        clientSecret: apiKeySecretPlaintext, // shown only once
+        rateLimitPerMin: txResult.apiKey.rateLimitPerMinute,
       },
       webhookSigningSecret, // shown only once
+    };
+  }
+
+  /**
+   * S17-FIX-9 — look up a prior onboarding for `(tenantId, idempotencyKey)`.
+   * Uses the AuditLog table as the idempotency record (consistent with
+   * CustomerMergeService.findReplay). Returns a result populated with
+   * tenant / roles / adminUser but with the unrecoverable secrets
+   * replaced by sentinels.
+   */
+  private async findReplay(
+    tenantId: string,
+    idempotencyKey: string,
+  ): Promise<OnboardTenantResult | null> {
+    const prior = await this.prisma.auditLog.findFirst({
+      where: {
+        tenantId,
+        action: AuditActionType.CREATE,
+        resourceType: AuditResourceType.TENANT,
+        metadata: {
+          path: ['idempotencyKey'],
+          equals: idempotencyKey,
+        } as never,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (!prior) return null;
+    const meta = (prior.metadata as Record<string, unknown>) || {};
+    if (meta.event !== 'tenant_onboarded') return null;
+
+    const tenant = await this.prisma.tenant.findUnique({ where: { id: tenantId } });
+    if (!tenant) return null;
+
+    const roles = await this.prisma.role.findMany({
+      where: { tenantId, isSystem: true },
+    });
+    const adminUser = await this.prisma.user.findFirst({
+      where: { tenantId, status: 'active' },
+      include: { role: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    return {
+      tenant,
+      roles,
+      adminUser,
+      apiCredentials: {
+        clientId: String(meta.apiKeyId ?? ''),
+        clientSecret: REPLAY_SECRET_SENTINEL,
+        rateLimitPerMin: 60,
+      },
+      webhookSigningSecret: REPLAY_SECRET_SENTINEL,
+      idempotentReplay: true,
     };
   }
 }
