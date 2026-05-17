@@ -153,6 +153,10 @@ enum LoanRequestStatus {
   approved
   rejected
   manual_review
+  /// S18-1 — operator escalated this request to a higher-tier approver.
+  /// Set by `escalateLoanRequest` GraphQL mutation; cleared back to
+  /// `approved` / `rejected` by the senior operator's decision.
+  escalated
   offer_sent
   accepted
   declined
@@ -384,6 +388,8 @@ model Tenant {
   // Sprint 14 (S14-9, S14-12): commercial billing relations.
   billingConfig               TenantBillingConfig?
   billingInvoices             BillingInvoice[]
+  // Sprint 18 S18-11 — plan-tier upgrade request audit trail.
+  upgradeRequests             UpgradeRequest[]
 
   @@map("tenants")
 }
@@ -565,6 +571,8 @@ model User {
   processedRequests LoanRequest[]    @relation("RequestProcessedBy")
   feedbacks         Feedback[]
   surveyResponses   SurveyResponse[]
+  // Sprint 18 S18-6 — per-operator approval-authority limits.
+  approvalLimit     OperatorApprovalLimit?
 
   /// FIX-S13B-1 (F-S13B-1): the original `@@unique([tenantId, email])` is
   /// removed — encrypted columns can't enforce uniqueness. The unique
@@ -815,6 +823,8 @@ model Product {
   bnplCreditLines  BnplCreditLine[]
   agingBucketConfigs AgingBucketConfig[]
   scorecardConfigs ScorecardConfig[]
+  // Sprint 18 S18-9 — per-product revenue distribution configuration.
+  revenueDistributionConfigs RevenueDistributionConfig[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -902,6 +912,8 @@ model LoanRequest {
   scoringResult ScoringResult? @relation(fields: [scoringResultId], references: [id])
   contract      Contract?      @relation("RequestContract", fields: [contractId], references: [id])
   processor     User?          @relation("RequestProcessedBy", fields: [processedBy], references: [id])
+  // Sprint 18 S18-7 — per-step pipeline audit trail.
+  pipelineSteps PipelineStepLog[]
 
   @@index([tenantId])
   @@index([customerId])
@@ -2253,6 +2265,12 @@ model Invoice {
   verifiedBy         String?            @map("verified_by") @db.Uuid
   verifiedAt         DateTime?          @map("verified_at") @db.Timestamptz(6)
   verificationNotes  String?            @map("verification_notes") @db.Text
+  /// S14-11 (Sprint 18 carry-forward) — operator who claimed this
+  /// invoice from the verification queue. Distinct from `verifiedBy`
+  /// (the operator who submitted the final verification decision):
+  /// an invoice can be claimed by Alice but verified by Bob if Alice
+  /// hands it off mid-review.
+  assignedVerifierId String?            @map("assigned_verifier_id") @db.Uuid
   recourseType       RecourseType       @default(with_recourse) @map("recourse_type")
   offerExpiresAt     DateTime?          @map("offer_expires_at") @db.Timestamptz(6)
   debtorNotifiedAt   DateTime?          @map("debtor_notified_at") @db.Timestamptz(6)
@@ -2554,4 +2572,136 @@ model CustomerMatchingRule {
   @@index([tenantId])
   @@index([tenantId, isActive, priority])
   @@map("customer_matching_rules")
+}
+
+// ============================================================================
+// Sprint 18 — Admin Portal, Process Engine, Post-Processing
+// ============================================================================
+
+/// S18-6 / FR-AE-002.4 — Per-operator approval-authority limits enforced
+/// inside the approval pipeline. A user with no row has no restriction
+/// (backwards-compatible — pre-Sprint-18 behaviour).
+model OperatorApprovalLimit {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String   @map("tenant_id") @db.Uuid
+  /// `@unique` here is what makes the User.approvalLimit relation a
+  /// 1:1 (one limit row per user). The compound `(tenantId, userId)`
+  /// stays as belt-and-braces tenant scoping.
+  userId              String   @unique @map("user_id") @db.Uuid
+  /// Maximum loan amount this operator can approve, Decimal string.
+  maxApprovalAmount   Decimal  @map("max_approval_amount") @db.Decimal(19, 4)
+  /// Maximum number of approvals per day; null = unlimited.
+  maxApprovalsPerDay  Int?     @map("max_approvals_per_day")
+  /// Product types this operator can approve; null = all.
+  allowedProductTypes Json?    @map("allowed_product_types")
+  /// Whether this operator can approve already-escalated requests.
+  canApproveEscalated Boolean  @default(false) @map("can_approve_escalated")
+  isActive            Boolean  @default(true) @map("is_active")
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([tenantId, userId])
+  @@index([tenantId])
+  @@map("operator_approval_limits")
+}
+
+/// S18-7 / FR-PE-006 — Per-step pipeline execution audit trail.
+/// Append-only. CLAUDE.md ledger/audit invariant: no updates, no deletes
+/// once written. Enforced at migration level via the GRANT in the
+/// RLS section.
+model PipelineStepLog {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String   @map("tenant_id") @db.Uuid
+  loanRequestId String   @map("loan_request_id") @db.Uuid
+  /// Pipeline step name — pre_qualification, scoring, approval,
+  /// offer_generation, offer_acceptance, contract_creation,
+  /// disbursement.
+  stepName      String   @map("step_name") @db.VarChar(100)
+  /// Execution order within the pipeline run.
+  stepOrder     Int      @map("step_order")
+  /// success | rejected | error | skipped | timeout.
+  outcome       String   @db.VarChar(50)
+  /// Inputs to this step (sanitised — no PII).
+  inputs        Json?
+  /// Outputs from this step (sanitised — no PII).
+  outputs       Json?
+  errorMessage  String?  @map("error_message") @db.Text
+  errorCode     String?  @map("error_code") @db.VarChar(100)
+  durationMs    Int      @map("duration_ms")
+  /// Operator who triggered this step; null for auto steps.
+  triggeredBy   String?  @map("triggered_by") @db.Uuid
+  startedAt     DateTime @map("started_at") @db.Timestamptz(6)
+  completedAt   DateTime @map("completed_at") @db.Timestamptz(6)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  loanRequest LoanRequest @relation(fields: [loanRequestId], references: [id])
+
+  @@index([tenantId])
+  @@index([loanRequestId])
+  @@index([loanRequestId, stepOrder])
+  @@map("pipeline_step_logs")
+}
+
+/// S18-9 — Revenue-distribution model selector. The legacy
+/// `percentage_split` is the default; new models are opt-in per
+/// product/tenant.
+enum RevenueDistributionModel {
+  percentage_split
+  tiered
+  fixed_fee
+  waterfall
+
+  @@map("revenue_distribution_model")
+}
+
+/// S18-9 — Per-tenant/product revenue distribution configuration.
+/// Resolution chain at settlement time: product-specific active →
+/// tenant-default (productId null) active → hardcoded legacy
+/// percentage_split fallback in SettlementService.
+model RevenueDistributionConfig {
+  id        String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String                   @map("tenant_id") @db.Uuid
+  productId String?                  @map("product_id") @db.Uuid
+  model     RevenueDistributionModel
+  /// Model-specific shape; structure depends on `model` value. See
+  /// Docs/DEV-PROMPT-SPRINT-18.md §S18-9 for the per-model JSON shape.
+  config    Json
+  priority  Int                      @default(0)
+  isActive  Boolean                  @default(true) @map("is_active")
+  createdAt DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt DateTime?                @map("deleted_at") @db.Timestamptz(6)
+
+  product Product? @relation(fields: [productId], references: [id])
+
+  @@index([tenantId])
+  @@index([tenantId, productId])
+  @@map("revenue_distribution_configs")
+}
+
+/// S18-11 — Tenant-initiated plan-tier upgrade request audit trail.
+/// Reviewed by the platform team; downgrades and same-tier requests are
+/// rejected at the service layer.
+model UpgradeRequest {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId      String    @map("tenant_id") @db.Uuid
+  currentTier   PlanTier  @map("current_tier")
+  requestedTier PlanTier  @map("requested_tier")
+  reason        String?   @db.Text
+  /// pending | approved | rejected.
+  status        String    @default("pending") @db.VarChar(20)
+  requestedBy   String?   @map("requested_by") @db.Uuid
+  reviewedBy    String?   @map("reviewed_by") @db.Uuid
+  reviewedAt    DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  reviewNotes   String?   @map("review_notes") @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+
+  @@index([tenantId])
+  @@index([status])
+  @@map("upgrade_requests")
 }

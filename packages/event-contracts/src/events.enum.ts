@@ -265,4 +265,18 @@ export enum EventType {
   CUSTOMER_MERGED = 'customer.merged',
   CUSTOMER_FINANCIAL_DATA_SYNCED = 'customer.financial_data.synced',
   SCORING_COMPLETED = 'scoring.completed',
+
+  // ── Sprint 18 — loan-request review workflow + invoice verification
+  // queue + plan-tier upgrade request + pipeline retry events.
+  //
+  // INVOICE_VERIFIED + PLAN_UPGRADE_REQUESTED already exist higher in
+  // this enum (lines 199, 238 — earlier sprints declared them). Re-use
+  // the existing identifiers; the dev prompt's "additions" list is
+  // checking that consumers can reference the names, which they can.
+  // INVOICE_VERIFICATION_FAILED is new (no prior declaration).
+  LOAN_REQUEST_ESCALATED = 'loan_request.escalated',
+  LOAN_REQUEST_TERMS_MODIFIED = 'loan_request.terms_modified',
+  INVOICE_VERIFICATION_FAILED = 'invoice.verification_failed',
+  PIPELINE_STEP_RETRY_SCHEDULED = 'pipeline.step.retry_scheduled',
+  PIPELINE_STEP_RETRY_EXHAUSTED = 'pipeline.step.retry_exhausted',
 }
