@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import PDFDocument from 'pdfkit';
 import { PrismaService } from '@lons/database';
 import { add, bankersRound, divide } from '@lons/common';
 
@@ -12,10 +13,11 @@ import { add, bankersRound, divide } from '@lons/common';
  * if a downstream consumer needs custom columns they should fork the
  * report definition rather than parametrising this service.
  *
- * PDF strategy: optional. PDFKit is heavyweight; we use a deferred
- * `require()` so the analytics-service test suite doesn't have to
- * install it unless the consumer actually requests a PDF. The build
- * graceful-degrades to "PDF unavailable" if pdfkit isn't present.
+ * PDF strategy: PDFKit, A4 landscape, columns split evenly across the
+ * page width. Sprint-18 follow-up flipped the previous lazy `require()`
+ * fallback to a normal top-of-file import once `pdfkit` was added to
+ * the package dependencies — the lazy form's only purpose was to let
+ * the analytics-service ship before the dep landed.
  */
 
 export type ReportType =
@@ -129,25 +131,15 @@ export class ReportExportService {
   }
 
   /**
-   * Lazy-loaded PDF generation. Returns a buffer using PDFKit if
-   * available; otherwise throws so the resolver can surface a clean
-   * error.
+   * Render `data` to an A4-landscape PDF buffer via PDFKit. Throws
+   * only if PDFKit itself faults during streaming — the prior
+   * "dependency not installed" branch is gone now that `pdfkit` is
+   * a hard dependency of analytics-service.
    */
   async generatePdf(data: ReportData): Promise<Buffer> {
-    let PDFDocument: unknown;
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      PDFDocument = require('pdfkit');
-    } catch {
-      throw new Error(
-        'PDF export unavailable: pdfkit dependency not installed in analytics-service',
-      );
-    }
-
     return new Promise<Buffer>((resolve, reject) => {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const doc = new (PDFDocument as any)({ size: 'A4', layout: 'landscape', margin: 32 });
+        const doc = new PDFDocument({ size: 'A4', layout: 'landscape', margin: 32 });
         const chunks: Buffer[] = [];
         doc.on('data', (c: Buffer) => chunks.push(c));
         doc.on('end', () => resolve(Buffer.concat(chunks)));

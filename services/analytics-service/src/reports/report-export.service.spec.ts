@@ -74,4 +74,61 @@ describe('ReportExportService', () => {
       expect(csv).toContain('\r\n12\r\n');
     });
   });
+
+  describe('generatePdf (Sprint 18 follow-up)', () => {
+    // Smallest verifiable contract: the method resolves with a real
+    // PDF buffer. We don't snapshot the bytes (PDFKit timestamps the
+    // /CreationDate metadata, so the output is non-deterministic)
+    // but we can verify magic bytes + non-trivial size + the
+    // standard PDF trailer marker.
+
+    const sample = {
+      title: 'Disbursement Report',
+      subtitle: 'Jan 2026',
+      columns: [
+        { key: 'date', label: 'Date' },
+        { key: 'amount', label: 'Amount' },
+        { key: 'currency', label: 'Currency' },
+      ],
+      rows: [
+        { date: '2026-01-15', amount: '1500.0000', currency: 'GHS' },
+        { date: '2026-01-16', amount: '2750.5000', currency: 'GHS' },
+      ],
+    };
+
+    it('returns a valid PDF buffer starting with %PDF- magic bytes', async () => {
+      const buf = await svc.generatePdf(sample);
+
+      expect(Buffer.isBuffer(buf)).toBe(true);
+      expect(buf.length).toBeGreaterThan(500); // PDFKit base output ~> 1 KB
+      // Magic bytes — every PDF starts with %PDF-
+      expect(buf.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+      // Trailer marker — every PDF ends with %%EOF on the last line.
+      expect(buf.subarray(-7).toString('ascii').trim()).toBe('%%EOF');
+    });
+
+    it('handles an empty rows array (header-only PDF still valid)', async () => {
+      const buf = await svc.generatePdf({ ...sample, rows: [] });
+      expect(buf.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+      expect(buf.length).toBeGreaterThan(500);
+    });
+
+    it('paginates when row count would overflow a single page', async () => {
+      // ~120 rows at 8pt font with 0.4 line-down per row on A4
+      // landscape definitely triggers the doc.addPage() branch.
+      const many = Array.from({ length: 120 }, (_, i) => ({
+        date: `2026-01-${String((i % 28) + 1).padStart(2, '0')}`,
+        amount: `${100 + i}.0000`,
+        currency: 'GHS',
+      }));
+      const buf = await svc.generatePdf({ ...sample, rows: many });
+      expect(buf.subarray(0, 5).toString('ascii')).toBe('%PDF-');
+      // /Count entry in /Pages is "/Count N" where N >= 2 for a
+      // paginated doc. Cheaper than parsing the cross-ref table.
+      const text = buf.toString('latin1');
+      const countMatch = text.match(/\/Count (\d+)/);
+      expect(countMatch).not.toBeNull();
+      expect(Number(countMatch![1])).toBeGreaterThanOrEqual(2);
+    });
+  });
 });
