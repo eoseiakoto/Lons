@@ -31,7 +31,7 @@
 | S18-ENH | Billing usageHistory query + nextBillingDate + estimatedFees | D — Fix Items | 3 | ✅ |
 | | **Total** | | **~79.5** | |
 
-Of the 27 PM exit criteria, 26 are met directly by the implementation; #21 (PDF export functional) is scoped down to "CSV ships working today; PDF throws a clean 'pdfkit not installed' error" — see §5.1.
+Of the 27 PM exit criteria, all 27 are now fully met. (Criterion #21 — PDF export functional — was originally scoped down at sprint cut, then resolved post-sprint in commit `f0595a0` by promoting `pdfkit` to a hard dependency; see §5.1.)
 
 ---
 
@@ -100,8 +100,8 @@ All 4 new tables have RLS (USING + WITH CHECK, platform-admin bypass, FORCE ROW 
 
 ## 5. Behavioural changes worth highlighting
 
-### 5.1 PDF report export needs `pdfkit` installed
-`services/analytics-service/src/reports/report-export.service.ts` uses a deferred `require('pdfkit')`. CSV export is fully working; the PDF code path throws a clean `"pdfkit not installed"` error until the dependency is added to `services/analytics-service/package.json`. Operator's primary use case is CSV — defer the install to the deploy bundle when PDF demand surfaces.
+### 5.1 PDF report export ~~needs `pdfkit` installed~~ now works (post-sprint follow-up)
+**Resolved in commit `f0595a0`** — `pdfkit ^0.15.0` + `@types/pdfkit` were promoted to hard dependencies of `@lons/analytics-service`, the deferred `require()` flipped to a normal top-of-file import, and three happy-path tests added (`generatePdf` returns a valid `%PDF-` buffer; empty-rows still produces a valid header-only PDF; ~120 rows triggers pagination with `/Count >= 2`). PM exit criterion #21 is now fully met — both CSV and PDF export work end-to-end.
 
 ### 5.2 Pipeline retry is BullMQ-backed and requires Redis
 S18-12 registers a `pipeline-step-retry` BullMQ queue in `ProcessEngineModule`. The app composition root must register `BullModule.forRoot({...})` against Redis. The existing `notification-service` already has this; if a deployment environment ships without it, the retry worker will fail to boot.
@@ -140,7 +140,7 @@ Carried over (unchanged from prior delivery notes):
 
 Newly introduced by Sprint 18:
 
-1. **PDF export pdfkit install** — see §5.1. One-line addition to `services/analytics-service/package.json` when PDF demand surfaces.
+1. ~~**PDF export pdfkit install**~~ — resolved post-sprint in commit `f0595a0`; see §5.1.
 2. **PlanTierConfig seed inserts** — S18-11 dashboard renders empty meters for tenants whose tier isn't seeded. Canonical values live in `Docs/SPEC-plan-tiers.md` §3. Add to `packages/database/prisma/seed.ts` Step [6.5/8] alongside the Sprint 17 scorecard + matching-rule seeds.
 3. **`OperatorApprovalLimit` seed inserts** — not required (no-row default = unrestricted, backwards-compat per S18-6 spec). Add demo rows in the staging seed if you want the admin portal to render meaningful limits.
 4. **Default `RevenueDistributionConfig` per seed tenant** — not required (legacy fallback). Add if you want the dev environment to exercise a non-default model.
@@ -194,7 +194,7 @@ Newly introduced by Sprint 18:
 | 1 | Operators can review/approve/reject/escalate/modify loan applications | ✅ S18-1 |
 | 2 | Approval enforces per-operator limits | ✅ S18-6 |
 | 3 | Contract operations (manual payment, restructure, waive) in UI | ✅ S18-2 |
-| 4 | All report views exportable as CSV and PDF | ✅ CSV; PDF deferred (§5.1) |
+| 4 | All report views exportable as CSV and PDF | ✅ both (PDF unblocked in follow-up `f0595a0`; see §5.1) |
 | 5 | Settlement runs + reconciliation in dashboard | ✅ S18-4 |
 | 6 | API keys manageable via admin portal | ✅ S18-5 |
 | 7 | Every pipeline step logs to pipeline_step_logs | ✅ S18-7 |
