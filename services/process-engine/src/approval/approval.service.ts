@@ -1,14 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Optional } from '@nestjs/common';
 import { PrismaService, LoanRequestStatus, Prisma } from '@lons/database';
 import { ValidationError, compare, min as decMin } from '@lons/common';
 
 import { LoanRequestService } from '../loan-request/loan-request.service';
+import { ApprovalLimitService } from './approval-limit.service';
 
 @Injectable()
 export class ApprovalService {
   constructor(
     private prisma: PrismaService,
     private loanRequestService: LoanRequestService,
+    // Sprint 18 (S18-6): per-operator approval-authority limits. @Optional
+    // so legacy tests that wire ApprovalService without the new dep keep
+    // working — production wiring always provides it via ApprovalModule.
+    // When absent, manual approvals/rejections proceed without authority
+    // checks (matching pre-S18 behaviour).
+    @Optional() private approvalLimitService?: ApprovalLimitService,
   ) {}
 
   async makeDecision(tenantId: string, loanRequestId: string) {
@@ -74,11 +81,38 @@ export class ApprovalService {
     loanRequestId: string,
     approvedAmount: string,
     approvedTenor: number,
+    // Sprint 18 (S18-6): operator id is used to enforce per-operator
+    // approval-authority limits. Optional for backward compat with
+    // callers that haven't been updated yet — when absent, no limit
+    // check is performed.
+    operatorId?: string,
   ) {
     const lr = await this.loanRequestService.findById(tenantId, loanRequestId);
-    if (lr.status !== LoanRequestStatus.manual_review) {
+    // S18-1 added the `escalated` status; an escalated request is also a
+    // manual decision so we allow approval from either state.
+    if (
+      lr.status !== LoanRequestStatus.manual_review &&
+      lr.status !== LoanRequestStatus.escalated
+    ) {
       throw new ValidationError(
-        `Loan request must be in manual_review to approve manually; current status: ${lr.status}`,
+        `Loan request must be in manual_review or escalated to approve manually; current status: ${lr.status}`,
+      );
+    }
+
+    // S18-6: check operator authority BEFORE the clamp so the error
+    // surfaces the operator's actual ceiling, not a silently-reduced
+    // amount. The check compares the OPERATOR-SUPPLIED amount (their
+    // intent) against the limit — clamping happens after.
+    if (operatorId && this.approvalLimitService) {
+      await this.approvalLimitService.validateOperatorAction(
+        tenantId,
+        operatorId,
+        'approve',
+        {
+          requestedAmount: approvedAmount,
+          product: { type: lr.product?.type, productType: lr.product?.type },
+          status: lr.status,
+        },
       );
     }
 
@@ -93,10 +127,25 @@ export class ApprovalService {
       amount = productMin;
     }
 
-    return this.loanRequestService.transitionStatus(tenantId, loanRequestId, LoanRequestStatus.approved, {
-      approvedAmount: amount,
-      approvedTenor,
-    });
+    const result = await this.loanRequestService.transitionStatus(
+      tenantId,
+      loanRequestId,
+      LoanRequestStatus.approved,
+      {
+        approvedAmount: amount,
+        approvedTenor,
+      },
+    );
+
+    // S18-6: increment the operator's daily counter only after the
+    // transition lands successfully. If the transition throws we leak
+    // no counter increment (and Redis being down doesn't roll back the
+    // approval — the service swallows that error).
+    if (operatorId && this.approvalLimitService) {
+      await this.approvalLimitService.incrementDailyCount(tenantId, operatorId);
+    }
+
+    return result;
   }
 
   async rejectManual(
@@ -104,13 +153,35 @@ export class ApprovalService {
     loanRequestId: string,
     reasonCode: string,
     reasonDetail?: string,
+    // S18-6: optional operatorId. Reject/escalate are not amount-bound
+    // so the limit check is a no-op in practice — but we pass it
+    // through to keep the call sites symmetric and to allow the
+    // `OPERATOR_SUSPENDED` check to fire.
+    operatorId?: string,
   ) {
     const lr = await this.loanRequestService.findById(tenantId, loanRequestId);
-    if (lr.status !== LoanRequestStatus.manual_review) {
+    if (
+      lr.status !== LoanRequestStatus.manual_review &&
+      lr.status !== LoanRequestStatus.escalated
+    ) {
       throw new ValidationError(
-        `Loan request must be in manual_review to reject manually; current status: ${lr.status}`,
+        `Loan request must be in manual_review or escalated to reject manually; current status: ${lr.status}`,
       );
     }
+
+    if (operatorId && this.approvalLimitService) {
+      await this.approvalLimitService.validateOperatorAction(
+        tenantId,
+        operatorId,
+        'reject',
+        {
+          requestedAmount: String(lr.requestedAmount),
+          product: { type: lr.product?.type, productType: lr.product?.type },
+          status: lr.status,
+        },
+      );
+    }
+
     return this.loanRequestService.transitionStatus(tenantId, loanRequestId, LoanRequestStatus.rejected, {
       rejectionReasons: [
         { code: reasonCode, message: reasonDetail ?? reasonCode },

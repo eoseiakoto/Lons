@@ -1,18 +1,27 @@
-import { ForbiddenException, Injectable, Inject, Optional } from '@nestjs/common';
+import { ForbiddenException, Injectable, Inject, Logger, Optional } from '@nestjs/common';
 import { PrismaService, LoanRequestStatus, DisbursementStatus } from '@lons/database';
-import { EventBusService, NotFoundError } from '@lons/common';
+import { EventBusService, NotFoundError, add } from '@lons/common';
 import { EventType } from '@lons/event-contracts';
 import { QuotaTrackingService } from '@lons/entity-service';
 
 import { LoanRequestService } from '../loan-request/loan-request.service';
 import { CoolingOffService } from '../cooling-off/cooling-off.service';
+import { PipelineRetryService } from '../pipeline/pipeline-retry.service';
+import { PipelineStep, PIPELINE_STEP_CONFIGS } from '../pipeline/pipeline-step-registry';
 import { WALLET_ADAPTER, IWalletAdapter } from './adapters/wallet-adapter.interface';
 import { SCREENING_GATE, IScreeningGate } from './screening-gate.interface';
 
-const MAX_RETRIES = 3;
+// Sprint 18 (S18-12): MAX_RETRIES is now sourced from PIPELINE_STEP_CONFIGS
+// for the DISBURSEMENT step. The local constant remains as a fallback
+// when PipelineRetryService isn't wired (e.g. legacy unit tests) so
+// behaviour is preserved.
+const MAX_RETRIES_FALLBACK =
+  PIPELINE_STEP_CONFIGS[PipelineStep.DISBURSEMENT].maxRetries;
 
 @Injectable()
 export class DisbursementService {
+  private readonly logger = new Logger(DisbursementService.name);
+
   constructor(
     private prisma: PrismaService,
     private eventBus: EventBusService,
@@ -25,6 +34,13 @@ export class DisbursementService {
     // construction without the new dep don't break — production wiring
     // always provides it via PlanTierModule.
     @Optional() private quotaTrackingService?: QuotaTrackingService,
+    // Sprint 18 (S18-12): pipeline-wide retry orchestrator. When
+    // available, disbursement failures delegate retry scheduling to it
+    // (BullMQ delayed job + exponential backoff) instead of recursing
+    // synchronously. @Optional() so existing unit tests that wire the
+    // service without it continue to work — they fall back to the
+    // legacy synchronous retry loop.
+    @Optional() private pipelineRetryService?: PipelineRetryService,
   ) {}
 
   async initiateDisbursement(tenantId: string, contractId: string) {
@@ -191,14 +207,147 @@ export class DisbursementService {
       },
     });
 
-    if (newRetryCount < MAX_RETRIES) {
-      // Retry
-      return this.attemptTransfer(tenantId, disbursementId, contractId, loanRequestId);
+    const maxRetries = MAX_RETRIES_FALLBACK;
+
+    if (newRetryCount < maxRetries) {
+      // Sprint 18 (S18-12): prefer the pipeline retry orchestrator
+      // (BullMQ delayed job + exponential backoff). When wired,
+      // schedule the next attempt asynchronously and return the
+      // current disbursement row. The worker calls
+      // initiateDisbursement again when the delay elapses.
+      if (this.pipelineRetryService && loanRequestId) {
+        const errorCode =
+          (result as { errorCode?: string }).errorCode || 'WALLET_ERROR';
+        const { willRetry, nextAttemptAt } =
+          await this.pipelineRetryService.handleStepFailure(
+            tenantId,
+            loanRequestId,
+            PipelineStep.DISBURSEMENT,
+            {
+              code: errorCode,
+              message: result.failureReason || 'Transfer failed',
+            },
+            newRetryCount,
+          );
+        if (willRetry) {
+          this.logger.warn(
+            `Disbursement ${disbursementId} retry ${newRetryCount + 1}/${maxRetries} scheduled for ${nextAttemptAt?.toISOString()}`,
+          );
+          return this.prisma.disbursement.findUniqueOrThrow({
+            where: { id: disbursementId },
+          });
+        }
+        // Pipeline retry decided NOT to retry (non-retryable error or
+        // max exhausted) — fall through to the permanent-failure path.
+      } else {
+        // Legacy synchronous retry — preserved for callers that don't
+        // wire PipelineRetryService (existing unit tests).
+        return this.attemptTransfer(
+          tenantId,
+          disbursementId,
+          contractId,
+          loanRequestId,
+        );
+      }
     }
 
-    // Permanent failure
+    // ── Permanent failure path ─────────────────────────────────────
     if (loanRequestId) {
-      await this.loanRequestService.transitionStatus(tenantId, loanRequestId, LoanRequestStatus.disbursement_failed);
+      await this.loanRequestService.transitionStatus(
+        tenantId,
+        loanRequestId,
+        LoanRequestStatus.disbursement_failed,
+      );
+    }
+
+    // Sprint 18 (S18-8 / FR-DB-002.3): roll the contract back to
+    // CANCELLED. Without this the contract row stays in whatever state
+    // it was created in (typically `active`) and shows up in the
+    // active-contracts list even though no money ever moved.
+    //
+    // Safety gates:
+    //   - Only roll back if the contract is not already `performing` —
+    //     that would mean a previous disbursement succeeded and money
+    //     left the system. We never cancel a contract with funded
+    //     principal.
+    //   - Capture the previous status before the update so the event
+    //     payload accurately reflects the transition.
+    let contractRolledBack = false;
+    const contract = await this.prisma.contract.findUnique({
+      where: { id: contractId },
+      select: { id: true, status: true, metadata: true, customerId: true, productId: true, principalAmount: true },
+    });
+
+    if (contract && contract.status !== 'performing') {
+      const previousStatus = contract.status;
+      const existingMetadata =
+        (contract.metadata as Record<string, unknown> | null) ?? {};
+      await this.prisma.contract.update({
+        where: { id: contractId },
+        data: {
+          status: 'cancelled',
+          metadata: {
+            ...existingMetadata,
+            cancellationReason: 'disbursement_failed',
+            cancellationDetails: {
+              disbursementId,
+              failureReason: result.failureReason || 'Max retries exceeded',
+              retryCount: newRetryCount,
+              cancelledAt: new Date().toISOString(),
+            },
+          },
+        },
+      });
+      contractRolledBack = true;
+
+      this.eventBus.emitAndBuild(EventType.CONTRACT_STATE_CHANGED, tenantId, {
+        contractId,
+        previousStatus,
+        newStatus: 'cancelled',
+        reason: 'disbursement_failed',
+      });
+
+      // Sprint 18 (S18-8): restore the subscription's available limit
+      // for revolving products. Contract doesn't have a direct
+      // subscription FK — look up by (tenant, customer, product). This
+      // is best-effort: if no subscription exists (one-shot product)
+      // we skip silently. If multiple subscriptions exist that's a
+      // data-model violation (`@@unique([tenantId, customerId, productId])`)
+      // so `findUnique` is safe.
+      try {
+        const subscription = await this.prisma.subscription.findUnique({
+          where: {
+            tenantId_customerId_productId: {
+              tenantId,
+              customerId: contract.customerId,
+              productId: contract.productId,
+            },
+          },
+        });
+        if (subscription?.availableLimit != null) {
+          const restoredLimit = add(
+            String(subscription.availableLimit),
+            String(contract.principalAmount),
+          );
+          await this.prisma.subscription.update({
+            where: { id: subscription.id },
+            data: { availableLimit: restoredLimit },
+          });
+          this.logger.log(
+            `Restored available limit on subscription ${subscription.id} by ${String(contract.principalAmount)} after disbursement rollback`,
+          );
+        }
+      } catch (err) {
+        // Limit restoration failure must NOT block the rollback path —
+        // log loudly so an operator can reconcile manually.
+        this.logger.error(
+          `Failed to restore subscription limit after disbursement rollback on contract ${contractId}: ${(err as Error).message}`,
+        );
+      }
+    } else if (contract?.status === 'performing') {
+      this.logger.warn(
+        `Skipping contract ${contractId} rollback: status is already 'performing' — partial disbursement may have occurred`,
+      );
     }
 
     this.eventBus.emitAndBuild(EventType.DISBURSEMENT_FAILED, tenantId, {
@@ -206,6 +355,7 @@ export class DisbursementService {
       contractId,
       reason: result.failureReason || 'Max retries exceeded',
       retryCount: newRetryCount,
+      contractRolledBack,
     });
 
     return this.prisma.disbursement.findUniqueOrThrow({ where: { id: disbursementId } });

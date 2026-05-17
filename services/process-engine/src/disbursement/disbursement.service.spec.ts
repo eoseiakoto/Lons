@@ -59,6 +59,7 @@ describe('DisbursementService', () => {
           useValue: {
             contract: {
               findFirst: jest.fn(),
+              findUnique: jest.fn(),
               update: jest.fn(),
             },
             disbursement: {
@@ -69,6 +70,10 @@ describe('DisbursementService', () => {
             },
             loanRequest: {
               findFirst: jest.fn(),
+            },
+            subscription: {
+              findUnique: jest.fn(),
+              update: jest.fn(),
             },
           },
         },
@@ -400,6 +405,124 @@ describe('DisbursementService', () => {
         tenantId,
         loanRequestId,
         LoanRequestStatus.disbursement_failed,
+      );
+    }, 15000);
+  });
+
+  // ─────────────────────────────────────────────────────────────────
+  // Sprint 18 — S18-8 (FR-DB-002.3): permanent disbursement failure
+  // rolls the contract back to CANCELLED and restores the
+  // subscription's available limit for revolving products.
+  // ─────────────────────────────────────────────────────────────────
+  describe('S18-8: permanent failure contract rollback', () => {
+    const setupPermanentFailure = (
+      contractOverrides: any = {},
+    ) => {
+      walletAdapter.setSuccessRate(0.0);
+      let retryCall = 0;
+      jest.spyOn(prisma.contract, 'findFirst').mockResolvedValue(mockContract as any);
+      jest.spyOn(prisma.contract, 'findUnique').mockResolvedValue({
+        id: contractId,
+        status: 'active',
+        metadata: null,
+        customerId,
+        productId: 'prod-1',
+        principalAmount: { toString: () => '5000.0000' } as any,
+        ...contractOverrides,
+      } as any);
+      jest.spyOn(prisma.loanRequest, 'findFirst').mockResolvedValue({ id: loanRequestId } as any);
+      jest.spyOn(prisma.disbursement, 'create').mockResolvedValue(mockDisbursement as any);
+      jest.spyOn(prisma.disbursement, 'findUniqueOrThrow').mockImplementation((() => {
+        const result = { ...mockDisbursement, retryCount: retryCall };
+        retryCall++;
+        return Promise.resolve(result);
+      }) as any);
+      jest.spyOn(prisma.disbursement, 'update').mockResolvedValue({} as any);
+      jest.spyOn(prisma.contract, 'update').mockResolvedValue({} as any);
+      jest.spyOn(loanRequestService, 'transitionStatus').mockResolvedValue({} as any);
+      jest.spyOn(eventBus, 'emitAndBuild').mockImplementation();
+      jest.spyOn((prisma as any).subscription, 'findUnique').mockResolvedValue(null);
+      jest.spyOn((prisma as any).subscription, 'update').mockResolvedValue({} as any);
+    };
+
+    it('updates contract.status to cancelled on permanent failure', async () => {
+      setupPermanentFailure();
+      await service.initiateDisbursement(tenantId, contractId);
+      expect(prisma.contract.update).toHaveBeenCalledWith({
+        where: { id: contractId },
+        data: expect.objectContaining({
+          status: 'cancelled',
+          metadata: expect.objectContaining({
+            cancellationReason: 'disbursement_failed',
+            cancellationDetails: expect.objectContaining({
+              disbursementId: mockDisbursement.id,
+              retryCount: expect.any(Number),
+            }),
+          }),
+        }),
+      });
+    }, 15000);
+
+    it('emits CONTRACT_STATE_CHANGED with newStatus=cancelled', async () => {
+      setupPermanentFailure();
+      await service.initiateDisbursement(tenantId, contractId);
+      expect(eventBus.emitAndBuild).toHaveBeenCalledWith(
+        EventType.CONTRACT_STATE_CHANGED,
+        tenantId,
+        expect.objectContaining({
+          contractId,
+          previousStatus: 'active',
+          newStatus: 'cancelled',
+          reason: 'disbursement_failed',
+        }),
+      );
+    }, 15000);
+
+    it('DISBURSEMENT_FAILED event carries contractRolledBack=true', async () => {
+      setupPermanentFailure();
+      await service.initiateDisbursement(tenantId, contractId);
+      expect(eventBus.emitAndBuild).toHaveBeenCalledWith(
+        EventType.DISBURSEMENT_FAILED,
+        tenantId,
+        expect.objectContaining({
+          contractId,
+          contractRolledBack: true,
+        }),
+      );
+    }, 15000);
+
+    it('restores subscription.availableLimit when a subscription exists', async () => {
+      setupPermanentFailure();
+      jest.spyOn((prisma as any).subscription, 'findUnique').mockResolvedValue({
+        id: 'sub-1',
+        availableLimit: { toString: () => '10000.0000' },
+      } as any);
+      await service.initiateDisbursement(tenantId, contractId);
+      expect((prisma as any).subscription.update).toHaveBeenCalledWith({
+        where: { id: 'sub-1' },
+        data: expect.objectContaining({
+          // 10000 + 5000 (principalAmount) = 15000
+          availableLimit: '15000.0000',
+        }),
+      });
+    }, 15000);
+
+    it('does NOT roll back when contract is already performing (partial disbursement)', async () => {
+      setupPermanentFailure({ status: 'performing' });
+      await service.initiateDisbursement(tenantId, contractId);
+      // Contract update with cancelled status must not have been called.
+      const updateCalls = (prisma.contract.update as jest.Mock).mock.calls;
+      const cancelledCall = updateCalls.find(
+        ([arg]) => arg?.data?.status === 'cancelled',
+      );
+      expect(cancelledCall).toBeUndefined();
+      // DISBURSEMENT_FAILED still emitted but contractRolledBack=false.
+      expect(eventBus.emitAndBuild).toHaveBeenCalledWith(
+        EventType.DISBURSEMENT_FAILED,
+        tenantId,
+        expect.objectContaining({
+          contractRolledBack: false,
+        }),
       );
     }, 15000);
   });

@@ -2,6 +2,9 @@ export * from './process-engine.module';
 export * from './loan-request/loan-request.service';
 export * from './loan-request/loan-request.module';
 export * from './loan-request/loan-request-state-machine';
+// Sprint 18 (S18-1) — operator review actions for manual_review/escalated.
+export * from './loan-request/loan-request-review.service';
+export * from './loan-request/loan-request-review.module';
 export * from './pre-qualification/pre-qualification.service';
 export * from './pre-qualification/pre-qualification.module';
 export * from './scoring/scoring.service';
@@ -15,12 +18,20 @@ export * from './scoring/credit-bureau-feature.extractor';
 export * from './scoring/feature-normalizer';
 export * from './approval/approval.service';
 export * from './approval/approval.module';
+// Sprint 18 (S18-6, Track B) — operator approval-authority limits.
+// Re-exported here so Track A (loan-request review) and the GraphQL
+// resolvers can consume it via the @lons/process-engine barrel.
+export * from './approval/approval-limit.service';
 export * from './offer/offer.service';
 export * from './offer/offer.module';
 export * from './offer/cost-of-credit.calculator';
 export * from './contract/contract.service';
 export * from './contract/contract.module';
 export * from './contract/contract-number.generator';
+// Sprint 18 (S18-2) — operator write operations on contracts (manual
+// payment, restructure, penalty waiver).
+export * from './contract/contract-write-operations.service';
+export * from './contract/contract-write-operations.module';
 export * from './disbursement/disbursement.service';
 export * from './disbursement/disbursement.module';
 export * from './disbursement/adapters/wallet-adapter.interface';
@@ -81,3 +92,9 @@ export * from './factoring/invoice-verification.service';
 
 // Sprint 16 (Track A) — Micro-loan product (micro-loan/).
 export * from './micro-loan';
+
+// Sprint 18 (Track B) — pipeline audit trail (S18-7) + retry
+// orchestration (S18-12). Re-exports the step logger, retry service,
+// worker, registry, and modules so the composition root and Track A's
+// GraphQL resolvers can import them via `@lons/process-engine`.
+export * from './pipeline';
