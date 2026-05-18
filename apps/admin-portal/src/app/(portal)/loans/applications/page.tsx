@@ -425,7 +425,7 @@ function ApplicationDetailDrawer({
                   disabled={approving}
                   className="flex-1 rounded-md bg-[color:var(--status-success)] text-white px-3 py-2 text-sm font-medium disabled:opacity-60"
                 >
-                  {approving ? t('loans.applications.detail.working') : t('loans.review.approve')}
+                  {approving ? t('loans.applications.detail.working') : t('loans.review.button.approve')}
                 </button>
                 <button
                   type="button"
@@ -433,7 +433,7 @@ function ApplicationDetailDrawer({
                   disabled={approving}
                   className="flex-1 rounded-md bg-[color:var(--status-error)] text-white px-3 py-2 text-sm font-medium disabled:opacity-60"
                 >
-                  {approving ? t('loans.applications.detail.working') : t('loans.review.reject')}
+                  {approving ? t('loans.applications.detail.working') : t('loans.review.button.reject')}
                 </button>
               </div>
             </div>

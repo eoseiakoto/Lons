@@ -1,5 +1,23 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService, Prisma } from '@lons/database';
+
+/**
+ * S18-FIX-8 — Async-context flag set by the retry worker (or any other
+ * caller that owns logging for the current attempt) so that the step
+ * services' `executeAndLog` wrappers skip their normal "step succeeded"
+ * row. The retry worker writes a single `${step}_retry` row instead, so
+ * each retry attempt produces exactly one `pipeline_step_logs` entry.
+ *
+ * Implemented as a module-level singleton rather than DI-injected so
+ * that any depth of awaited call chain inherits the context without
+ * threading an options object through every method.
+ */
+export const pipelineLogSuppressionContext = new AsyncLocalStorage<{
+  suppress: true;
+  reason: 'retry' | 'manual';
+}>();
 
 /**
  * Sprint 18 — S18-7 (FR-PE-006).
@@ -149,6 +167,14 @@ export class PipelineStepLoggerService {
     fn: () => Promise<T>,
     triggeredBy?: string,
   ): Promise<T> {
+    // S18-FIX-8 — if the call originated from the retry worker (or any
+    // caller that opened a suppression context), defer logging to that
+    // caller. Avoids the duplicate row where executeAndLog wrote a
+    // success entry AND the worker wrote a `${step}_retry` entry.
+    if (pipelineLogSuppressionContext.getStore()?.suppress) {
+      return await fn();
+    }
+
     const startedAt = new Date();
     try {
       const result = await fn();

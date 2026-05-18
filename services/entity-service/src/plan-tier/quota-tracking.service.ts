@@ -173,6 +173,43 @@ export class QuotaTrackingService {
   }
 
   /**
+   * S18-FIX-3 — Inverse of {@link incrementDisbursement}. Called from
+   * the disbursement-failure rollback path after a permanent transfer
+   * failure so the tenant's monthly counters don't carry phantom usage
+   * from a disbursement that didn't actually happen.
+   *
+   * Best-effort: counters are unsigned in Lua but Redis itself allows
+   * negative values, so we clamp at zero. Failures are logged and
+   * swallowed (the rollback must not be blocked by a Redis hiccup).
+   */
+  async decrementDisbursement(tenantId: string, amountUsd: string): Promise<void> {
+    const countKey = this.monthlyKey(tenantId, 'disbursements:count');
+    const volumeKey = this.monthlyKey(tenantId, 'disbursements:volume');
+    try {
+      // Count: DECR with a floor-at-zero guard. We read first to avoid
+      // negative counters from a race where the increment was lost but
+      // the decrement still fires.
+      const currentCount = Number((await this.redis.get(countKey)) ?? '0');
+      if (currentCount > 0) {
+        await this.redis.decr(countKey);
+      }
+
+      // Volume: INCRBYFLOAT with a negated amount, then clamp at zero
+      // if we crossed it. Redis INCRBYFLOAT preserves Decimal precision
+      // up to its internal long-double resolution.
+      const currentVolumeStr = (await this.redis.get(volumeKey)) ?? '0';
+      const currentVolume = parseFloat(currentVolumeStr);
+      const amountNum = parseFloat(amountUsd);
+      const newVolume = Math.max(0, currentVolume - amountNum);
+      await this.redis.set(volumeKey, newVolume.toFixed(4));
+    } catch (err) {
+      this.logger.warn(
+        `Quota decrement failed for tenant ${tenantId}: ${(err as Error).message}`,
+      );
+    }
+  }
+
+  /**
    * Increment the daily API call counter. The per-minute rate limit is
    * enforced separately by `TenantThrottlerGuard`; this counter is
    * purely informational for the admin portal "API calls today" tile.

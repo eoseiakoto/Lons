@@ -8,7 +8,10 @@ import {
   PIPELINE_STEP_CONFIGS,
   PipelineStep,
 } from './pipeline-step-registry';
-import { PipelineStepLoggerService } from './pipeline-step-logger.service';
+import {
+  PipelineStepLoggerService,
+  pipelineLogSuppressionContext,
+} from './pipeline-step-logger.service';
 import { PipelineRetryService } from './pipeline-retry.service';
 
 // All pipeline-step services are @Optional()-injected so the worker can
@@ -92,7 +95,15 @@ export class PipelineRetryWorker extends WorkerHost {
     const config = PIPELINE_STEP_CONFIGS[step as PipelineStep];
     const startedAt = new Date();
     try {
-      await this.executeStep(tenantId, loanRequestId, step);
+      // S18-FIX-8: run the step inside a log-suppression context so the
+      // service's own `executeAndLog` wrapper does not write a row.
+      // This worker becomes the single source of truth for the
+      // attempt's `pipeline_step_logs` entry (the `${step}_retry` row
+      // emitted below).
+      await pipelineLogSuppressionContext.run(
+        { suppress: true, reason: 'retry' },
+        () => this.executeStep(tenantId, loanRequestId, step),
+      );
       const completedAt = new Date();
       await this.pipelineStepLogger.logStep(tenantId, loanRequestId, {
         stepName: `${step}_retry`,

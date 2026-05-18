@@ -132,6 +132,24 @@ export default function ContractDetailPage() {
   // S18-2 — operator write-operation slide-overs.
   type OpPanel = 'payment' | 'restructure' | 'waive' | null;
   const [opPanel, setOpPanel] = useState<OpPanel>(null);
+  // S18-FIX-1 — fresh UUID per panel-open instead of the prior
+  // `mp:${contractId}:${paymentRef}` deterministic key. Two operators
+  // using the same paymentRef no longer collide; an operator who
+  // corrects a mistake and resubmits gets a distinct attempt. The
+  // double-click race within ONE open modal is still deduped (same
+  // mount = same UUID). On close-then-reopen we regenerate.
+  const [paymentIdemKey, setPaymentIdemKey] = useState<string>(() =>
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `mp:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+  );
+  const regeneratePaymentIdemKey = () => {
+    setPaymentIdemKey(
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `mp:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+    );
+  };
   const [recordManualPayment, { loading: recordingPayment }] = useMutation(RECORD_MANUAL_PAYMENT);
   const [restructureContract, { loading: restructuring }] = useMutation(RESTRUCTURE_CONTRACT);
   const [waivePenalties, { loading: waiving }] = useMutation(WAIVE_PENALTIES);
@@ -305,7 +323,10 @@ export default function ContractDetailPage() {
         <section className="relative z-10 flex flex-wrap items-center gap-2">
           <button
             type="button"
-            onClick={() => setOpPanel('payment')}
+            onClick={() => {
+              regeneratePaymentIdemKey();
+              setOpPanel('payment');
+            }}
             className="px-3 py-1.5 rounded-lg text-[13px] font-medium flex items-center gap-1.5"
             style={{
               backgroundColor: 'var(--accent-primary)',
@@ -584,11 +605,15 @@ export default function ContractDetailPage() {
                 variables: {
                   contractId: c.id,
                   input,
-                  idempotencyKey: `mp:${c.id}:${input.paymentRef}`,
+                  idempotencyKey: paymentIdemKey,
                 },
               });
               toast('success', t('loans.contractsDetail.paymentRecorded') || 'Payment recorded');
               setOpPanel(null);
+              // Regenerate so a re-open of the panel always starts
+              // with a fresh attempt rather than re-using the
+              // just-consumed key.
+              regeneratePaymentIdemKey();
               void refetch();
             } catch (e) {
               toast('error', (e as Error).message);

@@ -10,8 +10,13 @@ import {
   SCREENING_GATE,
   CREDIT_BUREAU_GATEWAY,
   PAYMENT_SERVICE_FOR_MANUAL_PAYMENT,
+  WALLET_ADAPTER,
 } from '@lons/process-engine';
-import { ScreeningService, CreditBureauService } from '@lons/integration-service';
+import {
+  ScreeningService,
+  CreditBureauService,
+  TenantAwareWalletAdapter,
+} from '@lons/integration-service';
 import { RepaymentServiceModule, PaymentService } from '@lons/repayment-service';
 // Sprint 18 (S18-10, S18-3) — new workspace package for portfolio
 // metrics + report export. Track A's report-export.resolver and Track
@@ -231,6 +236,16 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
     {
       provide: PAYMENT_SERVICE_FOR_MANUAL_PAYMENT,
       useExisting: PaymentService,
+    },
+    // S18-FIX-10 — production WALLET_ADAPTER binding. DisbursementModule
+    // defaults this token to MockWalletAdapter for unit tests; here we
+    // route it through TenantAwareWalletAdapter, which delegates to
+    // WalletAdapterResolver.resolve(tenantId) using tenant context from
+    // the AsyncLocalStorage request store. Tests can re-override with
+    // their own mock via the standard NestJS test-module pattern.
+    {
+      provide: WALLET_ADAPTER,
+      useExisting: TenantAwareWalletAdapter,
     },
     {
       provide: 'AUDIT_SERVICE',

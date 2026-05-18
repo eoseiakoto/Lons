@@ -1,4 +1,14 @@
-import { Resolver, Query, Mutation, Args, ID, Int, ObjectType, Field } from '@nestjs/graphql';
+import {
+  Resolver,
+  Query,
+  Mutation,
+  Args,
+  ID,
+  Int,
+  InputType,
+  ObjectType,
+  Field,
+} from '@nestjs/graphql';
 import { CollectionsService, AnalyticsService } from '@lons/process-engine';
 import { CurrentTenant, CurrentUser, Roles, IAuthenticatedUser } from '@lons/entity-service';
 import { AuditAction, AuditActionType, AuditResourceType } from '@lons/common';
@@ -165,6 +175,36 @@ class ProvisioningType {
   total!: string;
 }
 
+/**
+ * S18-FIX-9 — Optional filter for `portfolioMetrics`. All fields are
+ * ANDed together; an empty input (or omitted arg) is equivalent to the
+ * legacy global view. Mirrors `PortfolioMetricsFilters` in
+ * `@lons/process-engine`'s AnalyticsService.
+ */
+@InputType()
+class PortfolioMetricsFilterInput {
+  @Field(() => String, { nullable: true })
+  productId?: string;
+
+  @Field(() => String, { nullable: true })
+  productType?: string;
+
+  @Field(() => String, { nullable: true })
+  lenderId?: string;
+
+  @Field(() => String, { nullable: true })
+  region?: string;
+
+  @Field(() => String, { nullable: true })
+  customerSegment?: string;
+
+  @Field(() => String, { nullable: true })
+  dateFrom?: string;
+
+  @Field(() => String, { nullable: true })
+  dateTo?: string;
+}
+
 @ObjectType()
 class PortfolioMetricsType {
   @Field(() => Int)
@@ -260,7 +300,19 @@ export class CollectionsResolver {
   @Roles('analytics:read')
   async portfolioMetrics(
     @CurrentTenant() tenantId: string,
+    @Args('filter', { type: () => PortfolioMetricsFilterInput, nullable: true })
+    filter?: PortfolioMetricsFilterInput,
   ): Promise<any> {
-    return this.analyticsService.getPortfolioMetrics(tenantId);
+    // S18-FIX-9: forward optional filter to the service. Date strings
+    // are parsed here so the service can stick to `Date` types.
+    return this.analyticsService.getPortfolioMetrics(tenantId, {
+      productId: filter?.productId ?? null,
+      productType: filter?.productType ?? null,
+      lenderId: filter?.lenderId ?? null,
+      region: filter?.region ?? null,
+      customerSegment: filter?.customerSegment ?? null,
+      dateFrom: filter?.dateFrom ? new Date(filter.dateFrom) : null,
+      dateTo: filter?.dateTo ? new Date(filter.dateTo) : null,
+    });
   }
 }

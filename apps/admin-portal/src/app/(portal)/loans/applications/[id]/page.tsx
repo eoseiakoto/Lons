@@ -404,28 +404,28 @@ export default function LoanApplicationReviewPage() {
               disabled={!isActionable}
               variant="success"
               icon={<Check className="w-4 h-4" />}
-              label={t('loans.review.approve')}
+              label={t('loans.review.button.approve')}
             />
             <ActionButton
               onClick={() => setPanel('reject')}
               disabled={!isActionable}
               variant="error"
               icon={<XIcon className="w-4 h-4" />}
-              label={t('loans.review.reject')}
+              label={t('loans.review.button.reject')}
             />
             <ActionButton
               onClick={() => setPanel('escalate')}
               disabled={lr.status !== 'manual_review'}
               variant="warning"
               icon={<ArrowUpCircle className="w-4 h-4" />}
-              label={t('loans.review.escalate')}
+              label={t('loans.review.button.escalate')}
             />
             <ActionButton
               onClick={() => setPanel('modify')}
               disabled={!isActionable}
               variant="neutral"
               icon={<Edit3 className="w-4 h-4" />}
-              label={t('loans.review.modifyTerms')}
+              label={t('loans.review.button.modifyTerms')}
             />
           </section>
 
@@ -596,7 +596,7 @@ function ApprovePanel({
   const [amount, setAmount] = useState(String(recommendedLimit || requestedAmount));
   const [tenor, setTenor] = useState(defaultTenor);
   return (
-    <SlideOver title={t('loans.review.approve')} subtitle={currency} onClose={onClose}>
+    <SlideOver title={t('loans.review.button.approve')} subtitle={currency} onClose={onClose}>
       <div className="space-y-4">
         <FormField label={t('loans.review.approve.amount')}>
           <input
@@ -627,7 +627,7 @@ function ApprovePanel({
             onClick={() => onSubmit(amount, tenor)}
             disabled={loading || !amount || tenor < 1}
           >
-            {loading ? t('common.working') : t('loans.review.approve')}
+            {loading ? t('common.working') : t('loans.review.button.approve')}
           </button>
         </div>
       </div>
@@ -649,7 +649,7 @@ function RejectPanel({
   const [selectedCode, setSelectedCode] = useState('LOW_CREDIT_SCORE');
   const [detail, setDetail] = useState('');
   return (
-    <SlideOver title={t('loans.review.reject')} onClose={onClose}>
+    <SlideOver title={t('loans.review.button.reject')} onClose={onClose}>
       <div className="space-y-4">
         <FormField label={t('loans.review.reject.reasonCode')}>
           <select
@@ -684,7 +684,7 @@ function RejectPanel({
             }
             disabled={loading || !detail.trim()}
           >
-            {loading ? t('common.working') : t('loans.review.reject')}
+            {loading ? t('common.working') : t('loans.review.button.reject')}
           </button>
         </div>
       </div>
@@ -706,7 +706,7 @@ function EscalatePanel({
   const [reason, setReason] = useState('');
   const [assignee, setAssignee] = useState('');
   return (
-    <SlideOver title={t('loans.review.escalate')} onClose={onClose}>
+    <SlideOver title={t('loans.review.button.escalate')} onClose={onClose}>
       <div className="space-y-4">
         <FormField label={t('loans.review.escalate.reason')}>
           <textarea
@@ -736,7 +736,7 @@ function EscalatePanel({
             onClick={() => onSubmit(reason, assignee.trim() || null)}
             disabled={loading || !reason.trim()}
           >
-            {loading ? t('common.working') : t('loans.review.escalate')}
+            {loading ? t('common.working') : t('loans.review.button.escalate')}
           </button>
         </div>
       </div>
@@ -771,7 +771,7 @@ function ModifyPanel({
   const [rate, setRate] = useState('');
   const [reason, setReason] = useState('');
   return (
-    <SlideOver title={t('loans.review.modifyTerms')} subtitle={currency} onClose={onClose}>
+    <SlideOver title={t('loans.review.button.modifyTerms')} subtitle={currency} onClose={onClose}>
       <div className="space-y-4">
         <FormField label={t('loans.review.modify.amount')}>
           <input

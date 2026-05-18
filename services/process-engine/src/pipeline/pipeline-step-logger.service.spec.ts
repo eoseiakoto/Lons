@@ -1,7 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PrismaService } from '@lons/database';
 
-import { PipelineStepLoggerService } from './pipeline-step-logger.service';
+import {
+  PipelineStepLoggerService,
+  pipelineLogSuppressionContext,
+} from './pipeline-step-logger.service';
 
 /**
  * S18-7 unit tests. The PrismaService is a hand-rolled mock so we can
@@ -218,6 +221,58 @@ describe('PipelineStepLoggerService', () => {
       expect(args.data.outcome).toBe('error');
       expect(args.data.errorCode).toBe('SCORING_TIMEOUT');
       expect(args.data.errorMessage).toBe('scoring failed');
+    });
+  });
+
+  describe('executeAndLog log suppression (S18-FIX-8)', () => {
+    it('skips logging when invoked inside pipelineLogSuppressionContext', async () => {
+      const fn = jest.fn().mockResolvedValue({ ok: true });
+      const result = await pipelineLogSuppressionContext.run(
+        { suppress: true, reason: 'retry' },
+        () =>
+          service.executeAndLog(
+            tenantId,
+            loanRequestId,
+            'scoring',
+            2,
+            { customerId: 'cust-1' },
+            fn,
+          ),
+      );
+      expect(result).toEqual({ ok: true });
+      expect(fn).toHaveBeenCalledTimes(1);
+      expect(prisma.pipelineStepLog.create).not.toHaveBeenCalled();
+    });
+
+    it('skips logging on failure too — suppression is unconditional', async () => {
+      const fn = jest.fn().mockRejectedValue(new Error('boom'));
+      await expect(
+        pipelineLogSuppressionContext.run(
+          { suppress: true, reason: 'retry' },
+          () =>
+            service.executeAndLog(
+              tenantId,
+              loanRequestId,
+              'scoring',
+              2,
+              { customerId: 'cust-1' },
+              fn,
+            ),
+        ),
+      ).rejects.toThrow('boom');
+      expect(prisma.pipelineStepLog.create).not.toHaveBeenCalled();
+    });
+
+    it('logs normally outside the suppression context', async () => {
+      await service.executeAndLog(
+        tenantId,
+        loanRequestId,
+        'scoring',
+        2,
+        { customerId: 'cust-1' },
+        async () => ({ score: 700 }),
+      );
+      expect(prisma.pipelineStepLog.create).toHaveBeenCalledTimes(1);
     });
   });
 

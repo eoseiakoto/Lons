@@ -228,6 +228,17 @@ export class ApprovalLimitService {
     const startOfDay = new Date(`${today}T00:00:00.000Z`);
     const endOfDay = new Date(`${today}T23:59:59.999Z`);
 
+    // S18-FIX-2 — the count must include every status downstream of a
+    // successful `approve` action so an approval doesn't drop out of the
+    // tally when the pipeline progresses (e.g. offer expires, borrower
+    // declines, disbursement fails). Verified against
+    // schema.prisma#LoanRequestStatus and the loan-request state machine:
+    //   approved → offer_sent → accepted → contract_created → disbursing
+    //              ↘ expired   ↘ declined                    ↘ disbursed
+    //                                                         ↘ disbursement_failed
+    //                                                         ↘ cancelled  (S18-8 rollback)
+    // `approved` itself is the immediate post-action status. `rejected`
+    // / `escalated` are different operator actions and NOT counted here.
     const dbCount = await this.prisma.loanRequest.count({
       where: {
         tenantId,
@@ -236,8 +247,13 @@ export class ApprovalLimitService {
             'approved',
             'offer_sent',
             'accepted',
+            'declined',
+            'expired',
+            'contract_created',
             'disbursing',
             'disbursed',
+            'disbursement_failed',
+            'cancelled',
           ],
         },
         // The reviewer is stamped onto metadata when the approval lands

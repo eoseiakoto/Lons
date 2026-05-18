@@ -17,7 +17,8 @@
     "tenants": "Masu haya",
     "feedback": "Ra'ayoyi",
     "factoring": "Factoring",
-    "verificationQueue": "Jerin tabbatarwa"
+    "verificationQueue": "Jerin tabbatarwa",
+    "settings": "Saituna"
   },
   "sidebar": {
     "adminPortal": "Shafin Gudanarwa",
@@ -99,7 +100,9 @@
     "hours": "hours",
     "unexpectedError": "An unexpected error occurred.",
     "health": "Health",
-    "clear": "Clear"
+    "clear": "Clear",
+    "submitted": "Submitted",
+    "working": "Working…"
   },
   "login": {
     "title": "Shafin Gudanarwa",
@@ -779,7 +782,8 @@
         "manualReview": "Manual review",
         "pending": "Pending",
         "approved": "Approved",
-        "rejected": "Rejected"
+        "rejected": "Rejected",
+        "escalated": "An ɗaga matsayi"
       },
       "inQueue": "{{count}} in queue"
     },
@@ -820,9 +824,19 @@
       "riskTier": "Matakin Hadari",
       "recommendation": "Shawarar",
       "factors": "Dalilai",
-      "approve": "Amince",
-      "reject": "Ki",
-      "escalate": "Daukaka",
+      "reject": {
+        "detail": "Cikakkun bayanai",
+        "detailPlaceholder": "Ƙara mahallin ga abokin ciniki (na zaɓi).",
+        "reasonCode": "Lambar dalili",
+        "codes": {
+          "lowCreditScore": "Ƙimar bashi mara nauyi",
+          "insufficientIncome": "Kuɗin shiga bai isa ba",
+          "highDebtRatio": "Babban rabon bashi-kuɗin shiga",
+          "policyViolation": "Keta manufa",
+          "docIncomplete": "Takardu basu cika ba",
+          "other": "Sauran"
+        }
+      },
       "approveApplication": "Amince da Bukata",
       "approveDesc": "Za ku iya canja sharudda kafin amincewa.",
       "modifiedAmount": "Adadi da aka canja (na zabi)",
@@ -836,7 +850,9 @@
       "actions": {
         "approve": "approve",
         "reject": "reject",
-        "escalate": "escalate"
+        "escalate": "escalate",
+        "notActionable": "This request is not actionable in its current state.",
+        "title": "Actions"
       },
       "success": {
         "approve": "Application approved successfully",
@@ -864,9 +880,10 @@
         "factors": "Factors"
       },
       "button": {
-        "approve": "Approve",
-        "reject": "Reject",
-        "escalate": "Escalate"
+        "approve": "Amincewa",
+        "reject": "Ƙi",
+        "escalate": "Daga matsayi",
+        "modifyTerms": "Gyara sharudda"
       },
       "modal": {
         "approveTitle": "Approve Application",
@@ -878,6 +895,55 @@
         "reasonRequired": "Reason (required)",
         "rejectionPlaceholder": "Enter the reason for rejection...",
         "confirmRejection": "Confirm Rejection"
+      },
+      "application": "Application",
+      "approvedAmount": "Approved amount",
+      "audit": {
+        "empty": "No review actions yet.",
+        "escalated": "Escalated",
+        "reviewed": "Reviewed",
+        "termsModified": "Terms modified",
+        "title": "Review trail"
+      },
+      "backToQueue": "Back to queue",
+      "modify": {
+        "amount": "Adadin da aka gyara",
+        "tenor": "Tsawon lokaci da aka gyara (kwanaki)",
+        "rate": "New interest rate",
+        "reason": "Reason",
+        "submit": "Save changes"
+      },
+      "phone": "Phone",
+      "scoring": {
+        "modelVersion": "Model version",
+        "notScored": "Not scored yet",
+        "recommendedLimit": "Recommended limit",
+        "riskTier": "Risk tier",
+        "score": "Score",
+        "title": "Scoring"
+      },
+      "toast": {
+        "approveFailed": "Approval failed",
+        "approved": "Application approved.",
+        "escalateFailed": "Escalation failed",
+        "escalated": "Application escalated.",
+        "modified": "Terms updated.",
+        "modifyFailed": "Failed to update terms",
+        "rejectFailed": "Rejection failed",
+        "rejected": "Application rejected."
+      },
+      "viewCustomer": "View customer",
+      "approve": {
+        "amount": "Adadin da aka amince",
+        "requestedHint": "Abokin ciniki ya nemi",
+        "tenor": "Tsawon lokaci (kwanaki)"
+      },
+      "escalate": {
+        "reason": "Dalilin daga matsayi",
+        "reasonPlaceholder": "Me yasa wannan ke buƙatar bita ta babba…",
+        "assigneeOptional": "Wanda aka sanya (na zaɓi)",
+        "assigneePlaceholder": "ID na ma'aikaci",
+        "assigneeHint": "Bar wofi don aikawa zuwa babban mai bita na wajibi."
       }
     },
     "ledger": {
@@ -993,7 +1059,13 @@
       "cancelConfirmSuffix": "during the cooling-off period? This will reverse the disbursement and close the contract.",
       "keepContract": "Keep contract",
       "cancelling": "Cancelling…",
-      "yesCancel": "Yes, cancel"
+      "yesCancel": "Yes, cancel",
+      "paymentRecorded": "An rubuta biya",
+      "penaltyWaived": "An yafe hukunci",
+      "recordPayment": "Rubuta biya",
+      "restructure": "Sake tsara",
+      "restructured": "An sake tsara kwangila",
+      "waivePenalties": "Yafe hukunce-hukunce"
     },
     "overdraft": {
       "title": "Overdraft",
@@ -1465,7 +1537,11 @@
     },
     "typeNotFound": "Report type “{{type}}” not found.",
     "availableTypes": "Available: disbursement, repayment, portfolio-quality, revenue, reconciliation, customer-acquisition, product-performance, collections",
-    "subtitle": "PAR buckets and IFRS-9 classification, by product."
+    "subtitle": "PAR buckets and IFRS-9 classification, by product.",
+    "exportCsv": "Export CSV",
+    "exportError": "Export failed",
+    "exportPdf": "Export PDF",
+    "exportSuccess": "Export downloaded."
   },
   "settings": {
     "title": "Saituna",
@@ -1585,7 +1661,9 @@
         "compliance": "Compliance",
         "configuration": "Configuration",
         "integration": "Integration",
-        "capital": "Capital"
+        "capital": "Capital",
+        "security": "Tsaro",
+        "subscription": "Tallafi"
       },
       "tenantCard": {
         "title": "Tenant",
@@ -1598,6 +1676,14 @@
       "lendersCard": {
         "title": "Lenders",
         "description": "Configured funding partners and terms."
+      },
+      "apiKeysCard": {
+        "title": "Maɓallan API",
+        "description": "Bayar da sarrafa shaidu na shirye-shirye."
+      },
+      "billingCard": {
+        "title": "Lissafi",
+        "description": "Shiri, kuɗaɗe, da amfani."
       }
     },
     "auditLog": {
@@ -1702,6 +1788,25 @@
         "bnpl": "BNPL",
         "invoiceFactoring": "Invoice Factoring"
       }
+    },
+    "emi": {
+      "addProvider": "Ƙara mai bayarwa",
+      "addProviderTitle": "Ƙara mai bayar da EMI",
+      "baseUrl": "URL na asali",
+      "credentials": "Shaidu",
+      "credsMissing": "Shaidu sun ɓace",
+      "credsSet": "An saita shaidu",
+      "deactivate": "Kashe",
+      "fieldMappings": "Taswirar filaye",
+      "lastSync": "Aiki na ƙarshe",
+      "name": "Sunan mai bayarwa",
+      "noProviders": "Babu masu bayar da EMI da aka saita.",
+      "provider": "Mai bayarwa",
+      "subtitle": "Haɗa masu bayar da EMI/Open Banking don karɓar takaddama.",
+      "syncFrequencyMin": "Yawan aiki tare (minti)",
+      "testConnection": "Gwada haɗi",
+      "testing": "Ana gwadawa…",
+      "title": "Masu bayar da EMI"
     }
   },
   "feedback": {
@@ -1793,7 +1898,12 @@
     "accessUsers": "Access · Users",
     "tenantInbox": "Live · Tenant inbox",
     "lenderDirectory": "Live · Lender directory",
-    "fundingPartners": "Live · Funding partners"
+    "fundingPartners": "Live · Funding partners",
+    "applicationReview": "Application Review",
+    "financialOps": "Financial Operations",
+    "security": "Security",
+    "subscription": "Subscription",
+    "integrationEmi": "Haɗin EMI"
   },
   "validation": {
     "required": "Ana bukatar wannan filin",
@@ -2684,5 +2794,64 @@
   "layout": {
     "skipToMain": "Skip to main content",
     "closeMenu": "Close menu"
+  },
+  "billing": {
+    "comparePlans": "Compare Plans",
+    "features": {
+      "title": "Features"
+    },
+    "history": {
+      "empty": "No billing history yet.",
+      "title": "Billing History"
+    },
+    "monthToMonth": "Month-to-month",
+    "notAvailable": "Not available",
+    "requestUpgrade": "Request Upgrade",
+    "subtitle": "Plan, usage, and billing history",
+    "title": "Billing & Plan",
+    "upgrade": {
+      "submitted": "Upgrade request submitted."
+    },
+    "usage": {
+      "title": "Usage"
+    }
+  },
+  "settlements": {
+    "runs": {
+      "title": "Settlement Runs",
+      "empty": "No settlement runs yet."
+    },
+    "subtitle": "Settlement and reconciliation overview",
+    "title": "Settlements",
+    "exceptions": {
+      "requireResolution": "Exceptions require operator resolution.",
+      "title": "Reconciliation Exceptions"
+    },
+    "kpi": {
+      "calculatedApproved": "Calculated / Approved",
+      "exceptions": "Exceptions",
+      "latestRecon": "Latest reconciliation",
+      "matchRate": "Match rate",
+      "monthlyRuns": "Monthly runs",
+      "pending": "Pending",
+      "requireAttention": "Require attention"
+    },
+    "recon": {
+      "empty": "No reconciliation runs yet.",
+      "title": "Reconciliation Runs"
+    }
+  },
+  "apiKeys": {
+    "title": "Maɓallan API",
+    "subtitle": "Bayar, juyawa, da soke wasu shaidu na shirye-shirye don wannan mai haya.",
+    "create": "Ƙirƙira maɓalli",
+    "created": "An ƙirƙira maɓallin API",
+    "copyHint": "Kwafe wannan asirin yanzu — ba za a sake nuna shi ba.",
+    "empty": "Babu maɓallan API tukuna.",
+    "rotate": "Juya",
+    "rotateHint": "Samar da sabon asiri kuma soke tsohon.",
+    "rotated": "An juya maɓallin",
+    "revoke": "Soke",
+    "revoked": "An soke maɓallin"
   }
 }

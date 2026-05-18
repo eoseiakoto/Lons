@@ -2,6 +2,21 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService, ContractStatus, ContractClassification } from '@lons/database';
 import { add, divide, bankersRound, multiply, isPositive } from '@lons/common';
 
+/**
+ * S18-FIX-9 — optional filters narrowing the active-contract set used
+ * for all PAR / NPL / provisioning derivations. All fields AND together,
+ * an empty filter is equivalent to "no filter" (the legacy global view).
+ */
+export interface PortfolioMetricsFilters {
+  productId?: string | null;
+  productType?: string | null;
+  lenderId?: string | null;
+  region?: string | null;
+  customerSegment?: string | null;
+  dateFrom?: Date | null;
+  dateTo?: Date | null;
+}
+
 export interface PortfolioMetrics {
   activeLoans: number;
   activeOutstanding: string;
@@ -33,7 +48,10 @@ const PROVISIONING_RATES: Record<string, number> = {
 export class AnalyticsService {
   constructor(private prisma: PrismaService) {}
 
-  async getPortfolioMetrics(tenantId: string): Promise<PortfolioMetrics> {
+  async getPortfolioMetrics(
+    tenantId: string,
+    filters: PortfolioMetricsFilters = {},
+  ): Promise<PortfolioMetrics> {
     const activeStatuses = [
       ContractStatus.active,
       ContractStatus.performing,
@@ -43,8 +61,39 @@ export class AnalyticsService {
       ContractStatus.default_status,
     ];
 
+    // S18-FIX-9: AND the filter fields into the contract.findMany where
+    // clause so all downstream metric derivations operate on the same
+    // already-filtered slice. Product type & customer segment live on
+    // related rows, so route them through `is` relation filters.
+    const where: Record<string, unknown> = {
+      tenantId,
+      status: { in: activeStatuses },
+    };
+    if (filters.productId) {
+      where.productId = filters.productId;
+    }
+    if (filters.productType) {
+      where.product = { is: { productType: filters.productType } };
+    }
+    if (filters.lenderId) {
+      where.lenderId = filters.lenderId;
+    }
+    if (filters.region) {
+      where.customer = { is: { region: filters.region } };
+    }
+    if (filters.customerSegment) {
+      const existing = (where.customer as { is?: Record<string, unknown> })?.is ?? {};
+      where.customer = { is: { ...existing, segment: filters.customerSegment } };
+    }
+    if (filters.dateFrom || filters.dateTo) {
+      where.createdAt = {
+        ...(filters.dateFrom && { gte: filters.dateFrom }),
+        ...(filters.dateTo && { lte: filters.dateTo }),
+      };
+    }
+
     const contracts = await this.prisma.contract.findMany({
-      where: { tenantId, status: { in: activeStatuses } },
+      where,
       select: {
         id: true,
         daysPastDue: true,

@@ -207,6 +207,32 @@ describe('PipelineRetryWorker', () => {
     });
   });
 
+  describe('log suppression context (S18-FIX-8)', () => {
+    it('runs the step inside pipelineLogSuppressionContext so service-level executeAndLog skips its row', async () => {
+      const {
+        pipelineLogSuppressionContext,
+      } = require('./pipeline-step-logger.service');
+      const getStoreSpy = jest.spyOn(pipelineLogSuppressionContext, 'getStore');
+      scoringService.scoreCustomer.mockImplementation(async () => {
+        const store = pipelineLogSuppressionContext.getStore();
+        expect(store?.suppress).toBe(true);
+        expect(store?.reason).toBe('retry');
+        return {};
+      });
+
+      await makeWorker().process(makeJob() as any);
+
+      // Worker writes exactly one row (the `${step}_retry` success row).
+      expect(logger.logStep).toHaveBeenCalledTimes(1);
+      expect(logger.logStep).toHaveBeenCalledWith(
+        tenantId,
+        loanRequestId,
+        expect.objectContaining({ stepName: 'scoring_retry' }),
+      );
+      getStoreSpy.mockRestore();
+    });
+  });
+
   describe('failure feedback loop', () => {
     it('feeds failures back to handleStepFailure with the same attempt count', async () => {
       scoringService.scoreCustomer.mockRejectedValue(

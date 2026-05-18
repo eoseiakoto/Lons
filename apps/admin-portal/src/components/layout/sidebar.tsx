@@ -30,6 +30,8 @@ import {
   Briefcase,
   ClipboardCheck,
   DollarSign,
+  Key,
+  CreditCard,
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n/i18n-context';
@@ -202,6 +204,50 @@ export function Sidebar() {
             </Link>
           );
         })()}
+
+        {/* S18-FIX-5 — Settings section (API Keys + Billing). The
+            Settings landing page is still reachable from the user
+            popup; these sub-links surface the most-visited screens
+            directly in the sidebar so operators don't have to dig
+            for them. */}
+        <div className="mt-6 mb-2 px-3">
+          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[color:var(--text-tertiary)]">
+            {t('nav.settings')}
+          </span>
+        </div>
+        {[
+          { key: 'nav.apiKeys', href: '/settings/api-keys', icon: Key },
+          { key: 'nav.billing', href: '/settings/billing', icon: CreditCard },
+        ].map((item) => {
+          const isActive = pathname.startsWith(item.href);
+          const Icon = item.icon;
+          return (
+            <Link
+              key={item.key}
+              href={item.href}
+              className={cn(
+                'relative flex items-center gap-3 px-3 py-2 rounded-lg mb-0.5 text-sm font-medium transition-colors duration-150',
+                isActive ? 'text-[color:var(--accent-primary-deep)] font-semibold' : 'nav-item',
+              )}
+            >
+              {isActive && (
+                <motion.span
+                  layoutId="sidebar-active-pill"
+                  className="absolute inset-0 rounded-lg"
+                  style={{ backgroundColor: 'var(--accent-primary-soft)' }}
+                  transition={{ type: 'spring', stiffness: 380, damping: 32 }}
+                />
+              )}
+              <Icon
+                className={cn(
+                  'relative w-[18px] h-[18px] flex-shrink-0',
+                  isActive && 'text-[color:var(--accent-primary)]',
+                )}
+              />
+              <span className="relative flex-1">{t(item.key)}</span>
+            </Link>
+          );
+        })}
 
         {user?.role === 'platform_admin' && (
           <>

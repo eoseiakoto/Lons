@@ -11,6 +11,7 @@ export * from './monitoring';
 export * from './adapters/generic-wallet';
 export * from './adapters/mock';
 export * from './adapters/wallet-adapter-resolver.service';
+export * from './adapters/tenant-aware-wallet.adapter';
 export * from './screening/screening.interface';
 export * from './screening/screening.service';
 export * from './screening/screening-adapter.resolver';

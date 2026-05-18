@@ -17,7 +17,8 @@
     "tenants": "المستأجرين",
     "feedback": "الملاحظات",
     "factoring": "التخصيم",
-    "verificationQueue": "قائمة التحقق"
+    "verificationQueue": "قائمة التحقق",
+    "settings": "الإعدادات"
   },
   "sidebar": {
     "adminPortal": "بوابة الإدارة",
@@ -99,7 +100,9 @@
     "hours": "hours",
     "unexpectedError": "An unexpected error occurred.",
     "health": "Health",
-    "clear": "Clear"
+    "clear": "Clear",
+    "submitted": "Submitted",
+    "working": "Working…"
   },
   "login": {
     "title": "بوابة الإدارة",
@@ -779,7 +782,8 @@
         "manualReview": "Manual review",
         "pending": "Pending",
         "approved": "Approved",
-        "rejected": "Rejected"
+        "rejected": "Rejected",
+        "escalated": "مُصعَّد"
       },
       "inQueue": "{{count}} in queue"
     },
@@ -820,9 +824,19 @@
       "riskTier": "مستوى المخاطر",
       "recommendation": "التوصية",
       "factors": "العوامل",
-      "approve": "موافقة",
-      "reject": "رفض",
-      "escalate": "تصعيد",
+      "reject": {
+        "detail": "التفاصيل",
+        "detailPlaceholder": "أضف سياقاً للعميل (اختياري).",
+        "reasonCode": "رمز السبب",
+        "codes": {
+          "lowCreditScore": "درجة ائتمان منخفضة",
+          "insufficientIncome": "دخل غير كافٍ",
+          "highDebtRatio": "نسبة دين إلى دخل عالية",
+          "policyViolation": "انتهاك السياسة",
+          "docIncomplete": "الوثائق غير مكتملة",
+          "other": "أخرى"
+        }
+      },
       "approveApplication": "الموافقة على الطلب",
       "approveDesc": "يمكنك تعديل الشروط اختيارياً قبل الموافقة.",
       "modifiedAmount": "المبلغ المعدل (اختياري)",
@@ -836,7 +850,9 @@
       "actions": {
         "approve": "approve",
         "reject": "reject",
-        "escalate": "escalate"
+        "escalate": "escalate",
+        "notActionable": "This request is not actionable in its current state.",
+        "title": "Actions"
       },
       "success": {
         "approve": "Application approved successfully",
@@ -864,9 +880,10 @@
         "factors": "Factors"
       },
       "button": {
-        "approve": "Approve",
-        "reject": "Reject",
-        "escalate": "Escalate"
+        "approve": "موافقة",
+        "reject": "رفض",
+        "escalate": "تصعيد",
+        "modifyTerms": "تعديل الشروط"
       },
       "modal": {
         "approveTitle": "Approve Application",
@@ -878,6 +895,55 @@
         "reasonRequired": "Reason (required)",
         "rejectionPlaceholder": "Enter the reason for rejection...",
         "confirmRejection": "Confirm Rejection"
+      },
+      "application": "Application",
+      "approvedAmount": "Approved amount",
+      "audit": {
+        "empty": "No review actions yet.",
+        "escalated": "Escalated",
+        "reviewed": "Reviewed",
+        "termsModified": "Terms modified",
+        "title": "Review trail"
+      },
+      "backToQueue": "Back to queue",
+      "modify": {
+        "amount": "المبلغ المعدَّل",
+        "tenor": "المدة المعدلة (أيام)",
+        "rate": "New interest rate",
+        "reason": "Reason",
+        "submit": "Save changes"
+      },
+      "phone": "Phone",
+      "scoring": {
+        "modelVersion": "Model version",
+        "notScored": "Not scored yet",
+        "recommendedLimit": "Recommended limit",
+        "riskTier": "Risk tier",
+        "score": "Score",
+        "title": "Scoring"
+      },
+      "toast": {
+        "approveFailed": "Approval failed",
+        "approved": "Application approved.",
+        "escalateFailed": "Escalation failed",
+        "escalated": "Application escalated.",
+        "modified": "Terms updated.",
+        "modifyFailed": "Failed to update terms",
+        "rejectFailed": "Rejection failed",
+        "rejected": "Application rejected."
+      },
+      "viewCustomer": "View customer",
+      "approve": {
+        "amount": "المبلغ المعتمد",
+        "requestedHint": "العميل طلب",
+        "tenor": "المدة (أيام)"
+      },
+      "escalate": {
+        "reason": "سبب التصعيد",
+        "reasonPlaceholder": "لماذا يتطلب هذا مراجعة كبار…",
+        "assigneeOptional": "المُسنَد إليه (اختياري)",
+        "assigneePlaceholder": "معرّف المشغّل",
+        "assigneeHint": "اتركه فارغاً للتوجيه إلى المراجع الكبير المناوب."
       }
     },
     "ledger": {
@@ -993,7 +1059,13 @@
       "cancelConfirmSuffix": "during the cooling-off period? This will reverse the disbursement and close the contract.",
       "keepContract": "Keep contract",
       "cancelling": "Cancelling…",
-      "yesCancel": "Yes, cancel"
+      "yesCancel": "Yes, cancel",
+      "paymentRecorded": "تم تسجيل الدفع",
+      "penaltyWaived": "تم التنازل عن الغرامة",
+      "recordPayment": "تسجيل دفعة",
+      "restructure": "إعادة الهيكلة",
+      "restructured": "تمت إعادة هيكلة العقد",
+      "waivePenalties": "التنازل عن الغرامات"
     },
     "overdraft": {
       "title": "Overdraft",
@@ -1465,7 +1537,11 @@
     },
     "typeNotFound": "Report type “{{type}}” not found.",
     "availableTypes": "Available: disbursement, repayment, portfolio-quality, revenue, reconciliation, customer-acquisition, product-performance, collections",
-    "subtitle": "PAR buckets and IFRS-9 classification, by product."
+    "subtitle": "PAR buckets and IFRS-9 classification, by product.",
+    "exportCsv": "Export CSV",
+    "exportError": "Export failed",
+    "exportPdf": "Export PDF",
+    "exportSuccess": "Export downloaded."
   },
   "settings": {
     "title": "الإعدادات",
@@ -1585,7 +1661,9 @@
         "compliance": "Compliance",
         "configuration": "Configuration",
         "integration": "Integration",
-        "capital": "Capital"
+        "capital": "Capital",
+        "security": "الأمان",
+        "subscription": "الاشتراك"
       },
       "tenantCard": {
         "title": "Tenant",
@@ -1598,6 +1676,14 @@
       "lendersCard": {
         "title": "Lenders",
         "description": "Configured funding partners and terms."
+      },
+      "apiKeysCard": {
+        "title": "مفاتيح API",
+        "description": "إصدار وإدارة بيانات الاعتماد البرمجية."
+      },
+      "billingCard": {
+        "title": "الفوترة",
+        "description": "الخطة والفواتير والاستخدام."
       }
     },
     "auditLog": {
@@ -1702,6 +1788,25 @@
         "bnpl": "BNPL",
         "invoiceFactoring": "Invoice Factoring"
       }
+    },
+    "emi": {
+      "addProvider": "إضافة مزوّد",
+      "addProviderTitle": "إضافة مزوّد EMI",
+      "baseUrl": "الرابط الأساسي",
+      "credentials": "بيانات الاعتماد",
+      "credsMissing": "بيانات الاعتماد مفقودة",
+      "credsSet": "تم تعيين بيانات الاعتماد",
+      "deactivate": "تعطيل",
+      "fieldMappings": "تعيينات الحقول",
+      "lastSync": "آخر مزامنة",
+      "name": "اسم المزوّد",
+      "noProviders": "لا توجد مزوّدات EMI مُهيأة.",
+      "provider": "المزوّد",
+      "subtitle": "وصل مزودي EMI / Open Banking لاستيعاب كشوف الحساب.",
+      "syncFrequencyMin": "تردد المزامنة (دقائق)",
+      "testConnection": "اختبار الاتصال",
+      "testing": "جارٍ الاختبار…",
+      "title": "مزوّدو EMI"
     }
   },
   "feedback": {
@@ -1793,7 +1898,12 @@
     "accessUsers": "Access · Users",
     "tenantInbox": "Live · Tenant inbox",
     "lenderDirectory": "Live · Lender directory",
-    "fundingPartners": "Live · Funding partners"
+    "fundingPartners": "Live · Funding partners",
+    "applicationReview": "Application Review",
+    "financialOps": "Financial Operations",
+    "security": "Security",
+    "subscription": "Subscription",
+    "integrationEmi": "تكامل EMI"
   },
   "validation": {
     "required": "هذا الحقل مطلوب",
@@ -2684,5 +2794,64 @@
   "layout": {
     "skipToMain": "Skip to main content",
     "closeMenu": "Close menu"
+  },
+  "billing": {
+    "comparePlans": "Compare Plans",
+    "features": {
+      "title": "Features"
+    },
+    "history": {
+      "empty": "No billing history yet.",
+      "title": "Billing History"
+    },
+    "monthToMonth": "Month-to-month",
+    "notAvailable": "Not available",
+    "requestUpgrade": "Request Upgrade",
+    "subtitle": "Plan, usage, and billing history",
+    "title": "Billing & Plan",
+    "upgrade": {
+      "submitted": "Upgrade request submitted."
+    },
+    "usage": {
+      "title": "Usage"
+    }
+  },
+  "settlements": {
+    "runs": {
+      "title": "Settlement Runs",
+      "empty": "No settlement runs yet."
+    },
+    "subtitle": "Settlement and reconciliation overview",
+    "title": "Settlements",
+    "exceptions": {
+      "requireResolution": "Exceptions require operator resolution.",
+      "title": "Reconciliation Exceptions"
+    },
+    "kpi": {
+      "calculatedApproved": "Calculated / Approved",
+      "exceptions": "Exceptions",
+      "latestRecon": "Latest reconciliation",
+      "matchRate": "Match rate",
+      "monthlyRuns": "Monthly runs",
+      "pending": "Pending",
+      "requireAttention": "Require attention"
+    },
+    "recon": {
+      "empty": "No reconciliation runs yet.",
+      "title": "Reconciliation Runs"
+    }
+  },
+  "apiKeys": {
+    "title": "مفاتيح API",
+    "subtitle": "إصدار وتدوير وإلغاء بيانات الاعتماد البرمجية لهذا المستأجر.",
+    "create": "إنشاء مفتاح",
+    "created": "تم إنشاء مفتاح API",
+    "copyHint": "انسخ هذا السر الآن — لن يُعرض مرة أخرى.",
+    "empty": "لا توجد مفاتيح API حتى الآن.",
+    "rotate": "تدوير",
+    "rotateHint": "إنشاء سرّ جديد وإلغاء القديم.",
+    "rotated": "تم تدوير المفتاح",
+    "revoke": "إلغاء",
+    "revoked": "تم إلغاء المفتاح"
   }
 }

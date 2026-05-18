@@ -17,7 +17,8 @@
     "tenants": "Wapangaji",
     "feedback": "Maoni",
     "factoring": "Factoring",
-    "verificationQueue": "Foleni ya uthibitisho"
+    "verificationQueue": "Foleni ya uthibitisho",
+    "settings": "Mipangilio"
   },
   "sidebar": {
     "adminPortal": "Bawaba ya Msimamizi",
@@ -99,7 +100,9 @@
     "hours": "hours",
     "unexpectedError": "An unexpected error occurred.",
     "health": "Health",
-    "clear": "Clear"
+    "clear": "Clear",
+    "submitted": "Submitted",
+    "working": "Working…"
   },
   "login": {
     "title": "Bawaba ya Msimamizi",
@@ -779,7 +782,8 @@
         "manualReview": "Manual review",
         "pending": "Pending",
         "approved": "Approved",
-        "rejected": "Rejected"
+        "rejected": "Rejected",
+        "escalated": "Imepandishwa"
       },
       "inQueue": "{{count}} in queue"
     },
@@ -820,9 +824,19 @@
       "riskTier": "Ngazi ya Hatari",
       "recommendation": "Mapendekezo",
       "factors": "Sababu",
-      "approve": "Idhinisha",
-      "reject": "Kataa",
-      "escalate": "Pandisha",
+      "reject": {
+        "detail": "Maelezo",
+        "detailPlaceholder": "Ongeza muktadha kwa mteja (hiari).",
+        "reasonCode": "Msimbo wa sababu",
+        "codes": {
+          "lowCreditScore": "Alama ya mkopo ya chini",
+          "insufficientIncome": "Mapato yasiyotosha",
+          "highDebtRatio": "Uwiano mkubwa wa deni-mapato",
+          "policyViolation": "Ukiukaji wa sera",
+          "docIncomplete": "Hati hazijakamilika",
+          "other": "Nyingine"
+        }
+      },
       "approveApplication": "Idhinisha Ombi",
       "approveDesc": "Kwa hiari badilisha masharti kabla ya kuidhinisha.",
       "modifiedAmount": "Kiasi Kilichobadilishwa (hiari)",
@@ -836,7 +850,9 @@
       "actions": {
         "approve": "approve",
         "reject": "reject",
-        "escalate": "escalate"
+        "escalate": "escalate",
+        "notActionable": "This request is not actionable in its current state.",
+        "title": "Actions"
       },
       "success": {
         "approve": "Application approved successfully",
@@ -864,9 +880,10 @@
         "factors": "Factors"
       },
       "button": {
-        "approve": "Approve",
-        "reject": "Reject",
-        "escalate": "Escalate"
+        "approve": "Idhinisha",
+        "reject": "Kataa",
+        "escalate": "Pandisha",
+        "modifyTerms": "Badilisha masharti"
       },
       "modal": {
         "approveTitle": "Approve Application",
@@ -878,6 +895,55 @@
         "reasonRequired": "Reason (required)",
         "rejectionPlaceholder": "Enter the reason for rejection...",
         "confirmRejection": "Confirm Rejection"
+      },
+      "application": "Application",
+      "approvedAmount": "Approved amount",
+      "audit": {
+        "empty": "No review actions yet.",
+        "escalated": "Escalated",
+        "reviewed": "Reviewed",
+        "termsModified": "Terms modified",
+        "title": "Review trail"
+      },
+      "backToQueue": "Back to queue",
+      "modify": {
+        "amount": "Kiasi kilichorekebishwa",
+        "tenor": "Muda uliorekebishwa (siku)",
+        "rate": "New interest rate",
+        "reason": "Reason",
+        "submit": "Save changes"
+      },
+      "phone": "Phone",
+      "scoring": {
+        "modelVersion": "Model version",
+        "notScored": "Not scored yet",
+        "recommendedLimit": "Recommended limit",
+        "riskTier": "Risk tier",
+        "score": "Score",
+        "title": "Scoring"
+      },
+      "toast": {
+        "approveFailed": "Approval failed",
+        "approved": "Application approved.",
+        "escalateFailed": "Escalation failed",
+        "escalated": "Application escalated.",
+        "modified": "Terms updated.",
+        "modifyFailed": "Failed to update terms",
+        "rejectFailed": "Rejection failed",
+        "rejected": "Application rejected."
+      },
+      "viewCustomer": "View customer",
+      "approve": {
+        "amount": "Kiasi kilichoidhinishwa",
+        "requestedHint": "Mteja aliomba",
+        "tenor": "Muda (siku)"
+      },
+      "escalate": {
+        "reason": "Sababu ya kupandisha",
+        "reasonPlaceholder": "Kwa nini hii inahitaji ukaguzi wa mkuu…",
+        "assigneeOptional": "Aliyepewa (hiari)",
+        "assigneePlaceholder": "Kitambulisho cha mwendeshaji",
+        "assigneeHint": "Acha tupu ili kuelekeza kwa mkaguzi mkuu wa zamu."
       }
     },
     "ledger": {
@@ -993,7 +1059,13 @@
       "cancelConfirmSuffix": "during the cooling-off period? This will reverse the disbursement and close the contract.",
       "keepContract": "Keep contract",
       "cancelling": "Cancelling…",
-      "yesCancel": "Yes, cancel"
+      "yesCancel": "Yes, cancel",
+      "paymentRecorded": "Malipo yamerekodiwa",
+      "penaltyWaived": "Adhabu imeondolewa",
+      "recordPayment": "Rekodi malipo",
+      "restructure": "Panga upya",
+      "restructured": "Mkataba umepangwa upya",
+      "waivePenalties": "Ondoa adhabu"
     },
     "overdraft": {
       "title": "Overdraft",
@@ -1465,7 +1537,11 @@
     },
     "typeNotFound": "Report type “{{type}}” not found.",
     "availableTypes": "Available: disbursement, repayment, portfolio-quality, revenue, reconciliation, customer-acquisition, product-performance, collections",
-    "subtitle": "PAR buckets and IFRS-9 classification, by product."
+    "subtitle": "PAR buckets and IFRS-9 classification, by product.",
+    "exportCsv": "Export CSV",
+    "exportError": "Export failed",
+    "exportPdf": "Export PDF",
+    "exportSuccess": "Export downloaded."
   },
   "settings": {
     "title": "Mipangilio",
@@ -1585,7 +1661,9 @@
         "compliance": "Compliance",
         "configuration": "Configuration",
         "integration": "Integration",
-        "capital": "Capital"
+        "capital": "Capital",
+        "security": "Usalama",
+        "subscription": "Usajili"
       },
       "tenantCard": {
         "title": "Tenant",
@@ -1598,6 +1676,14 @@
       "lendersCard": {
         "title": "Lenders",
         "description": "Configured funding partners and terms."
+      },
+      "apiKeysCard": {
+        "title": "Funguo za API",
+        "description": "Toa na simamia vitambulisho vya kiprogramu."
+      },
+      "billingCard": {
+        "title": "Kulipia",
+        "description": "Mpango, ankara na matumizi."
       }
     },
     "auditLog": {
@@ -1702,6 +1788,25 @@
         "bnpl": "BNPL",
         "invoiceFactoring": "Invoice Factoring"
       }
+    },
+    "emi": {
+      "addProvider": "Ongeza mtoa huduma",
+      "addProviderTitle": "Ongeza mtoa huduma wa EMI",
+      "baseUrl": "URL ya msingi",
+      "credentials": "Vitambulisho",
+      "credsMissing": "Vitambulisho havipo",
+      "credsSet": "Vitambulisho vimewekwa",
+      "deactivate": "Lemaza",
+      "fieldMappings": "Ramani za uga",
+      "lastSync": "Usawazishaji wa mwisho",
+      "name": "Jina la mtoa huduma",
+      "noProviders": "Hakuna watoa huduma wa EMI walioundwa.",
+      "provider": "Mtoa huduma",
+      "subtitle": "Unganisha watoa huduma wa EMI/Open Banking kwa ulaji wa taarifa.",
+      "syncFrequencyMin": "Mzunguko wa usawazishaji (dakika)",
+      "testConnection": "Jaribu muunganisho",
+      "testing": "Inajaribu…",
+      "title": "Watoa huduma wa EMI"
     }
   },
   "feedback": {
@@ -1793,7 +1898,12 @@
     "accessUsers": "Access · Users",
     "tenantInbox": "Live · Tenant inbox",
     "lenderDirectory": "Live · Lender directory",
-    "fundingPartners": "Live · Funding partners"
+    "fundingPartners": "Live · Funding partners",
+    "applicationReview": "Application Review",
+    "financialOps": "Financial Operations",
+    "security": "Security",
+    "subscription": "Subscription",
+    "integrationEmi": "Muunganisho wa EMI"
   },
   "validation": {
     "required": "Sehemu hii inahitajika",
@@ -2684,5 +2794,64 @@
   "layout": {
     "skipToMain": "Skip to main content",
     "closeMenu": "Close menu"
+  },
+  "billing": {
+    "comparePlans": "Compare Plans",
+    "features": {
+      "title": "Features"
+    },
+    "history": {
+      "empty": "No billing history yet.",
+      "title": "Billing History"
+    },
+    "monthToMonth": "Month-to-month",
+    "notAvailable": "Not available",
+    "requestUpgrade": "Request Upgrade",
+    "subtitle": "Plan, usage, and billing history",
+    "title": "Billing & Plan",
+    "upgrade": {
+      "submitted": "Upgrade request submitted."
+    },
+    "usage": {
+      "title": "Usage"
+    }
+  },
+  "settlements": {
+    "runs": {
+      "title": "Settlement Runs",
+      "empty": "No settlement runs yet."
+    },
+    "subtitle": "Settlement and reconciliation overview",
+    "title": "Settlements",
+    "exceptions": {
+      "requireResolution": "Exceptions require operator resolution.",
+      "title": "Reconciliation Exceptions"
+    },
+    "kpi": {
+      "calculatedApproved": "Calculated / Approved",
+      "exceptions": "Exceptions",
+      "latestRecon": "Latest reconciliation",
+      "matchRate": "Match rate",
+      "monthlyRuns": "Monthly runs",
+      "pending": "Pending",
+      "requireAttention": "Require attention"
+    },
+    "recon": {
+      "empty": "No reconciliation runs yet.",
+      "title": "Reconciliation Runs"
+    }
+  },
+  "apiKeys": {
+    "title": "Funguo za API",
+    "subtitle": "Toa, zungusha, na batilisha vitambulisho vya kiprogramu kwa mteja huyu.",
+    "create": "Unda funguo",
+    "created": "Funguo ya API imeundwa",
+    "copyHint": "Nakili siri hii sasa — haitaonyeshwa tena.",
+    "empty": "Hakuna funguo za API bado.",
+    "rotate": "Zungusha",
+    "rotateHint": "Tengeneza siri mpya na ubatilishe ya zamani.",
+    "rotated": "Funguo imezungushwa",
+    "revoke": "Batilisha",
+    "revoked": "Funguo imebatilishwa"
   }
 }

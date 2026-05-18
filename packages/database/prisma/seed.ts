@@ -504,6 +504,195 @@ async function main() {
   console.log(`  Created platform admin: ${platformAdmin.email}`);
 
   // -----------------------------------------------------------------------
+  // 1.5. PlanTierConfig — global, one row per tier (S18-FIX-11)
+  //
+  // Without these rows, the S18-11 billing dashboard renders empty
+  // meters and the quota-enforcement service has no caps to enforce.
+  // Values mirror Docs/SPEC-plan-tiers.md §2 (Starter / Growth /
+  // Enterprise). Idempotent via upsert on the tier @unique column.
+  // -----------------------------------------------------------------------
+  console.log('[1.5/8] Seeding PlanTierConfig (3 tiers)...');
+  const PLAN_TIER_SEED: Array<{
+    tier: 'starter' | 'growth' | 'enterprise';
+    displayName: string;
+    allowedProductTypes: string[];
+    maxActiveProducts: number | null;
+    maxCustomers: number | null;
+    maxMonthlyDisbursementVolumeUsd: string | null;
+    maxMonthlyTransactions: number | null;
+    maxLenderConfigs: number | null;
+    maxBnplMerchants: number | null;
+    maxPortalUsers: number | null;
+    dataRetentionMonths: number;
+    featureFlags: Record<string, unknown>;
+    apiRateLimitPerMinute: number;
+    restApiEnabled: boolean;
+    websocketEnabled: boolean;
+    bulkOperationsEnabled: boolean;
+    maxApiKeys: number | null;
+    brandingOptions: Record<string, unknown>;
+  }> = [
+    {
+      tier: 'starter',
+      displayName: 'Starter',
+      allowedProductTypes: ['micro_loan'],
+      maxActiveProducts: 3,
+      maxCustomers: 10_000,
+      maxMonthlyDisbursementVolumeUsd: '500000.0000',
+      maxMonthlyTransactions: 5_000,
+      maxLenderConfigs: 1,
+      maxBnplMerchants: null, // N/A on starter
+      maxPortalUsers: 5,
+      dataRetentionMonths: 12,
+      featureFlags: {
+        mlScoring: false,
+        aiRecovery: false,
+        collectionsLevel: 'basic',
+        customReports: false,
+        scheduledReports: false,
+        settlementLevel: 'basic',
+        reconciliationLevel: 'daily_batch',
+        notificationChannels: ['sms', 'email'],
+        maxWebhookEndpoints: 3,
+        auditLogRetentionDays: 90,
+      },
+      apiRateLimitPerMinute: 60,
+      restApiEnabled: false,
+      websocketEnabled: false,
+      bulkOperationsEnabled: false,
+      maxApiKeys: 2,
+      brandingOptions: {
+        fullBrandPalette: false,
+        customEmailTemplates: false,
+        customSmsSenderId: false,
+        whiteLabel: false,
+        customDomain: false,
+      },
+    },
+    {
+      tier: 'growth',
+      displayName: 'Growth',
+      allowedProductTypes: ['micro_loan', 'overdraft', 'bnpl'],
+      maxActiveProducts: 10,
+      maxCustomers: 100_000,
+      maxMonthlyDisbursementVolumeUsd: '5000000.0000',
+      maxMonthlyTransactions: 50_000,
+      maxLenderConfigs: 5,
+      maxBnplMerchants: 50,
+      maxPortalUsers: 25,
+      dataRetentionMonths: 36,
+      featureFlags: {
+        mlScoring: true,
+        aiRecovery: true,
+        collectionsLevel: 'full',
+        customReports: true,
+        scheduledReports: true,
+        settlementLevel: 'multi_party',
+        reconciliationLevel: 'daily_plus_ondemand',
+        notificationChannels: ['sms', 'email', 'push'],
+        maxWebhookEndpoints: 10,
+        auditLogRetentionDays: 365,
+      },
+      apiRateLimitPerMinute: 300,
+      restApiEnabled: true,
+      websocketEnabled: true,
+      bulkOperationsEnabled: true,
+      maxApiKeys: 10,
+      brandingOptions: {
+        fullBrandPalette: true,
+        customEmailTemplates: true,
+        customSmsSenderId: true,
+        whiteLabel: false,
+        customDomain: false,
+      },
+    },
+    {
+      tier: 'enterprise',
+      displayName: 'Enterprise',
+      allowedProductTypes: ['micro_loan', 'overdraft', 'bnpl', 'invoice_financing'],
+      // null = unlimited.
+      maxActiveProducts: null,
+      maxCustomers: null,
+      maxMonthlyDisbursementVolumeUsd: null,
+      maxMonthlyTransactions: null,
+      maxLenderConfigs: null,
+      maxBnplMerchants: null,
+      maxPortalUsers: null,
+      dataRetentionMonths: 84, // 7 years
+      featureFlags: {
+        mlScoring: true,
+        aiRecovery: true,
+        collectionsLevel: 'full_with_agency',
+        customReports: true,
+        scheduledReports: true,
+        settlementLevel: 'multi_party_custom',
+        reconciliationLevel: 'realtime_plus_daily',
+        notificationChannels: ['sms', 'email', 'push', 'ussd', 'custom'],
+        maxWebhookEndpoints: null,
+        auditLogRetentionDays: 2555, // 7 years
+      },
+      apiRateLimitPerMinute: 1000,
+      restApiEnabled: true,
+      websocketEnabled: true,
+      bulkOperationsEnabled: true,
+      maxApiKeys: null,
+      brandingOptions: {
+        fullBrandPalette: true,
+        customEmailTemplates: true,
+        customSmsSenderId: true,
+        whiteLabel: true,
+        customDomain: true,
+      },
+    },
+  ];
+
+  for (const tierDef of PLAN_TIER_SEED) {
+    await prisma.planTierConfig.upsert({
+      where: { tier: tierDef.tier },
+      update: {
+        displayName: tierDef.displayName,
+        allowedProductTypes: tierDef.allowedProductTypes as unknown as Prisma.InputJsonValue,
+        maxActiveProducts: tierDef.maxActiveProducts,
+        maxCustomers: tierDef.maxCustomers,
+        maxMonthlyDisbursementVolumeUsd: tierDef.maxMonthlyDisbursementVolumeUsd,
+        maxMonthlyTransactions: tierDef.maxMonthlyTransactions,
+        maxLenderConfigs: tierDef.maxLenderConfigs,
+        maxBnplMerchants: tierDef.maxBnplMerchants,
+        maxPortalUsers: tierDef.maxPortalUsers,
+        dataRetentionMonths: tierDef.dataRetentionMonths,
+        featureFlags: tierDef.featureFlags as Prisma.InputJsonValue,
+        apiRateLimitPerMinute: tierDef.apiRateLimitPerMinute,
+        restApiEnabled: tierDef.restApiEnabled,
+        websocketEnabled: tierDef.websocketEnabled,
+        bulkOperationsEnabled: tierDef.bulkOperationsEnabled,
+        maxApiKeys: tierDef.maxApiKeys,
+        brandingOptions: tierDef.brandingOptions as Prisma.InputJsonValue,
+      },
+      create: {
+        tier: tierDef.tier,
+        displayName: tierDef.displayName,
+        allowedProductTypes: tierDef.allowedProductTypes as unknown as Prisma.InputJsonValue,
+        maxActiveProducts: tierDef.maxActiveProducts,
+        maxCustomers: tierDef.maxCustomers,
+        maxMonthlyDisbursementVolumeUsd: tierDef.maxMonthlyDisbursementVolumeUsd,
+        maxMonthlyTransactions: tierDef.maxMonthlyTransactions,
+        maxLenderConfigs: tierDef.maxLenderConfigs,
+        maxBnplMerchants: tierDef.maxBnplMerchants,
+        maxPortalUsers: tierDef.maxPortalUsers,
+        dataRetentionMonths: tierDef.dataRetentionMonths,
+        featureFlags: tierDef.featureFlags as Prisma.InputJsonValue,
+        apiRateLimitPerMinute: tierDef.apiRateLimitPerMinute,
+        restApiEnabled: tierDef.restApiEnabled,
+        websocketEnabled: tierDef.websocketEnabled,
+        bulkOperationsEnabled: tierDef.bulkOperationsEnabled,
+        maxApiKeys: tierDef.maxApiKeys,
+        brandingOptions: tierDef.brandingOptions as Prisma.InputJsonValue,
+      },
+    });
+  }
+  console.log(`  PlanTierConfig: 3 tiers upserted (starter / growth / enterprise)`);
+
+  // -----------------------------------------------------------------------
   // Loop through each tenant
   // -----------------------------------------------------------------------
   for (let ti = 0; ti < TENANTS.length; ti++) {

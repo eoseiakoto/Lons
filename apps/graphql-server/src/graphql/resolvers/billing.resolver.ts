@@ -165,9 +165,14 @@ export class BillingResolver {
    *   - `estimatedFees`: base + transaction fees accumulated in the current period
    *   - `currentPlan`: active plan config (tier, model, amounts)
    */
+  // S18-FIX-4 — `@RequiresPlan('growth')` removed. Every tenant should
+  // be able to see their own billing history regardless of tier;
+  // gating this behind growth meant Starter tenants couldn't audit
+  // what they were being charged for. The mutation-side of billing
+  // (e.g. plan upgrade) still gates appropriately via the policy
+  // guards on the relevant resolvers.
   @Query(() => UsageHistoryType)
   @Roles('billing:read')
-  @RequiresPlan('growth')
   async usageHistory(
     @CurrentTenant() tenantId: string,
     @Args('subscriptionId', { type: () => ID, nullable: true })

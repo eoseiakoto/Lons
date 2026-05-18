@@ -382,6 +382,24 @@ export class DisbursementService {
           `Failed to restore subscription limit after disbursement rollback on contract ${contractId}: ${(err as Error).message}`,
         );
       }
+
+      // S18-FIX-3 — restore the plan-tier monthly quota counter. The
+      // initial attempt at line ~157 incremented it; a permanent
+      // failure means that disbursement didn't actually happen, so
+      // the count + volume must come back. Best-effort: failure is
+      // logged but never blocks the rollback.
+      if (this.quotaTrackingService) {
+        try {
+          await this.quotaTrackingService.decrementDisbursement(
+            tenantId,
+            String(contract.principalAmount),
+          );
+        } catch (err) {
+          this.logger.warn(
+            `Failed to decrement quota counter after disbursement rollback on contract ${contractId}: ${(err as Error).message}`,
+          );
+        }
+      }
     } else if (contract?.status === 'performing') {
       this.logger.warn(
         `Skipping contract ${contractId} rollback: status is already 'performing' — partial disbursement may have occurred`,

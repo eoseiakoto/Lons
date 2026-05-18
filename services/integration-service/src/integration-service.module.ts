@@ -5,6 +5,7 @@ import { EventBusModule, ObservabilityModule } from '@lons/common';
 import { MtnMomoAdapter } from './adapters/mtn-momo.adapter';
 import { MpesaAdapter } from './adapters/mpesa.adapter';
 import { WalletAdapterResolver } from './adapters/wallet-adapter-resolver.service';
+import { TenantAwareWalletAdapter } from './adapters/tenant-aware-wallet.adapter';
 import { CreditBureauService } from './credit-bureau/credit-bureau.service';
 import { MockCreditBureauAdapter } from './credit-bureau/mock-credit-bureau.adapter';
 import { CREDIT_BUREAU_ADAPTER } from './credit-bureau/credit-bureau.interface';
@@ -25,6 +26,7 @@ import { EmiDataModule } from './emi-data/emi-data.module';
     MtnMomoAdapter,
     MpesaAdapter,
     WalletAdapterResolver,
+    TenantAwareWalletAdapter,
     CreditBureauService,
     { provide: CREDIT_BUREAU_ADAPTER, useClass: MockCreditBureauAdapter },
     WebhookService,
@@ -33,6 +35,7 @@ import { EmiDataModule } from './emi-data/emi-data.module';
     MtnMomoAdapter,
     MpesaAdapter,
     WalletAdapterResolver,
+    TenantAwareWalletAdapter,
     CreditBureauService,
     WebhookService,
     ScreeningModule,

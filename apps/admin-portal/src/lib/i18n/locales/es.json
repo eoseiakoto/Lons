@@ -17,7 +17,8 @@
     "tenants": "Inquilinos",
     "feedback": "Comentarios",
     "factoring": "Factoraje",
-    "verificationQueue": "Cola de verificación"
+    "verificationQueue": "Cola de verificación",
+    "settings": "Configuración"
   },
   "sidebar": {
     "adminPortal": "Portal Admin",
@@ -99,7 +100,9 @@
     "hours": "hours",
     "unexpectedError": "An unexpected error occurred.",
     "health": "Health",
-    "clear": "Clear"
+    "clear": "Clear",
+    "submitted": "Submitted",
+    "working": "Working…"
   },
   "login": {
     "title": "Portal Admin",
@@ -779,7 +782,8 @@
         "manualReview": "Manual review",
         "pending": "Pending",
         "approved": "Approved",
-        "rejected": "Rejected"
+        "rejected": "Rejected",
+        "escalated": "Escalado"
       },
       "inQueue": "{{count}} in queue"
     },
@@ -820,9 +824,19 @@
       "riskTier": "Nivel de Riesgo",
       "recommendation": "Recomendación",
       "factors": "Factores",
-      "approve": "Aprobar",
-      "reject": "Rechazar",
-      "escalate": "Escalar",
+      "reject": {
+        "detail": "Detalles",
+        "detailPlaceholder": "Agregue contexto para el cliente (opcional).",
+        "reasonCode": "Código de motivo",
+        "codes": {
+          "lowCreditScore": "Puntuación crediticia baja",
+          "insufficientIncome": "Ingresos insuficientes",
+          "highDebtRatio": "Alta relación deuda/ingreso",
+          "policyViolation": "Violación de política",
+          "docIncomplete": "Documentación incompleta",
+          "other": "Otro"
+        }
+      },
       "approveApplication": "Aprobar Solicitud",
       "approveDesc": "Opcionalmente modifique los términos antes de aprobar.",
       "modifiedAmount": "Monto Modificado (opcional)",
@@ -836,7 +850,9 @@
       "actions": {
         "approve": "approve",
         "reject": "reject",
-        "escalate": "escalate"
+        "escalate": "escalate",
+        "notActionable": "This request is not actionable in its current state.",
+        "title": "Actions"
       },
       "success": {
         "approve": "Application approved successfully",
@@ -864,9 +880,10 @@
         "factors": "Factors"
       },
       "button": {
-        "approve": "Approve",
-        "reject": "Reject",
-        "escalate": "Escalate"
+        "approve": "Aprobar",
+        "reject": "Rechazar",
+        "escalate": "Escalar",
+        "modifyTerms": "Modificar términos"
       },
       "modal": {
         "approveTitle": "Approve Application",
@@ -878,6 +895,55 @@
         "reasonRequired": "Reason (required)",
         "rejectionPlaceholder": "Enter the reason for rejection...",
         "confirmRejection": "Confirm Rejection"
+      },
+      "application": "Application",
+      "approvedAmount": "Approved amount",
+      "audit": {
+        "empty": "No review actions yet.",
+        "escalated": "Escalated",
+        "reviewed": "Reviewed",
+        "termsModified": "Terms modified",
+        "title": "Review trail"
+      },
+      "backToQueue": "Back to queue",
+      "modify": {
+        "amount": "Monto modificado",
+        "tenor": "Plazo modificado (días)",
+        "rate": "New interest rate",
+        "reason": "Reason",
+        "submit": "Save changes"
+      },
+      "phone": "Phone",
+      "scoring": {
+        "modelVersion": "Model version",
+        "notScored": "Not scored yet",
+        "recommendedLimit": "Recommended limit",
+        "riskTier": "Risk tier",
+        "score": "Score",
+        "title": "Scoring"
+      },
+      "toast": {
+        "approveFailed": "Approval failed",
+        "approved": "Application approved.",
+        "escalateFailed": "Escalation failed",
+        "escalated": "Application escalated.",
+        "modified": "Terms updated.",
+        "modifyFailed": "Failed to update terms",
+        "rejectFailed": "Rejection failed",
+        "rejected": "Application rejected."
+      },
+      "viewCustomer": "View customer",
+      "approve": {
+        "amount": "Monto aprobado",
+        "requestedHint": "El cliente solicitó",
+        "tenor": "Plazo (días)"
+      },
+      "escalate": {
+        "reason": "Motivo de escalada",
+        "reasonPlaceholder": "Por qué requiere revisión sénior…",
+        "assigneeOptional": "Asignado (opcional)",
+        "assigneePlaceholder": "ID de operador",
+        "assigneeHint": "Deje en blanco para enrutar al revisor sénior de guardia."
       }
     },
     "ledger": {
@@ -993,7 +1059,13 @@
       "cancelConfirmSuffix": "during the cooling-off period? This will reverse the disbursement and close the contract.",
       "keepContract": "Keep contract",
       "cancelling": "Cancelling…",
-      "yesCancel": "Yes, cancel"
+      "yesCancel": "Yes, cancel",
+      "paymentRecorded": "Pago registrado",
+      "penaltyWaived": "Penalización condonada",
+      "recordPayment": "Registrar pago",
+      "restructure": "Reestructurar",
+      "restructured": "Contrato reestructurado",
+      "waivePenalties": "Condonar penalizaciones"
     },
     "overdraft": {
       "title": "Overdraft",
@@ -1465,7 +1537,11 @@
     },
     "typeNotFound": "Report type “{{type}}” not found.",
     "availableTypes": "Available: disbursement, repayment, portfolio-quality, revenue, reconciliation, customer-acquisition, product-performance, collections",
-    "subtitle": "PAR buckets and IFRS-9 classification, by product."
+    "subtitle": "PAR buckets and IFRS-9 classification, by product.",
+    "exportCsv": "Export CSV",
+    "exportError": "Export failed",
+    "exportPdf": "Export PDF",
+    "exportSuccess": "Export downloaded."
   },
   "settings": {
     "title": "Configuración",
@@ -1585,7 +1661,9 @@
         "compliance": "Compliance",
         "configuration": "Configuration",
         "integration": "Integration",
-        "capital": "Capital"
+        "capital": "Capital",
+        "security": "Seguridad",
+        "subscription": "Suscripción"
       },
       "tenantCard": {
         "title": "Tenant",
@@ -1598,6 +1676,14 @@
       "lendersCard": {
         "title": "Lenders",
         "description": "Configured funding partners and terms."
+      },
+      "apiKeysCard": {
+        "title": "Claves API",
+        "description": "Emitir y gestionar credenciales programáticas."
+      },
+      "billingCard": {
+        "title": "Facturación",
+        "description": "Plan, facturas y uso."
       }
     },
     "auditLog": {
@@ -1702,6 +1788,25 @@
         "bnpl": "BNPL",
         "invoiceFactoring": "Invoice Factoring"
       }
+    },
+    "emi": {
+      "addProvider": "Agregar proveedor",
+      "addProviderTitle": "Agregar proveedor EMI",
+      "baseUrl": "URL base",
+      "credentials": "Credenciales",
+      "credsMissing": "Credenciales faltantes",
+      "credsSet": "Credenciales establecidas",
+      "deactivate": "Desactivar",
+      "fieldMappings": "Asignaciones de campos",
+      "lastSync": "Última sincronización",
+      "name": "Nombre del proveedor",
+      "noProviders": "No hay proveedores EMI configurados.",
+      "provider": "Proveedor",
+      "subtitle": "Conecte proveedores EMI/Open Banking para ingesta de extractos.",
+      "syncFrequencyMin": "Frecuencia de sincronización (minutos)",
+      "testConnection": "Probar conexión",
+      "testing": "Probando…",
+      "title": "Proveedores EMI"
     }
   },
   "feedback": {
@@ -1793,7 +1898,12 @@
     "accessUsers": "Access · Users",
     "tenantInbox": "Live · Tenant inbox",
     "lenderDirectory": "Live · Lender directory",
-    "fundingPartners": "Live · Funding partners"
+    "fundingPartners": "Live · Funding partners",
+    "applicationReview": "Application Review",
+    "financialOps": "Financial Operations",
+    "security": "Security",
+    "subscription": "Subscription",
+    "integrationEmi": "Integración EMI"
   },
   "validation": {
     "required": "Este campo es obligatorio",
@@ -2684,5 +2794,64 @@
   "layout": {
     "skipToMain": "Skip to main content",
     "closeMenu": "Close menu"
+  },
+  "billing": {
+    "comparePlans": "Compare Plans",
+    "features": {
+      "title": "Features"
+    },
+    "history": {
+      "empty": "No billing history yet.",
+      "title": "Billing History"
+    },
+    "monthToMonth": "Month-to-month",
+    "notAvailable": "Not available",
+    "requestUpgrade": "Request Upgrade",
+    "subtitle": "Plan, usage, and billing history",
+    "title": "Billing & Plan",
+    "upgrade": {
+      "submitted": "Upgrade request submitted."
+    },
+    "usage": {
+      "title": "Usage"
+    }
+  },
+  "settlements": {
+    "runs": {
+      "title": "Settlement Runs",
+      "empty": "No settlement runs yet."
+    },
+    "subtitle": "Settlement and reconciliation overview",
+    "title": "Settlements",
+    "exceptions": {
+      "requireResolution": "Exceptions require operator resolution.",
+      "title": "Reconciliation Exceptions"
+    },
+    "kpi": {
+      "calculatedApproved": "Calculated / Approved",
+      "exceptions": "Exceptions",
+      "latestRecon": "Latest reconciliation",
+      "matchRate": "Match rate",
+      "monthlyRuns": "Monthly runs",
+      "pending": "Pending",
+      "requireAttention": "Require attention"
+    },
+    "recon": {
+      "empty": "No reconciliation runs yet.",
+      "title": "Reconciliation Runs"
+    }
+  },
+  "apiKeys": {
+    "title": "Claves API",
+    "subtitle": "Emite, rota y revoca credenciales programáticas para este inquilino.",
+    "create": "Crear clave",
+    "created": "Clave API creada",
+    "copyHint": "Copie este secreto ahora; no se mostrará de nuevo.",
+    "empty": "Aún no hay claves API.",
+    "rotate": "Rotar",
+    "rotateHint": "Generar un nuevo secreto y revocar el anterior.",
+    "rotated": "Clave rotada",
+    "revoke": "Revocar",
+    "revoked": "Clave revocada"
   }
 }

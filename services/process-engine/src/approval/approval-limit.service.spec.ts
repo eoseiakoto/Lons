@@ -203,6 +203,56 @@ describe('ApprovalLimitService', () => {
         ),
       ).resolves.toBeUndefined();
     });
+
+    // S18-FIX-2 — pin the exact status list the DB fallback uses so the
+    // next person to extend the LoanRequestStatus enum has a forcing
+    // function to update the count query too.
+    it('DB fallback counts every status downstream of an approve action', async () => {
+      prisma.operatorApprovalLimit.findUnique.mockResolvedValue({
+        ...baseLimits,
+        maxApprovalsPerDay: 10,
+      });
+      prisma.loanRequest.count.mockResolvedValue(2);
+
+      await service.validateOperatorAction(
+        tenantId,
+        operatorId,
+        'approve',
+        makeLoanRequest(),
+      );
+
+      const countCall = prisma.loanRequest.count.mock.calls[0]?.[0];
+      const statuses = countCall?.where?.status?.in as string[];
+      // Every state the loan-request state machine can reach AFTER an
+      // approve action must be in the list. rejected/escalated are
+      // different operator actions and intentionally absent.
+      expect(statuses).toEqual(
+        expect.arrayContaining([
+          'approved',
+          'offer_sent',
+          'accepted',
+          'declined',
+          'expired',
+          'contract_created',
+          'disbursing',
+          'disbursed',
+          'disbursement_failed',
+          'cancelled',
+        ]),
+      );
+      expect(statuses).not.toContain('rejected');
+      expect(statuses).not.toContain('escalated');
+      // Tenant + reviewer + same-day filter all present.
+      expect(countCall?.where?.tenantId).toBe(tenantId);
+      expect(countCall?.where?.metadata).toEqual({
+        path: ['reviewedBy'],
+        equals: operatorId,
+      });
+      expect(countCall?.where?.updatedAt).toEqual({
+        gte: expect.any(Date),
+        lte: expect.any(Date),
+      });
+    });
   });
 
   describe('validateOperatorAction — product type restriction', () => {

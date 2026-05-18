@@ -520,6 +520,37 @@ describe('DisbursementService', () => {
       );
     }, 15000);
 
+    it('S18-FIX-3: decrements plan-tier quota counter on permanent failure', async () => {
+      // The base test harness omits QuotaTrackingService (it's
+      // @Optional). For this test we attach a mock directly to the
+      // private field so the rollback path's quotaTrackingService?.
+      // decrementDisbursement call lands. The unguarded mode (no
+      // quotaTrackingService injected) is implicitly tested by every
+      // other rollback test in this describe block — they all pass,
+      // proving the @Optional? guard works.
+      const decrement = jest.fn().mockResolvedValue(undefined);
+      (service as unknown as Record<string, unknown>).quotaTrackingService = {
+        decrementDisbursement: decrement,
+        // Quota check at the top of initiateDisbursement reads `.allowed`
+        // on the resolved value; default jest.fn() returns undefined,
+        // which would throw before the rollback path runs.
+        incrementDisbursement: jest
+          .fn()
+          .mockResolvedValue({ allowed: true, currentCount: 0 }),
+        getCurrentUsage: jest.fn(),
+      };
+      jest.spyOn((prisma as any).subscription, 'updateMany').mockResolvedValue({ count: 1 } as any);
+
+      setupPermanentFailure();
+      await service.initiateDisbursement(tenantId, contractId);
+
+      expect(decrement).toHaveBeenCalledTimes(1);
+      // Pre-fix, the rollback only restored subscription.availableLimit
+      // and the Redis quota counter stayed inflated by the failed
+      // attempt's count + volume. The decrement reverses both.
+      expect(decrement).toHaveBeenCalledWith(tenantId, '5000.0000');
+    }, 15000);
+
     it('does NOT roll back when contract is already performing (partial disbursement)', async () => {
       setupPermanentFailure({ status: 'performing' });
       await service.initiateDisbursement(tenantId, contractId);

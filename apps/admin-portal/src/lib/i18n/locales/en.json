@@ -17,7 +17,8 @@
     "tenants": "Tenants",
     "feedback": "Feedback",
     "factoring": "Factoring",
-    "verificationQueue": "Verification Queue"
+    "verificationQueue": "Verification Queue",
+    "settings": "Settings"
   },
   "sidebar": {
     "adminPortal": "Admin Portal",
@@ -99,7 +100,9 @@
     "hours": "hours",
     "unexpectedError": "An unexpected error occurred.",
     "health": "Health",
-    "clear": "Clear"
+    "clear": "Clear",
+    "submitted": "Submitted",
+    "working": "Working…"
   },
   "login": {
     "title": "Admin Portal",
@@ -779,7 +782,8 @@
         "manualReview": "Manual review",
         "pending": "Pending",
         "approved": "Approved",
-        "rejected": "Rejected"
+        "rejected": "Rejected",
+        "escalated": "Escalated"
       },
       "inQueue": "{{count}} in queue"
     },
@@ -820,9 +824,19 @@
       "riskTier": "Risk Tier",
       "recommendation": "Recommendation",
       "factors": "Factors",
-      "approve": "Approve",
-      "reject": "Reject",
-      "escalate": "Escalate",
+      "reject": {
+        "detail": "Details",
+        "detailPlaceholder": "Add context for the customer (optional).",
+        "reasonCode": "Reason code",
+        "codes": {
+          "lowCreditScore": "Low credit score",
+          "insufficientIncome": "Insufficient income",
+          "highDebtRatio": "High debt-to-income ratio",
+          "policyViolation": "Policy violation",
+          "docIncomplete": "Documentation incomplete",
+          "other": "Other"
+        }
+      },
       "approveApplication": "Approve Application",
       "approveDesc": "Optionally modify the terms before approving.",
       "modifiedAmount": "Modified Amount (optional)",
@@ -836,7 +850,9 @@
       "actions": {
         "approve": "approve",
         "reject": "reject",
-        "escalate": "escalate"
+        "escalate": "escalate",
+        "notActionable": "This request is not actionable in its current state.",
+        "title": "Actions"
       },
       "success": {
         "approve": "Application approved successfully",
@@ -866,7 +882,8 @@
       "button": {
         "approve": "Approve",
         "reject": "Reject",
-        "escalate": "Escalate"
+        "escalate": "Escalate",
+        "modifyTerms": "Modify Terms"
       },
       "modal": {
         "approveTitle": "Approve Application",
@@ -878,6 +895,55 @@
         "reasonRequired": "Reason (required)",
         "rejectionPlaceholder": "Enter the reason for rejection...",
         "confirmRejection": "Confirm Rejection"
+      },
+      "application": "Application",
+      "approvedAmount": "Approved amount",
+      "audit": {
+        "empty": "No review actions yet.",
+        "escalated": "Escalated",
+        "reviewed": "Reviewed",
+        "termsModified": "Terms modified",
+        "title": "Review trail"
+      },
+      "backToQueue": "Back to queue",
+      "modify": {
+        "amount": "Modified amount",
+        "tenor": "Modified tenor (days)",
+        "rate": "New interest rate",
+        "reason": "Reason",
+        "submit": "Save changes"
+      },
+      "phone": "Phone",
+      "scoring": {
+        "modelVersion": "Model version",
+        "notScored": "Not scored yet",
+        "recommendedLimit": "Recommended limit",
+        "riskTier": "Risk tier",
+        "score": "Score",
+        "title": "Scoring"
+      },
+      "toast": {
+        "approveFailed": "Approval failed",
+        "approved": "Application approved.",
+        "escalateFailed": "Escalation failed",
+        "escalated": "Application escalated.",
+        "modified": "Terms updated.",
+        "modifyFailed": "Failed to update terms",
+        "rejectFailed": "Rejection failed",
+        "rejected": "Application rejected."
+      },
+      "viewCustomer": "View customer",
+      "approve": {
+        "amount": "Approved amount",
+        "requestedHint": "Customer requested",
+        "tenor": "Tenor (days)"
+      },
+      "escalate": {
+        "reason": "Escalation reason",
+        "reasonPlaceholder": "Why this needs senior review…",
+        "assigneeOptional": "Assignee (optional)",
+        "assigneePlaceholder": "Operator user ID",
+        "assigneeHint": "Leave blank to route to the on-call senior reviewer."
       }
     },
     "ledger": {
@@ -993,7 +1059,13 @@
       "cancelConfirmSuffix": "during the cooling-off period? This will reverse the disbursement and close the contract.",
       "keepContract": "Keep contract",
       "cancelling": "Cancelling…",
-      "yesCancel": "Yes, cancel"
+      "yesCancel": "Yes, cancel",
+      "paymentRecorded": "Payment recorded",
+      "penaltyWaived": "Penalty waived",
+      "recordPayment": "Record payment",
+      "restructure": "Restructure",
+      "restructured": "Contract restructured",
+      "waivePenalties": "Waive penalties"
     },
     "overdraft": {
       "title": "Overdraft",
@@ -1465,7 +1537,11 @@
     },
     "typeNotFound": "Report type “{{type}}” not found.",
     "availableTypes": "Available: disbursement, repayment, portfolio-quality, revenue, reconciliation, customer-acquisition, product-performance, collections",
-    "subtitle": "PAR buckets and IFRS-9 classification, by product."
+    "subtitle": "PAR buckets and IFRS-9 classification, by product.",
+    "exportCsv": "Export CSV",
+    "exportError": "Export failed",
+    "exportPdf": "Export PDF",
+    "exportSuccess": "Export downloaded."
   },
   "settings": {
     "title": "Settings",
@@ -1585,7 +1661,9 @@
         "compliance": "Compliance",
         "configuration": "Configuration",
         "integration": "Integration",
-        "capital": "Capital"
+        "capital": "Capital",
+        "security": "Security",
+        "subscription": "Subscription"
       },
       "tenantCard": {
         "title": "Tenant",
@@ -1598,6 +1676,14 @@
       "lendersCard": {
         "title": "Lenders",
         "description": "Configured funding partners and terms."
+      },
+      "apiKeysCard": {
+        "title": "API Keys",
+        "description": "Issue and manage programmatic credentials."
+      },
+      "billingCard": {
+        "title": "Billing",
+        "description": "Plan, invoices, and usage."
       }
     },
     "auditLog": {
@@ -1702,6 +1788,25 @@
         "bnpl": "BNPL",
         "invoiceFactoring": "Invoice Factoring"
       }
+    },
+    "emi": {
+      "addProvider": "Add provider",
+      "addProviderTitle": "Add EMI provider",
+      "baseUrl": "Base URL",
+      "credentials": "Credentials",
+      "credsMissing": "Credentials missing",
+      "credsSet": "Credentials set",
+      "deactivate": "Deactivate",
+      "fieldMappings": "Field mappings",
+      "lastSync": "Last sync",
+      "name": "Provider name",
+      "noProviders": "No EMI providers configured.",
+      "provider": "Provider",
+      "subtitle": "Connect EMI/Open Banking providers for statement ingestion.",
+      "syncFrequencyMin": "Sync frequency (minutes)",
+      "testConnection": "Test connection",
+      "testing": "Testing…",
+      "title": "EMI Providers"
     }
   },
   "feedback": {
@@ -1793,7 +1898,12 @@
     "accessUsers": "Access · Users",
     "tenantInbox": "Live · Tenant inbox",
     "lenderDirectory": "Live · Lender directory",
-    "fundingPartners": "Live · Funding partners"
+    "fundingPartners": "Live · Funding partners",
+    "applicationReview": "Application Review",
+    "financialOps": "Financial Operations",
+    "security": "Security",
+    "subscription": "Subscription",
+    "integrationEmi": "EMI integration"
   },
   "validation": {
     "required": "This field is required",
@@ -2684,5 +2794,64 @@
   "layout": {
     "skipToMain": "Skip to main content",
     "closeMenu": "Close menu"
+  },
+  "billing": {
+    "comparePlans": "Compare Plans",
+    "features": {
+      "title": "Features"
+    },
+    "history": {
+      "empty": "No billing history yet.",
+      "title": "Billing History"
+    },
+    "monthToMonth": "Month-to-month",
+    "notAvailable": "Not available",
+    "requestUpgrade": "Request Upgrade",
+    "subtitle": "Plan, usage, and billing history",
+    "title": "Billing & Plan",
+    "upgrade": {
+      "submitted": "Upgrade request submitted."
+    },
+    "usage": {
+      "title": "Usage"
+    }
+  },
+  "settlements": {
+    "runs": {
+      "title": "Settlement Runs",
+      "empty": "No settlement runs yet."
+    },
+    "subtitle": "Settlement and reconciliation overview",
+    "title": "Settlements",
+    "exceptions": {
+      "requireResolution": "Exceptions require operator resolution.",
+      "title": "Reconciliation Exceptions"
+    },
+    "kpi": {
+      "calculatedApproved": "Calculated / Approved",
+      "exceptions": "Exceptions",
+      "latestRecon": "Latest reconciliation",
+      "matchRate": "Match rate",
+      "monthlyRuns": "Monthly runs",
+      "pending": "Pending",
+      "requireAttention": "Require attention"
+    },
+    "recon": {
+      "empty": "No reconciliation runs yet.",
+      "title": "Reconciliation Runs"
+    }
+  },
+  "apiKeys": {
+    "title": "API Keys",
+    "subtitle": "Issue, rotate, and revoke programmatic credentials for this tenant.",
+    "create": "Create key",
+    "created": "API key created",
+    "copyHint": "Copy this secret now — it will not be shown again.",
+    "empty": "No API keys yet.",
+    "rotate": "Rotate",
+    "rotateHint": "Generate a new secret and revoke the old one.",
+    "rotated": "Key rotated",
+    "revoke": "Revoke",
+    "revoked": "Key revoked"
   }
 }
