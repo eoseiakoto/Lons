@@ -18,7 +18,9 @@
     "feedback": "Feedback",
     "factoring": "Fatoração",
     "verificationQueue": "Fila de verificação",
-    "settings": "Configurações"
+    "settings": "Configurações",
+    "apiKeys": "Chaves API",
+    "billing": "Faturamento e Plano"
   },
   "sidebar": {
     "adminPortal": "Portal Admin",

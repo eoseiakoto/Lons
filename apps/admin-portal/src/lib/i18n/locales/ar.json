@@ -18,7 +18,9 @@
     "feedback": "الملاحظات",
     "factoring": "التخصيم",
     "verificationQueue": "قائمة التحقق",
-    "settings": "الإعدادات"
+    "settings": "الإعدادات",
+    "apiKeys": "مفاتيح API",
+    "billing": "الفواتير والخطة"
   },
   "sidebar": {
     "adminPortal": "بوابة الإدارة",

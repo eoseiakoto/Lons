@@ -18,7 +18,9 @@
     "feedback": "Feedback",
     "factoring": "Factoring",
     "verificationQueue": "Verification Queue",
-    "settings": "Settings"
+    "settings": "Settings",
+    "apiKeys": "API Keys",
+    "billing": "Billing & Plan"
   },
   "sidebar": {
     "adminPortal": "Admin Portal",

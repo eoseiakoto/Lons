@@ -18,7 +18,9 @@
     "feedback": "Commentaires",
     "factoring": "Affacturage",
     "verificationQueue": "File de vérification",
-    "settings": "Paramètres"
+    "settings": "Paramètres",
+    "apiKeys": "Clés API",
+    "billing": "Facturation et Plan"
   },
   "sidebar": {
     "adminPortal": "Portail Admin",

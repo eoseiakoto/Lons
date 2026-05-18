@@ -18,7 +18,9 @@
     "feedback": "Comentarios",
     "factoring": "Factoraje",
     "verificationQueue": "Cola de verificación",
-    "settings": "Configuración"
+    "settings": "Configuración",
+    "apiKeys": "Claves API",
+    "billing": "Facturación y Plan"
   },
   "sidebar": {
     "adminPortal": "Portal Admin",

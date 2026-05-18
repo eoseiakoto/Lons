@@ -18,7 +18,9 @@
     "feedback": "Ra'ayoyi",
     "factoring": "Factoring",
     "verificationQueue": "Jerin tabbatarwa",
-    "settings": "Saituna"
+    "settings": "Saituna",
+    "apiKeys": "Maɓallan API",
+    "billing": "Kuɗi da Shiri"
   },
   "sidebar": {
     "adminPortal": "Shafin Gudanarwa",

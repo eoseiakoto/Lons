@@ -18,7 +18,9 @@
     "feedback": "Maoni",
     "factoring": "Factoring",
     "verificationQueue": "Foleni ya uthibitisho",
-    "settings": "Mipangilio"
+    "settings": "Mipangilio",
+    "apiKeys": "Funguo za API",
+    "billing": "Malipo na Mpango"
   },
   "sidebar": {
     "adminPortal": "Bawaba ya Msimamizi",
