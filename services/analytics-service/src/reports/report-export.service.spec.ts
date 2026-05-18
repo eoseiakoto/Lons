@@ -73,6 +73,21 @@ describe('ReportExportService', () => {
       const csv = svc.generateCsv(cols, [{ n: 12.9 }]).toString('utf-8');
       expect(csv).toContain('\r\n12\r\n');
     });
+
+    it('FIX-BA-3: formats large integer values without precision loss', () => {
+      // Number.MAX_SAFE_INTEGER + 2 — once a value crosses the IEEE-754
+      // safe-integer boundary, `Number(...)` rounds to the nearest
+      // representable double. The old `String(Math.trunc(Number(value)))`
+      // path lost the low bits ('...992' instead of '...993'). The new
+      // `parseInt(String(value), 10)` path keeps the exact integer.
+      const cols: ReportColumn[] = [{ key: 'n', label: 'N', format: 'int' }];
+      const csv = svc
+        .generateCsv(cols, [{ n: '9007199254740993' }])
+        .toString('utf-8');
+      expect(csv).toContain('\r\n9007199254740993\r\n');
+      // Sanity check: Number() would have produced 9007199254740992.
+      expect(csv).not.toContain('9007199254740992');
+    });
   });
 
   describe('generatePdf (Sprint 18 follow-up)', () => {

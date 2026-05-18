@@ -14,6 +14,11 @@ import { ReconciliationServiceModule } from '@lons/reconciliation-service';
 import { OverdraftAgingModule } from '@lons/overdraft-service';
 import { AuditModule } from '@lons/entity-service';
 import { NotificationServiceModule } from '@lons/notification-service';
+// FIX-BA-4 — EmiDataSyncJob is the business-logic worker; the scheduler
+// wraps it in a @Cron-decorated job below. Without this import,
+// `EmiDataSyncJob` is unreachable from the scheduler app and the EMI
+// sync is dead code.
+import { EmiDataModule } from '@lons/integration-service';
 
 import { InterestAccrualJob } from './jobs/interest-accrual.job';
 import { AgingJob } from './jobs/aging.job';
@@ -32,6 +37,7 @@ import { AutoDeductionJob } from './jobs/auto-deduction.job';
 import { AutoDeductionRetryJob } from './jobs/auto-deduction-retry.job';
 import { SettlementJob } from './jobs/settlement.job';
 import { PaymentReminderJob } from './jobs/payment-reminder.job';
+import { EmiSyncJob } from './jobs/emi-sync.job';
 
 @Module({
   imports: [
@@ -59,6 +65,9 @@ import { PaymentReminderJob } from './jobs/payment-reminder.job';
     // Sprint 16 (S16-10) — payment reminder scheduler needs
     // NotificationService to dispatch SMS / email reminders.
     NotificationServiceModule,
+    // FIX-BA-4 — exposes EmiDataSyncJob + EmiIntegrationConfigService
+    // so the cron wrapper can iterate active configs per tenant.
+    EmiDataModule,
   ],
   providers: [
     InterestAccrualJob,
@@ -85,6 +94,10 @@ import { PaymentReminderJob } from './jobs/payment-reminder.job';
     SettlementJob,
     // Sprint 16 (S16-10) — generic payment reminder scheduler.
     PaymentReminderJob,
+    // FIX-BA-4 — EMI snapshot sweep (every 30 min). Iterates active
+    // tenants and active EMI integration configs and dispatches the
+    // worker `EmiDataSyncJob` for each.
+    EmiSyncJob,
   ],
 })
 export class SchedulerModule {}

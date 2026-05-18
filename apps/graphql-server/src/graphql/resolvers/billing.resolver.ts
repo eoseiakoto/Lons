@@ -52,9 +52,13 @@ export class BillingResolver {
    * type, status, and the billing-period window. Default page size is
    * 25; cap at 100.
    */
+  // FIX-BA-2 — billing reads must be available to every tier. Round-1
+  // FIX-4 removed the gate from `usageHistory` but missed the two
+  // sibling queries (this one and `billingInvoice`), leaving Starter
+  // tenants able to see usage totals but not the underlying invoices.
+  // The mutation `markInvoicePaid` keeps its `growth`-tier gate.
   @Query(() => BillingInvoiceConnection)
   @Roles('billing:read')
-  @RequiresPlan('growth')
   async billingInvoices(
     @CurrentTenant() tenantId: string,
     @Args('type', { type: () => BillingInvoiceTypeGql, nullable: true })
@@ -107,9 +111,10 @@ export class BillingResolver {
   }
 
   /** Single invoice by ID. Line items resolved via field resolver. */
+  // FIX-BA-2 — same rationale as `billingInvoices`: read is open to all
+  // tiers; the write-side `markInvoicePaid` retains the growth gate.
   @Query(() => BillingInvoiceType, { nullable: true })
   @Roles('billing:read')
-  @RequiresPlan('growth')
   async billingInvoice(
     @CurrentTenant() tenantId: string,
     @Args('id', { type: () => ID }) id: string,

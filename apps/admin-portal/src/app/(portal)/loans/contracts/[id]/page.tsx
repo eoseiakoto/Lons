@@ -154,6 +154,35 @@ export default function ContractDetailPage() {
   const [restructureContract, { loading: restructuring }] = useMutation(RESTRUCTURE_CONTRACT);
   const [waivePenalties, { loading: waiving }] = useMutation(WAIVE_PENALTIES);
 
+  // FIX-BA-1 — fresh UUID per panel open for restructure + waive. Same
+  // rationale as the payment modal above: prevents Date.now()-collision
+  // replays on double-submit and gives each successful submission a
+  // distinct idempotency key.
+  const [restructureIdemKey, setRestructureIdemKey] = useState<string>(() =>
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `rs:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+  );
+  const regenerateRestructureIdemKey = () => {
+    setRestructureIdemKey(
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `rs:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+    );
+  };
+  const [waiveIdemKey, setWaiveIdemKey] = useState<string>(() =>
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `pw:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+  );
+  const regenerateWaiveIdemKey = () => {
+    setWaiveIdemKey(
+      typeof crypto !== 'undefined' && crypto.randomUUID
+        ? crypto.randomUUID()
+        : `pw:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+    );
+  };
+
   if (loading)
     return <div className="text-sm text-[color:var(--text-tertiary)] py-12 text-center">{t('common.loading')}</div>;
   const contract = data?.contract;
@@ -634,10 +663,11 @@ export default function ContractDetailPage() {
                 variables: {
                   contractId: c.id,
                   input,
-                  idempotencyKey: `rs:${c.id}:${Date.now()}`,
+                  idempotencyKey: restructureIdemKey,
                 },
               });
               toast('success', t('loans.contractsDetail.restructured') || 'Contract restructured');
+              regenerateRestructureIdemKey();
               setOpPanel(null);
               void refetch();
             } catch (e) {
@@ -658,10 +688,11 @@ export default function ContractDetailPage() {
                 variables: {
                   contractId: c.id,
                   input,
-                  idempotencyKey: `pw:${c.id}:${Date.now()}`,
+                  idempotencyKey: waiveIdemKey,
                 },
               });
               toast('success', t('loans.contractsDetail.penaltyWaived') || 'Penalties waived');
+              regenerateWaiveIdemKey();
               setOpPanel(null);
               void refetch();
             } catch (e) {

@@ -117,8 +117,25 @@ export class ReportExportService {
             return this.escapeCsv(this.toISO(value));
           case 'percent':
             return this.escapeCsv(`${value}%`);
-          case 'int':
-            return this.escapeCsv(String(Math.trunc(Number(value))));
+          case 'int': {
+            // FIX-BA-3 — preserve exact integer values for `Prisma.Decimal`,
+            // `bigint`, and any string past `Number.MAX_SAFE_INTEGER`. The
+            // prior `Math.trunc(Number(value))` and the spec-suggested
+            // `parseInt(...)` both round-trip through an IEEE-754 double,
+            // which silently drops the low bits. BigInt is exact, so we
+            // strip any fractional portion (preserving the sign on the
+            // integer part) and route through BigInt instead.
+            const raw = String(value).trim();
+            const dot = raw.indexOf('.');
+            const intPart = dot === -1 ? raw : raw.slice(0, dot);
+            // Empty (e.g. value === '.5') and obviously non-integer
+            // strings fall back to '0' so the column still rendered.
+            const normalized =
+              intPart === '' || intPart === '-' || intPart === '+'
+                ? '0'
+                : intPart;
+            return this.escapeCsv(BigInt(normalized).toString());
+          }
           default:
             return this.escapeCsv(String(value));
         }

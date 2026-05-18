@@ -180,6 +180,13 @@ export default function LoanApplicationReviewPage() {
 
   const [panel, setPanel] = useState<Panel>(null);
 
+  // FIX-BA-1: one UUID per page mount, regenerated after every successful
+  // mutation. Prevents Date.now()-collision replays under rapid double-
+  // clicks and matches the FIX-1 pattern from the manual-payment modal.
+  const [reviewIdemKey, setReviewIdemKey] = useState(() =>
+    crypto.randomUUID(),
+  );
+
   const [approveMut, { loading: approving }] = useMutation(APPROVE_MUT);
   const [rejectMut, { loading: rejecting }] = useMutation(REJECT_MUT);
   const [escalateMut, { loading: escalating }] = useMutation(ESCALATE_MUT);
@@ -218,10 +225,11 @@ export default function LoanApplicationReviewPage() {
           loanRequestId,
           approvedAmount: amount,
           approvedTenor: tenor,
-          idempotencyKey: `approve-${loanRequestId}-${Date.now()}`,
+          idempotencyKey: reviewIdemKey,
         },
       });
       toast('success', t('loans.review.toast.approved'));
+      setReviewIdemKey(crypto.randomUUID());
       onClose();
       void refetch();
     } catch (e) {
@@ -235,10 +243,11 @@ export default function LoanApplicationReviewPage() {
         variables: {
           loanRequestId,
           rejectionReasons: reasons,
-          idempotencyKey: `reject-${loanRequestId}-${Date.now()}`,
+          idempotencyKey: reviewIdemKey,
         },
       });
       toast('success', t('loans.review.toast.rejected'));
+      setReviewIdemKey(crypto.randomUUID());
       onClose();
       void refetch();
     } catch (e) {
@@ -253,10 +262,11 @@ export default function LoanApplicationReviewPage() {
           loanRequestId,
           escalationReason: reason,
           escalatedTo: assignee,
-          idempotencyKey: `escalate-${loanRequestId}-${Date.now()}`,
+          idempotencyKey: reviewIdemKey,
         },
       });
       toast('success', t('loans.review.toast.escalated'));
+      setReviewIdemKey(crypto.randomUUID());
       onClose();
       void refetch();
     } catch (e) {
@@ -275,10 +285,11 @@ export default function LoanApplicationReviewPage() {
         variables: {
           loanRequestId,
           input,
-          idempotencyKey: `modify-${loanRequestId}-${Date.now()}`,
+          idempotencyKey: reviewIdemKey,
         },
       });
       toast('success', t('loans.review.toast.modified'));
+      setReviewIdemKey(crypto.randomUUID());
       onClose();
       void refetch();
     } catch (e) {

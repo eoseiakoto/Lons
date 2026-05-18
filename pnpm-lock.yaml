@@ -408,6 +408,9 @@ importers:
       '@lons/event-contracts':
         specifier: workspace:*
         version: link:../../packages/event-contracts
+      '@lons/integration-service':
+        specifier: workspace:*
+        version: link:../../services/integration-service
       '@lons/notification-service':
         specifier: workspace:*
         version: link:../../services/notification-service
