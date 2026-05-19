@@ -1,17 +1,7 @@
-// Supported locales and their metadata
-export const SUPPORTED_LOCALES = [
-  { code: 'en', label: 'English (United States)', flag: '🇺🇸' },
-  { code: 'fr', label: 'Français (France)', flag: '🇫🇷' },
-  { code: 'es', label: 'Español (España)', flag: '🇪🇸' },
-  { code: 'pt', label: 'Português (Brasil)', flag: '🇧🇷' },
-  { code: 'ar', label: 'العربية', flag: '🇸🇦' },
-  { code: 'sw', label: 'Kiswahili (Afrika Mashariki)', flag: '🇰🇪' },
-  { code: 'ha', label: 'Hausa (Nijeriya)', flag: '🇳🇬' },
-] as const;
-
-export type LocaleCode = (typeof SUPPORTED_LOCALES)[number]['code'];
-
-export const DEFAULT_LOCALE: LocaleCode = 'en';
+// Re-exported from a leaf module to keep `i18n-context.tsx` out of the
+// barrel cycle. See `./constants.ts` and Docs/DE-NOTE-i18n-circular-import.md.
+export { SUPPORTED_LOCALES, type LocaleCode, DEFAULT_LOCALE } from './constants';
+import { type LocaleCode, DEFAULT_LOCALE } from './constants';
 
 // Lazy-load locale files
 const localeLoaders: Record<LocaleCode, () => Promise<Record<string, unknown>>> = {

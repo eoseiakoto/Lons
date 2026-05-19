@@ -20,6 +20,21 @@
       "port": 3100
     },
     {
+      "name": "admin-portal-preview",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "pnpm@9",
+        "--filter",
+        "@lons/admin-portal",
+        "exec",
+        "next",
+        "dev",
+        "--port",
+        "3101"
+      ],
+      "port": 3101
+    },
+    {
       "name": "platform-portal",
       "runtimeExecutable": "npx",
       "runtimeArgs": ["pnpm@9", "--filter", "@lons/platform-portal", "dev"],

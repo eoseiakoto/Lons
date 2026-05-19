@@ -1,7 +1,16 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
-import { type LocaleCode, DEFAULT_LOCALE, loadTranslations, getNestedValue, SUPPORTED_LOCALES } from './index';
+
+// Constants live in a leaf module with no imports back here, so reading
+// `DEFAULT_LOCALE` on line ~17 inside `createContext({...})` no longer
+// hits a temporal-dead-zone error when the bundler resolves the
+// `index.ts ↔ i18n-context.tsx` cycle. See Docs/DE-NOTE-i18n-circular-import.md.
+import { type LocaleCode, DEFAULT_LOCALE, SUPPORTED_LOCALES } from './constants';
+// The remaining cycle on `loadTranslations` and `getNestedValue` is
+// safe — both are function declarations (hoisted), so they're available
+// even while `index.ts` is mid-evaluation.
+import { loadTranslations, getNestedValue } from './index';
 
 // Eagerly import English so first render is instant (static import — restart dev server if keys change)
 import enTranslations from './locales/en.json';
