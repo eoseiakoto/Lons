@@ -20,7 +20,9 @@ export class UsageDimensionMoney {
   /** Decimal-as-string. */
   @Field() current!: string;
   /** Decimal-as-string. null = unlimited. */
-  @Field({ nullable: true }) limit?: string | null;
+  // Explicit `() => String` required — TS emits `string | null` as
+  // `Object` and the GraphQL schema builder rejects that.
+  @Field(() => String, { nullable: true }) limit?: string | null;
 }
 
 @ObjectType()

@@ -13,8 +13,13 @@ export enum MicroLoanCreditLimitChangeTypeGql {
   suspension = 'suspension',
   restoration = 'restoration',
 }
+// DE-NOTE-nestjs-runtime-crashes — name MUST differ from the
+// `MicroLoanCreditLimitChangeType` @ObjectType class below; GraphQL
+// requires uniquely-named types across the schema and the prior name
+// collided, crashing the schema builder at boot. The enum semantically
+// describes the kind of change (increase/decrease/suspension/restoration).
 registerEnumType(MicroLoanCreditLimitChangeTypeGql, {
-  name: 'MicroLoanCreditLimitChangeType',
+  name: 'MicroLoanCreditLimitChangeKind',
 });
 
 @ObjectType()

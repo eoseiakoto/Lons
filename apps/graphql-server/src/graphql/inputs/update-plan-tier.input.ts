@@ -15,7 +15,11 @@ export class UpdatePlanTierConfigInput {
 
   @Field(() => Int, { nullable: true }) maxActiveProducts?: number | null;
   @Field(() => Int, { nullable: true }) maxCustomers?: number | null;
-  @Field({ nullable: true }) maxMonthlyDisbursementVolumeUsd?: string | null;
+  // Explicit `() => String` is required because TypeScript's emitted
+  // metadata for `string | null` collapses to `Object`, which the
+  // GraphQL schema builder rejects (UndefinedTypeError at boot).
+  @Field(() => String, { nullable: true })
+  maxMonthlyDisbursementVolumeUsd?: string | null;
   @Field(() => Int, { nullable: true }) maxMonthlyTransactions?: number | null;
   @Field(() => Int, { nullable: true }) maxLenderConfigs?: number | null;
   @Field(() => Int, { nullable: true }) maxBnplMerchants?: number | null;

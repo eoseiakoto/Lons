@@ -10,18 +10,17 @@ import {
   EmiFinancialSnapshot,
   IEmiDataAdapter,
 } from './emi-data-adapter.interface';
+import {
+  EMI_CACHE_TTL_MS,
+  EMI_RETRY_OPTIONS,
+  DEFAULT_EMI_CACHE_TTL_MS,
+  DEFAULT_EMI_RETRY_OPTIONS,
+} from './emi-data.constants';
 
 interface CacheEntry {
   snapshot: EmiFinancialSnapshot;
   cachedAt: number;
 }
-
-const DEFAULT_RETRY: RetryOptions = {
-  maxRetries: 3,
-  baseDelay: 1_000,
-  maxDelay: 8_000,
-  backoffMultiplier: 2,
-};
 
 /**
  * S17-1 / FR-DI-001.1 — wraps the active {@link IEmiDataAdapter} with:
@@ -47,8 +46,14 @@ export class EmiDataService {
   constructor(
     @Inject(EMI_DATA_ADAPTER) private readonly adapter: IEmiDataAdapter,
     private readonly prisma: PrismaService,
-    private readonly cacheTtlMs: number = 60 * 60 * 1000, // 1 hour default
-    private readonly retryOptions: RetryOptions = DEFAULT_RETRY,
+    // Primitive + plain-object DI tokens must be explicit — see
+    // emi-data.constants.ts header for the full rationale. Defaults
+    // preserved so positional `new EmiDataService(...)` from unit tests
+    // still works unchanged.
+    @Inject(EMI_CACHE_TTL_MS)
+    private readonly cacheTtlMs: number = DEFAULT_EMI_CACHE_TTL_MS,
+    @Inject(EMI_RETRY_OPTIONS)
+    private readonly retryOptions: RetryOptions = DEFAULT_EMI_RETRY_OPTIONS,
     // S17 review fix — emit CUSTOMER_FINANCIAL_DATA_SYNCED after each
     // sync so the entity-service financial-profile cache invalidates.
     // Optional so existing unit tests that instantiate EmiDataService

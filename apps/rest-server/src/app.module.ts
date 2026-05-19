@@ -2,6 +2,7 @@ import { Module, MiddlewareConsumer, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core';
+import { NotificationServiceModule } from '@lons/notification-service';
 import {
   ObservabilityModule,
   TenantThrottlerGuard,
@@ -50,6 +51,14 @@ import { UsageRestModule } from './usage/usage.module';
     // Sprint 14 (S14-9) — shared Redis client for plan-tier cache +
     // quota counters. Must precede EntityServiceModule.
     RedisClientModule.forRoot(),
+    // DE-NOTE-nestjs-runtime-crashes — NotificationServiceModule
+    // registers `BullModule.forRoot(...)` at the composition root.
+    // Required here so the `@Processor`-decorated workers pulled in
+    // transitively via ProcessEngineModule → DisbursementModule →
+    // PipelineRetryModule can be instantiated; without it, NestJS
+    // throws "Worker requires a connection" at module-init. Same
+    // pattern as graphql-server and scheduler.
+    NotificationServiceModule,
     EntityServiceModule,
     LoanRequestModule,
     CustomerModule,

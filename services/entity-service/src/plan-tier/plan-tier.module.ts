@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from '@lons/database';
-import { EventBusModule } from '@lons/common';
+import { EventBusModule, PLAN_TIER_CONFIG_SERVICE } from '@lons/common';
 
 import { PlanTierConfigService } from './plan-tier-config.service';
 import { QuotaEnforcementService } from './quota-enforcement.service';
@@ -28,12 +28,21 @@ import { UsageMetricsService } from './usage-metrics.service';
     QuotaEnforcementService,
     QuotaTrackingService,
     UsageMetricsService,
+    // DE-NOTE-nestjs-runtime-crashes — bind the symbol token here so
+    // `TenantPlanGuard` (auto-attached by `@RequiresPlan(...)` on REST
+    // controllers) can inject `PLAN_TIER_CONFIG_SERVICE` from its
+    // declaring module's DI context. Previously this binding only
+    // existed at the app composition root of each NestJS app, which
+    // doesn't propagate into the per-domain sub-modules that
+    // declare those controllers.
+    { provide: PLAN_TIER_CONFIG_SERVICE, useExisting: PlanTierConfigService },
   ],
   exports: [
     PlanTierConfigService,
     QuotaEnforcementService,
     QuotaTrackingService,
     UsageMetricsService,
+    PLAN_TIER_CONFIG_SERVICE,
   ],
 })
 export class PlanTierModule {}

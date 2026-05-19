@@ -17,7 +17,10 @@ import GraphQLJSON from 'graphql-type-json';
 export class UsageLimitsType {
   @Field(() => Int, { nullable: true }) maxActiveProducts?: number | null;
   @Field(() => Int, { nullable: true }) maxCustomers?: number | null;
-  @Field({ nullable: true }) maxMonthlyDisbursementVolumeUsd?: string | null;
+  // `string | null` emits as `Object` metadata — explicit `() => String`
+  // keeps the GraphQL schema builder happy.
+  @Field(() => String, { nullable: true })
+  maxMonthlyDisbursementVolumeUsd?: string | null;
   @Field(() => Int, { nullable: true }) maxMonthlyTransactions?: number | null;
   @Field(() => Int, { nullable: true }) maxLenderConfigs?: number | null;
   @Field(() => Int, { nullable: true }) maxBnplMerchants?: number | null;
@@ -46,8 +49,8 @@ export class PlanTierSummaryType {
   @Field() billingModel!: string;
   @Field() subscriptionAmount!: string;
   @Field() billingCurrency!: string;
-  @Field({ nullable: true }) contractStartDate?: string | null;
-  @Field({ nullable: true }) contractEndDate?: string | null;
+  @Field(() => String, { nullable: true }) contractStartDate?: string | null;
+  @Field(() => String, { nullable: true }) contractEndDate?: string | null;
   @Field(() => CurrentUsageType) usage!: CurrentUsageType;
   @Field(() => UsageLimitsType) limits!: UsageLimitsType;
   @Field(() => GraphQLJSON) featureFlags!: Record<string, unknown>;
@@ -59,7 +62,8 @@ export class PlanTierComparisonType {
   @Field() displayName!: string;
   @Field(() => Int, { nullable: true }) maxActiveProducts?: number | null;
   @Field(() => Int, { nullable: true }) maxCustomers?: number | null;
-  @Field({ nullable: true }) maxMonthlyDisbursementVolumeUsd?: string | null;
+  @Field(() => String, { nullable: true })
+  maxMonthlyDisbursementVolumeUsd?: string | null;
   @Field(() => Int, { nullable: true }) maxMonthlyTransactions?: number | null;
   @Field(() => Int, { nullable: true }) maxLenderConfigs?: number | null;
   @Field(() => Int, { nullable: true }) maxPortalUsers?: number | null;
@@ -77,6 +81,6 @@ export class UpgradeRequestType {
   @Field() currentTier!: string;
   @Field() requestedTier!: string;
   @Field() status!: string;
-  @Field({ nullable: true }) reason?: string | null;
+  @Field(() => String, { nullable: true }) reason?: string | null;
   @Field() createdAt!: Date;
 }
