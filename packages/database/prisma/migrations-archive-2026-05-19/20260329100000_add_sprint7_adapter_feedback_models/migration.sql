@@ -1,3 +1,10 @@
+-- Sprint 7: redesign of wallet_provider_configs from the integration-models
+-- migration (20260327004703). The earlier schema used provider_name + auth_type
+-- + request/response mappings; this revision pivots to a typed enum +
+-- environment_mode + credentials secret ref. Drop the legacy shape before
+-- recreating with the new columns.
+DROP TABLE IF EXISTS "wallet_provider_configs" CASCADE;
+
 -- CreateEnum
 CREATE TYPE "WalletProviderType" AS ENUM ('MOCK', 'MTN_MOMO', 'MPESA', 'AIRTEL_MONEY', 'GENERIC');
 CREATE TYPE "NotificationProviderType" AS ENUM ('CONSOLE', 'RECORDING_MOCK', 'AFRICAS_TALKING', 'TWILIO', 'SMTP', 'FCM');
