@@ -8,6 +8,7 @@ import { useI18n } from '@/lib/i18n/i18n-context';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { User, Phone, Mail, Shield, Key, ArrowLeft } from 'lucide-react';
 import { PageHeader } from '@/components/ui/page-header';
+import { MfaCard } from './mfa-card';
 
 const ME_QUERY = gql`
   query Me {
@@ -279,14 +280,13 @@ export default function ProfilePage() {
             </form>
           </div>
 
+          {/* Two-Factor Authentication */}
+          <MfaCard mfaEnabled={!!me?.mfaEnabled} onChange={() => { refetch(); }} />
+
           {/* Account Details */}
           <div className="card-glow p-6">
             <h2 className="text-[color:var(--text-primary)] font-medium mb-4">{t('settings.profile.accountDetails')}</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <span className="text-[color:var(--text-tertiary)]">{t('settings.profile.mfa')}</span>
-                <p className="text-[color:var(--text-primary)] mt-1">{me?.mfaEnabled ? t('common.enabled') : t('common.disabled')}</p>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
               <div>
                 <span className="text-[color:var(--text-tertiary)]">{t('settings.profile.memberSince')}</span>
                 <p className="text-[color:var(--text-primary)] mt-1">{me?.createdAt ? new Date(me.createdAt).toLocaleDateString() : '-'}</p>
