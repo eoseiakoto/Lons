@@ -1,6 +1,7 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
-import { DEFAULT_SCORECARD } from '@lons/process-engine';
+import { computeSearchableHash } from '@lons/common';
+import { DEFAULT_SCORECARD } from '@lons/shared-types';
 
 const prisma = new PrismaClient();
 
@@ -489,11 +490,14 @@ async function main() {
   // -----------------------------------------------------------------------
   console.log('[1/8] Creating platform admin...');
   const adminPasswordHash = await hashPassword('AdminPass123!@#');
+  const adminEmail = 'admin@lons.io';
+  const adminEmailHash = computeSearchableHash(adminEmail)!;
   const platformAdmin = await prisma.platformUser.upsert({
-    where: { email: 'admin@lons.io' },
-    update: { passwordHash: adminPasswordHash },
+    where: { emailHash: adminEmailHash },
+    update: { passwordHash: adminPasswordHash, emailHash: adminEmailHash },
     create: {
-      email: 'admin@lons.io',
+      email: adminEmail,
+      emailHash: adminEmailHash,
       passwordHash: adminPasswordHash,
       name: 'Platform Admin',
       role: 'platform_admin',
@@ -777,12 +781,14 @@ async function main() {
       const roleObj = roles[u.key];
       if (!roleObj) { console.log(`  Skipping ${u.email} — role not found`); continue; }
       const pwHash = await hashPassword(u.password);
+      const userEmailHash = computeSearchableHash(u.email)!;
       const user = await prisma.user.upsert({
-        where: { tenantId_email: { tenantId: tenant.id, email: u.email } },
-        update: { passwordHash: pwHash },
+        where: { tenantId_emailHash: { tenantId: tenant.id, emailHash: userEmailHash } },
+        update: { passwordHash: pwHash, emailHash: userEmailHash },
         create: {
           tenantId: tenant.id,
           email: u.email,
+          emailHash: userEmailHash,
           passwordHash: pwHash,
           name: u.name,
           roleId: roleObj.id,
@@ -2026,12 +2032,14 @@ async function seedStagingData(p: PrismaClient) {
       const roleObj = roles[u.key];
       if (!roleObj) continue;
       const pwHash = await hashPassword(u.password);
+      const userEmailHash = computeSearchableHash(u.email)!;
       const user = await p.user.upsert({
-        where: { tenantId_email: { tenantId: tenant.id, email: u.email } },
-        update: { passwordHash: pwHash },
+        where: { tenantId_emailHash: { tenantId: tenant.id, emailHash: userEmailHash } },
+        update: { passwordHash: pwHash, emailHash: userEmailHash },
         create: {
           tenantId: tenant.id,
           email: u.email,
+          emailHash: userEmailHash,
           passwordHash: pwHash,
           name: u.name,
           roleId: roleObj.id,
