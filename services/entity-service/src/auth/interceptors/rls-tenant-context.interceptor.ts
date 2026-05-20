@@ -44,12 +44,18 @@ export class RlsTenantContextInterceptor implements NestInterceptor {
       return next.handle();
     }
 
+    // Platform admins carry `tenantId: 'platform'` in the JWT as a sentinel,
+    // not a real UUID. Don't forward that to setTenantContext — its UUID
+    // guard would reject it. The is_platform_admin session var alone is
+    // enough for the RLS policies to bypass tenant filtering.
+    const tenantId = user.isPlatformAdmin ? undefined : user.tenantId;
+
     // Run the downstream handler inside an interactive transaction with
     // SET LOCAL applied. We materialize the Observable into a Promise via
     // `firstValueFrom`-like pattern (using `toPromise` semantics through `from`).
     return from(
       this.prisma.enterTenantContext(
-        { tenantId: user.tenantId, isPlatformAdmin: user.isPlatformAdmin },
+        { tenantId, isPlatformAdmin: user.isPlatformAdmin },
         async () => {
           // Convert Observable → Promise so it joins the transaction's
           // async chain. If `next.handle()` errors, the transaction rolls back.

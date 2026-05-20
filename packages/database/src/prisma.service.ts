@@ -105,11 +105,13 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         if (ctx.isPlatformAdmin) {
           await tx.$executeRaw`SELECT set_config('app.is_platform_admin', 'true', true)`;
         }
-        if (ctx.tenantId) {
-          if (!UUID_RE.test(ctx.tenantId)) {
-            throw new Error(`Invalid tenant id format`);
-          }
+        // For platform admins the JWT sometimes carries `tenantId: 'platform'`
+        // as a sentinel rather than a real UUID. Skip the tenant SET in that
+        // case — `is_platform_admin` alone unlocks the RLS bypass.
+        if (ctx.tenantId && UUID_RE.test(ctx.tenantId)) {
           await tx.$executeRaw`SELECT set_config('app.current_tenant', ${ctx.tenantId}, true)`;
+        } else if (ctx.tenantId && !ctx.isPlatformAdmin) {
+          throw new Error(`Invalid tenant id format`);
         }
         // Re-enter with `tx` on the ALS so the recursive call bypasses the
         // wrap-and-set logic and runs straight through.
@@ -169,15 +171,23 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       throw new Error('enterTenantContext requires either tenantId or isPlatformAdmin');
     }
 
+    // Platform admins carry `tenantId: 'platform'` in the JWT as a sentinel,
+    // not a real UUID. Strip it before calling setTenantContext so the UUID
+    // guard doesn't reject the request. The is_platform_admin session var
+    // alone is enough for RLS policies to bypass tenant filtering.
+    const isUuidTenant =
+      typeof ctx.tenantId === 'string' && UUID_RE.test(ctx.tenantId);
+    const effectiveTenantId = isUuidTenant ? ctx.tenantId : undefined;
+
     return this.$transaction(async (tx) => {
       if (ctx.isPlatformAdmin) {
         await this.setPlatformAdminContext(tx);
       }
-      if (ctx.tenantId) {
-        await this.setTenantContext(tx, ctx.tenantId);
+      if (effectiveTenantId) {
+        await this.setTenantContext(tx, effectiveTenantId);
       }
       return tenantContextStorage.run(
-        { tenantId: ctx.tenantId, isPlatformAdmin: ctx.isPlatformAdmin, tx },
+        { tenantId: effectiveTenantId, isPlatformAdmin: ctx.isPlatformAdmin, tx },
         fn,
       );
     });
