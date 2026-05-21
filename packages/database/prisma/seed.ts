@@ -14,18 +14,36 @@ async function hashPassword(password: string): Promise<string> {
 }
 
 async function createRoles(tenantId: string) {
+  // Catalog of every permission the platform recognises. Mirrors the
+  // @Roles(...) strings used in resolvers across graphql-server and
+  // process-engine. If a new resolver introduces a permission, add it
+  // here so the SP Admin role gets it by default — otherwise existing
+  // tenant admins will silently lose access on the next deploy.
   const allPermissions = [
     'tenant:create', 'tenant:read', 'tenant:update', 'tenant:suspend',
     'user:create', 'user:read', 'user:update', 'user:deactivate',
     'role:create', 'role:read', 'role:update', 'role:delete',
-    'product:create', 'product:read', 'product:update', 'product:activate',
+    'product:create', 'product:read', 'product:update', 'product:activate', 'product:delete',
     'customer:create', 'customer:read', 'customer:update', 'customer:read_pii', 'customer:blacklist',
     'lender:create', 'lender:read', 'lender:update',
     'subscription:create', 'subscription:read', 'subscription:update',
-    'loan_request:create', 'loan_request:read', 'loan_request:process',
-    'contract:read', 'contract:update',
+    'loan_request:create', 'loan_request:read', 'loan_request:process', 'loan_request:approve',
+    'contract:create', 'contract:read', 'contract:update',
     'repayment:create', 'repayment:read',
     'audit:read', 'analytics:read',
+    'collections:read', 'collections:write',
+    'monitoring:read', 'monitoring:write',
+    'usage:read',
+    // Invoice factoring (Sprint 14)
+    'debtor:create', 'debtor:read', 'debtor:update',
+    'invoice:create', 'invoice:verify', 'invoice:offer', 'invoice:accept',
+    'invoice:decline', 'invoice:dispute', 'invoice:fund', 'invoice:notify',
+    'invoice:payment', 'invoice:release',
+    'factoring:verify',
+    // BNPL credit lines (Sprint 15)
+    'bnpl_credit_line:create', 'bnpl_credit_line:read', 'bnpl_credit_line:adjust',
+    // Billing + integrations
+    'billing:read', 'billing:manage', 'integration:read',
   ];
 
   const roleDefinitions = {

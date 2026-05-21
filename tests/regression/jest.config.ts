@@ -1,6 +1,8 @@
 export default {
   testMatch: ['<rootDir>/**/*.spec.ts'],
-  transform: { '^.+\\.ts$': 'ts-jest' },
+  transform: {
+    '^.+\\.ts$': ['ts-jest', { tsconfig: '<rootDir>/../tsconfig.json' }],
+  },
   testTimeout: 60000,
   // Security Hardening (SEC-5): set HASH_PEPPER deterministically.
   setupFiles: ['<rootDir>/../jest.setup.ts'],

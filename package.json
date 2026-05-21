@@ -18,12 +18,15 @@
     "db:studio": "pnpm --filter @lons/database db:studio",
     "db:generate": "pnpm --filter @lons/database db:generate",
     "encrypt-pii": "tsx scripts/encrypt-existing-pii.ts",
+    "audit:permissions": "pnpm --filter @lons/database exec ts-node --transpile-only --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"target\":\"es2022\",\"esModuleInterop\":true,\"skipLibCheck\":true}' --skip-project ../../scripts/audit-permissions.ts",
     "verify:synced": "bash scripts/verify-synced-files.sh",
     "test:regression": "jest --config tests/regression/jest.config.ts --runInBand",
     "test:staging": "jest --config tests/staging/jest.config.ts --runInBand",
     "clean": "turbo clean && rm -rf node_modules"
   },
   "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "@types/node": "^20.19.37",
     "jest-junit": "^16.0.0",
     "prettier": "^3.2.0",
     "turbo": "^2.3.0"
