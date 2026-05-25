@@ -94,6 +94,8 @@ Lōns is deployed as a containerized microservice platform on cloud infrastructu
 | NFR-MIG-003 | Destructive migrations (column removal, table drop) SHALL go through a multi-step process: deprecate → stop using → remove (across separate deployments). | Must |
 | NFR-MIG-004 | Migration execution time SHALL be monitored — long-running migrations must be optimized or run during maintenance windows. | Should |
 
+**Operational procedure:** see `Docs/MIGRATION-PLAYBOOK.md` for the concrete pre-push checklist, local-dev pull procedure, staging/prod `migrate resolve --applied` runbook, environment-variable bootstrapping, helper commands, and troubleshooting. The playbook is the source of truth for *how* the above requirements are satisfied; this section defines *what* the requirements are.
+
 ---
 
 ## 4. Service Map
