@@ -212,7 +212,7 @@ These are convenience aliases for the sequences above. They live in the root `pa
 | `pnpm audit:input-decorators` | Scans every `@InputType` / `@ArgsType` `@Field` for missing class-validator decorators. Exits non-zero on gaps. | Locally before pushing; CI on every PR. |
 | `pnpm test:regression` | Jest suite under `tests/regression/`. Includes the two drift specs above plus other lifecycle tests. | Before pushing; CI on every PR. |
 
-Note: `pnpm db:fresh-start` is not yet implemented — add as part of S19-STAB-7. Until then, run the §3b sequence by hand.
+Implementation: `scripts/db-fresh-start.sh` runs the §3b sequence end-to-end. It refuses to execute if `DATABASE_URL` resolves to anything other than `localhost`, `127.0.0.1`, or `host.docker.internal` — guards against accidentally wiping staging or prod via a stale `.env` switch. For non-local databases, follow §4 explicitly.
 
 ---
 
