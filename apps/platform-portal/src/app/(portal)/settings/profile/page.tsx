@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth-context';
 import { StatusBadge } from '@/components/ui/status-badge';
 import { User, Mail, Shield, Key } from 'lucide-react';
+import { MfaCard } from './mfa-card';
 
 const PLATFORM_ME_QUERY = gql`
   query PlatformMe {
@@ -268,14 +269,13 @@ export default function ProfilePage() {
             </form>
           </div>
 
+          {/* Two-Factor Authentication */}
+          <MfaCard mfaEnabled={!!me?.mfaEnabled} onChange={() => { refetch(); }} />
+
           {/* Account Details */}
           <div className="card p-6">
             <h2 className="text-[color:var(--text-primary)] font-medium mb-4">Account Details</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-              <div>
-                <span className="text-[color:var(--text-tertiary)]">MFA</span>
-                <p className="text-[color:var(--text-primary)] mt-1">{me?.mfaEnabled ? 'Enabled' : 'Disabled'}</p>
-              </div>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
               <div>
                 <span className="text-[color:var(--text-tertiary)]">Member Since</span>
                 <p className="text-[color:var(--text-primary)] mt-1">{me?.createdAt ? new Date(me.createdAt).toLocaleDateString() : '-'}</p>

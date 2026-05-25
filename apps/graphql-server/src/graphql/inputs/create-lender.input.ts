@@ -1,49 +1,57 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import { IsNotEmpty, IsObject, IsOptional, IsString } from 'class-validator';
 import { GraphQLJSON } from 'graphql-type-json';
 
+/**
+ * FIX-STAB-1: class-validator decorators placed ABOVE @Field so the
+ * global ValidationPipe (whitelist + forbidNonWhitelisted) treats every
+ * property as whitelisted. See invoice-verification.input.ts for the
+ * canonical pattern.
+ */
 @InputType()
 export class CreateLenderInput {
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   name!: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   licenseNumber?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   country?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   fundingCapacity?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   fundingCurrency?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   minInterestRate?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   maxInterestRate?: string;
 
-  @Field(() => GraphQLJSON, { nullable: true })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true })
   settlementAccount?: Record<string, unknown>;
 
-  @Field(() => GraphQLJSON, { nullable: true })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true })
   riskParameters?: Record<string, unknown>;
 }

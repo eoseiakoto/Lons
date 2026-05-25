@@ -1,44 +1,49 @@
 import { InputType, Field } from '@nestjs/graphql';
 import { IsNotEmpty, IsOptional, IsString, IsEmail, MinLength } from 'class-validator';
 
+/**
+ * FIX-STAB-1: class-validator decorators placed ABOVE @Field so the
+ * global ValidationPipe (whitelist + forbidNonWhitelisted) treats every
+ * property as whitelisted.
+ */
 @InputType()
 export class CreateUserInput {
-  @Field()
   @IsNotEmpty()
   @IsEmail()
+  @Field()
   email!: string;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
   @MinLength(12)
+  @Field()
   password!: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   name?: string;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   roleId!: string;
 }
 
 @InputType()
 export class UpdateUserInput {
-  @Field({ nullable: true })
   @IsOptional()
   @IsEmail()
+  @Field({ nullable: true })
   email?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   name?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   roleId?: string;
 }

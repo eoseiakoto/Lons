@@ -1,6 +1,7 @@
 import { Field, ID, InputType } from '@nestjs/graphql';
 import {
   IsDateString,
+  IsEnum,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -21,45 +22,50 @@ import { BnplCreditLineStatusGql } from '../types/bnpl-credit-line.type';
  * codebase — UUIDs validated at the framework boundary so malformed
  * inputs never reach the service, and a 422 surfaces to the client
  * instead of an opaque Prisma error.
+ *
+ * FIX-STAB-1: decorators placed ABOVE @Field so the global
+ * ValidationPipe (whitelist + forbidNonWhitelisted) treats every
+ * property as whitelisted. See invoice-verification.input.ts for the
+ * canonical pattern.
  */
 
 @InputType()
 export class CreateBnplCreditLineInput {
   /** Replay key. Repeated calls with the same value return the existing row. */
-  @Field()
   @IsString()
   @IsNotEmpty()
   @Length(8, 255)
+  @Field()
   idempotencyKey!: string;
 
-  @Field(() => ID)
   @IsUUID()
+  @Field(() => ID)
   customerId!: string;
 
-  @Field(() => ID)
   @IsUUID()
+  @Field(() => ID)
   subscriptionId!: string;
 
-  @Field(() => ID)
   @IsUUID()
+  @Field(() => ID)
   productId!: string;
 
   /** Decimal-as-string. */
-  @Field()
   @IsString()
   @IsNotEmpty()
+  @Field()
   approvedLimit!: string;
 
-  @Field()
   @IsString()
   @IsNotEmpty()
   @Length(3, 3)
+  @Field()
   currency!: string;
 
   /** ISO 8601. Defaults to +90 days from now if omitted. */
-  @Field({ nullable: true })
   @IsOptional()
   @IsDateString()
+  @Field({ nullable: true })
   nextReviewAt?: string;
 
   /**
@@ -67,32 +73,33 @@ export class CreateBnplCreditLineInput {
    * the line to `expired` after this timestamp. Leave unset for
    * indefinite credit grants.
    */
-  @Field({ nullable: true })
   @IsOptional()
   @IsDateString()
+  @Field({ nullable: true })
   expiresAt?: string;
 }
 
 @InputType()
 export class UpdateBnplCreditLineStatusInput {
   /** Replay key — same status transition with same key is a no-op. */
-  @Field()
   @IsString()
   @IsNotEmpty()
   @Length(8, 255)
+  @Field()
   idempotencyKey!: string;
 
-  @Field(() => ID)
   @IsUUID()
+  @Field(() => ID)
   id!: string;
 
+  @IsEnum(BnplCreditLineStatusGql)
   @Field(() => BnplCreditLineStatusGql)
   status!: BnplCreditLineStatusGql;
 
   /** Required when suspending or closing. */
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   reason?: string;
 }
 
@@ -102,29 +109,29 @@ export class AdjustBnplCreditLimitInput {
    * Replay key. Duplicate manual adjustment with the same value returns
    * the originally-created adjustment row — no double-apply.
    */
-  @Field()
   @IsString()
   @IsNotEmpty()
   @Length(8, 255)
+  @Field()
   idempotencyKey!: string;
 
-  @Field(() => ID)
   @IsUUID()
+  @Field(() => ID)
   creditLineId!: string;
 
   /** Decimal-as-string. */
-  @Field()
   @IsString()
   @IsNotEmpty()
+  @Field()
   newLimit!: string;
 
-  @Field()
   @IsString()
   @IsNotEmpty()
+  @Field()
   reasonCode!: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   reasonDetail?: string;
 }

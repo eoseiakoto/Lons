@@ -36,8 +36,12 @@ async function bootstrap() {
   // Origin header back, which is forbidden by CLAUDE.md (functionally `*`
   // for credentialed requests). Webhook endpoints are server-to-server and
   // don't go through CORS, so they're not affected.
-  const adminOrigin = process.env.ADMIN_PORTAL_URL || 'http://localhost:3001';
-  const platformOrigin = process.env.PLATFORM_PORTAL_URL || 'http://localhost:3002';
+  // Defaults align with lons.sh port assignments (admin-portal=3100, platform-portal=3200).
+  // The historical 3001/3002 defaults pre-dated those choices and caused the
+  // platform-portal health card to mark this server as DOWN even when running,
+  // because the browser fetch from :3200 was rejected by the CORS allowlist.
+  const adminOrigin = process.env.ADMIN_PORTAL_URL || 'http://localhost:3100';
+  const platformOrigin = process.env.PLATFORM_PORTAL_URL || 'http://localhost:3200';
   const extraOrigins = (process.env.CORS_ORIGINS || '')
     .split(',')
     .map((s) => s.trim())

@@ -1,6 +1,7 @@
 import { PrismaClient, Prisma } from '@prisma/client';
 import * as argon2 from 'argon2';
-import { DEFAULT_SCORECARD } from '@lons/process-engine';
+import { computeSearchableHash } from '@lons/common';
+import { DEFAULT_SCORECARD } from '@lons/shared-types';
 
 const prisma = new PrismaClient();
 
@@ -13,18 +14,36 @@ async function hashPassword(password: string): Promise<string> {
 }
 
 async function createRoles(tenantId: string) {
+  // Catalog of every permission the platform recognises. Mirrors the
+  // @Roles(...) strings used in resolvers across graphql-server and
+  // process-engine. If a new resolver introduces a permission, add it
+  // here so the SP Admin role gets it by default — otherwise existing
+  // tenant admins will silently lose access on the next deploy.
   const allPermissions = [
     'tenant:create', 'tenant:read', 'tenant:update', 'tenant:suspend',
     'user:create', 'user:read', 'user:update', 'user:deactivate',
     'role:create', 'role:read', 'role:update', 'role:delete',
-    'product:create', 'product:read', 'product:update', 'product:activate',
+    'product:create', 'product:read', 'product:update', 'product:activate', 'product:delete',
     'customer:create', 'customer:read', 'customer:update', 'customer:read_pii', 'customer:blacklist',
     'lender:create', 'lender:read', 'lender:update',
     'subscription:create', 'subscription:read', 'subscription:update',
-    'loan_request:create', 'loan_request:read', 'loan_request:process',
-    'contract:read', 'contract:update',
+    'loan_request:create', 'loan_request:read', 'loan_request:process', 'loan_request:approve',
+    'contract:create', 'contract:read', 'contract:update',
     'repayment:create', 'repayment:read',
     'audit:read', 'analytics:read',
+    'collections:read', 'collections:write',
+    'monitoring:read', 'monitoring:write',
+    'usage:read',
+    // Invoice factoring (Sprint 14)
+    'debtor:create', 'debtor:read', 'debtor:update',
+    'invoice:create', 'invoice:verify', 'invoice:offer', 'invoice:accept',
+    'invoice:decline', 'invoice:dispute', 'invoice:fund', 'invoice:notify',
+    'invoice:payment', 'invoice:release',
+    'factoring:verify',
+    // BNPL credit lines (Sprint 15)
+    'bnpl_credit_line:create', 'bnpl_credit_line:read', 'bnpl_credit_line:adjust',
+    // Billing + integrations
+    'billing:read', 'billing:manage', 'integration:read',
   ];
 
   const roleDefinitions = {
@@ -489,11 +508,14 @@ async function main() {
   // -----------------------------------------------------------------------
   console.log('[1/8] Creating platform admin...');
   const adminPasswordHash = await hashPassword('AdminPass123!@#');
+  const adminEmail = 'admin@lons.io';
+  const adminEmailHash = computeSearchableHash(adminEmail)!;
   const platformAdmin = await prisma.platformUser.upsert({
-    where: { email: 'admin@lons.io' },
-    update: { passwordHash: adminPasswordHash },
+    where: { emailHash: adminEmailHash },
+    update: { passwordHash: adminPasswordHash, emailHash: adminEmailHash },
     create: {
-      email: 'admin@lons.io',
+      email: adminEmail,
+      emailHash: adminEmailHash,
       passwordHash: adminPasswordHash,
       name: 'Platform Admin',
       role: 'platform_admin',
@@ -777,12 +799,14 @@ async function main() {
       const roleObj = roles[u.key];
       if (!roleObj) { console.log(`  Skipping ${u.email} — role not found`); continue; }
       const pwHash = await hashPassword(u.password);
+      const userEmailHash = computeSearchableHash(u.email)!;
       const user = await prisma.user.upsert({
-        where: { tenantId_email: { tenantId: tenant.id, email: u.email } },
-        update: { passwordHash: pwHash },
+        where: { tenantId_emailHash: { tenantId: tenant.id, emailHash: userEmailHash } },
+        update: { passwordHash: pwHash, emailHash: userEmailHash },
         create: {
           tenantId: tenant.id,
           email: u.email,
+          emailHash: userEmailHash,
           passwordHash: pwHash,
           name: u.name,
           roleId: roleObj.id,
@@ -2026,12 +2050,14 @@ async function seedStagingData(p: PrismaClient) {
       const roleObj = roles[u.key];
       if (!roleObj) continue;
       const pwHash = await hashPassword(u.password);
+      const userEmailHash = computeSearchableHash(u.email)!;
       const user = await p.user.upsert({
-        where: { tenantId_email: { tenantId: tenant.id, email: u.email } },
-        update: { passwordHash: pwHash },
+        where: { tenantId_emailHash: { tenantId: tenant.id, emailHash: userEmailHash } },
+        update: { passwordHash: pwHash, emailHash: userEmailHash },
         create: {
           tenantId: tenant.id,
           email: u.email,
+          emailHash: userEmailHash,
           passwordHash: pwHash,
           name: u.name,
           roleId: roleObj.id,

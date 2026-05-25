@@ -1,61 +1,67 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsNotEmpty, IsOptional, IsString, IsEmail, MinLength } from 'class-validator';
+import { IsNotEmpty, IsObject, IsOptional, IsString, IsEmail, MinLength } from 'class-validator';
 import { GraphQLJSON } from 'graphql-type-json';
 
+/**
+ * FIX-STAB-1: class-validator decorators placed ABOVE @Field so the
+ * global ValidationPipe (whitelist + forbidNonWhitelisted) treats every
+ * property as whitelisted.
+ */
 @InputType()
 export class CreateTenantInput {
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   name!: string;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   slug!: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   legalName?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   registrationNumber?: string;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   country!: string;
 
-  @Field({ nullable: true, defaultValue: 'starter' })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true, defaultValue: 'starter' })
   planTier?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   platformFeePercent?: string;
 
-  @Field(() => GraphQLJSON, { nullable: true })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true })
   settings?: Record<string, unknown>;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   adminName!: string;
 
-  @Field()
   @IsNotEmpty()
   @IsEmail()
+  @Field()
   adminEmail!: string;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
   @MinLength(12)
+  @Field()
   adminPassword!: string;
 }

@@ -9,6 +9,7 @@ import {
   ObjectType,
   Field,
 } from '@nestjs/graphql';
+import { IsOptional, IsString } from 'class-validator';
 import { CollectionsService, AnalyticsService } from '@lons/process-engine';
 import { CurrentTenant, CurrentUser, Roles, IAuthenticatedUser } from '@lons/entity-service';
 import { AuditAction, AuditActionType, AuditResourceType } from '@lons/common';
@@ -181,26 +182,46 @@ class ProvisioningType {
  * legacy global view. Mirrors `PortfolioMetricsFilters` in
  * `@lons/process-engine`'s AnalyticsService.
  */
+// class-validator decorators are required on every field for the global
+// ValidationPipe ({ whitelist: true, forbidNonWhitelisted: true }) to
+// accept this input. Without them every property is treated as
+// non-whitelisted and the empty-filter instance the GraphQL runtime
+// constructs for `@Args('filter', { nullable: true })` gets rejected,
+// breaking the dashboard with "property X should not exist" errors.
 @InputType()
 class PortfolioMetricsFilterInput {
+  @IsOptional()
+  @IsString()
   @Field(() => String, { nullable: true })
   productId?: string;
 
+  @IsOptional()
+  @IsString()
   @Field(() => String, { nullable: true })
   productType?: string;
 
+  @IsOptional()
+  @IsString()
   @Field(() => String, { nullable: true })
   lenderId?: string;
 
+  @IsOptional()
+  @IsString()
   @Field(() => String, { nullable: true })
   region?: string;
 
+  @IsOptional()
+  @IsString()
   @Field(() => String, { nullable: true })
   customerSegment?: string;
 
+  @IsOptional()
+  @IsString()
   @Field(() => String, { nullable: true })
   dateFrom?: string;
 
+  @IsOptional()
+  @IsString()
   @Field(() => String, { nullable: true })
   dateTo?: string;
 }

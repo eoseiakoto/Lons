@@ -56,7 +56,11 @@ registerEnumType(RecourseTypeGql, { name: 'RecourseType' });
 
 // ─── Debtor ──────────────────────────────────────────────────────────────
 
-@ObjectType()
+// Explicit GraphQL name so the public schema exposes `Debtor` (matching the
+// canonical domain name and the client's `fragment ... on Debtor`). The TS
+// class keeps the `Type` suffix to avoid colliding with the Prisma model
+// import in resolvers.
+@ObjectType('Debtor')
 export class DebtorType {
   @Field(() => ID) id!: string;
   @Field() tenantId!: string;
@@ -100,7 +104,8 @@ export class DebtorConnectionType {
 
 // ─── Invoice ─────────────────────────────────────────────────────────────
 
-@ObjectType()
+// Explicit GraphQL name — see comment above DebtorType.
+@ObjectType('Invoice')
 export class InvoiceType {
   @Field(() => ID) id!: string;
   @Field() tenantId!: string;

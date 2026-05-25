@@ -11,6 +11,7 @@
     "db:migrate": "dotenv -e ../../.env -- prisma migrate deploy",
     "db:migrate:dev": "dotenv -e ../../.env -- prisma migrate dev",
     "db:seed": "dotenv -e ../../.env -- ts-node prisma/seed.ts",
+    "db:seed:test": "dotenv -e ../../.env -- ts-node prisma/seed-test.ts",
     "db:studio": "dotenv -e ../../.env -- prisma studio",
     "lint": "eslint src --ext .ts"
   },
@@ -21,6 +22,7 @@
     "@nestjs/core": "^10.3.0",
     "@prisma/client": "^5.14.0",
     "argon2": "^0.40.0",
+    "otplib": "^12.0.1",
     "reflect-metadata": "^0.2.0"
   },
   "devDependencies": {

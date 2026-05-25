@@ -1,5 +1,5 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsNotEmpty, IsOptional, IsString, IsBoolean, IsUrl } from 'class-validator';
+import { IsBoolean, IsEnum, IsNotEmpty, IsObject, IsOptional, IsString, IsUrl } from 'class-validator';
 import { GraphQLJSON } from 'graphql-type-json';
 import {
   WalletProviderTypeEnum,
@@ -8,87 +8,93 @@ import {
 
 @InputType()
 export class CreateWalletProviderConfigInput {
-  @Field(() => WalletProviderTypeEnum)
   @IsNotEmpty()
+  @IsEnum(WalletProviderTypeEnum)
+  @Field(() => WalletProviderTypeEnum)
   providerType!: WalletProviderTypeEnum;
 
-  @Field(() => AdapterEnvironmentModeEnum)
   @IsNotEmpty()
+  @IsEnum(AdapterEnvironmentModeEnum)
+  @Field(() => AdapterEnvironmentModeEnum)
   environmentMode!: AdapterEnvironmentModeEnum;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   displayName!: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
   @IsUrl({}, { message: 'apiBaseUrl must be a valid URL' })
+  @Field({ nullable: true })
   apiBaseUrl?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   credentialsSecretRef?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   webhookSigningKeyRef?: string;
 
-  @Field(() => GraphQLJSON, { nullable: true, description: 'Provider-specific configuration JSON' })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true, description: 'Provider-specific configuration JSON' })
   configJson?: Record<string, unknown>;
 
-  @Field({ nullable: true, defaultValue: false })
   @IsOptional()
   @IsBoolean()
+  @Field({ nullable: true, defaultValue: false })
   isDefault?: boolean;
 }
 
 @InputType()
 export class UpdateWalletProviderConfigInput {
-  @Field(() => WalletProviderTypeEnum, { nullable: true })
   @IsOptional()
+  @IsEnum(WalletProviderTypeEnum)
+  @Field(() => WalletProviderTypeEnum, { nullable: true })
   providerType?: WalletProviderTypeEnum;
 
-  @Field(() => AdapterEnvironmentModeEnum, { nullable: true })
   @IsOptional()
+  @IsEnum(AdapterEnvironmentModeEnum)
+  @Field(() => AdapterEnvironmentModeEnum, { nullable: true })
   environmentMode?: AdapterEnvironmentModeEnum;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   displayName?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
   @IsUrl({}, { message: 'apiBaseUrl must be a valid URL' })
+  @Field({ nullable: true })
   apiBaseUrl?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   credentialsSecretRef?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   webhookSigningKeyRef?: string;
 
-  @Field(() => GraphQLJSON, { nullable: true })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true })
   configJson?: Record<string, unknown>;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsBoolean()
+  @Field({ nullable: true })
   isActive?: boolean;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsBoolean()
+  @Field({ nullable: true })
   isDefault?: boolean;
 }

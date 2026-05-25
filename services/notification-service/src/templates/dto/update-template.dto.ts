@@ -1,42 +1,43 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsNotEmpty, IsString, IsOptional, IsUUID, IsEnum, MaxLength } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsUUID, IsEnum, IsBoolean, MaxLength } from 'class-validator';
 
 @InputType('UpdateNotificationTemplateInput')
 export class UpdateNotificationTemplateInput {
-  @Field()
   @IsNotEmpty()
   @IsUUID()
+  @Field()
   tenantId: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsUUID()
+  @Field({ nullable: true })
   productId?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
   @MaxLength(100)
+  @Field({ nullable: true })
   eventType?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
   @IsEnum(['sms', 'email', 'push', 'in_app'])
+  @Field({ nullable: true })
   channel?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   templateBody?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
   @MaxLength(10)
+  @Field({ nullable: true })
   language?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
+  @IsBoolean()
+  @Field({ nullable: true })
   isActive?: boolean;
 }

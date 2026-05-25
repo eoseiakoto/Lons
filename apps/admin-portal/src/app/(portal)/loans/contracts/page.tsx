@@ -136,7 +136,11 @@ export default function ContractsPage() {
       </section>
 
       {/* Filters */}
-      <section className="relative z-10 flex flex-wrap items-center gap-2">
+      {/* z-20 (above the table section's z-10) so filter dropdowns can
+          paint over the table when open. Without this, the dropdown's
+          own z-30 is trapped inside this section's stacking context,
+          and the later-DOM table section paints on top. */}
+      <section className="relative z-20 flex flex-wrap items-center gap-2">
         <div className="relative flex-shrink-0">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[color:var(--text-tertiary)] pointer-events-none" />
           <input
@@ -200,7 +204,12 @@ export default function ContractsPage() {
       </section>
 
       {/* Table */}
-      <section className="relative z-10 card-glow overflow-hidden">
+      {/* `overflow-hidden` here used to clip the filter dropdowns above
+          because the dropdowns are absolute-positioned relative to the
+          filter buttons but their bounding box overflows into this
+          table section. The inner div's `overflow-x-auto` already
+          handles horizontal scrolling for wide tables. */}
+      <section className="relative z-10 card-glow">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

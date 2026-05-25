@@ -1,18 +1,10 @@
 import { bankersRound, multiply, divide, add, compare } from '@lons/common';
+// `ScorecardConfig` + `ScorecardFactor` live in `@lons/shared-types` so the
+// database seed can reference them without depending on this package (which
+// would create a cycle since process-engine depends on @lons/database).
+import { ScorecardConfig, ScorecardFactor } from '@lons/shared-types';
 
-export interface ScorecardConfig {
-  version: string;
-  scoreRange: { min: number; max: number };
-  factors: ScorecardFactor[];
-  riskTiers: { tier: string; minScore: number }[];
-  limitBands: { minScore: number; maxScore: number; limitMultiplier: string }[];
-}
-
-export interface ScorecardFactor {
-  name: string;
-  weight: number;
-  bands: { min: number; max: number | null; points: number }[];
-}
+export { ScorecardConfig, ScorecardFactor };
 
 export interface ScoringInput {
   [key: string]: number | string | null | undefined;

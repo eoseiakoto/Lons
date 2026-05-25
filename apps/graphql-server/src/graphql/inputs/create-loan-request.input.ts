@@ -2,16 +2,21 @@ import { InputType, Field, Int } from '@nestjs/graphql';
 import { IsNotEmpty, IsOptional, IsString, IsInt, Min, IsDecimal } from 'class-validator';
 import type { MoneyString } from '@lons/shared-types';
 
+/**
+ * FIX-STAB-1: class-validator decorators placed ABOVE @Field so the
+ * global ValidationPipe (whitelist + forbidNonWhitelisted) treats every
+ * property as whitelisted.
+ */
 @InputType()
 export class CreateLoanRequestInput {
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   customerId!: string;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   productId!: string;
 
   /**
@@ -19,25 +24,25 @@ export class CreateLoanRequestInput {
    * forbids `Float`/`number` for money. Format: positive decimal with up
    * to 4 decimal places (e.g. "1234.5678").
    */
-  @Field(() => String)
   @IsNotEmpty()
   @IsString()
   @IsDecimal({ decimal_digits: '0,4', force_decimal: false })
+  @Field(() => String)
   requestedAmount!: MoneyString;
 
-  @Field(() => Int, { nullable: true })
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Field(() => Int, { nullable: true })
   requestedTenor?: number;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   currency!: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   channel?: string;
 }
