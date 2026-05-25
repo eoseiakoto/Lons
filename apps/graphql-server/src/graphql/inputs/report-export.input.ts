@@ -1,4 +1,5 @@
 import { Field, InputType, Int, ObjectType, registerEnumType } from '@nestjs/graphql';
+import { IsDate, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
 
 /**
  * Sprint 18 (S18-3) — CSV / PDF export inputs + result shape.
@@ -21,21 +22,31 @@ registerEnumType(ExportFormatEnum, { name: 'ExportFormatEnum' });
 
 @InputType()
 export class ExportReportInput {
+  @IsEnum(ReportTypeEnum)
   @Field(() => ReportTypeEnum)
   reportType!: ReportTypeEnum;
 
+  @IsEnum(ExportFormatEnum)
   @Field(() => ExportFormatEnum)
   format!: ExportFormatEnum;
 
+  @IsOptional()
+  @IsDate()
   @Field({ nullable: true })
   dateFrom?: Date;
 
+  @IsOptional()
+  @IsDate()
   @Field({ nullable: true })
   dateTo?: Date;
 
+  @IsOptional()
+  @IsUUID()
   @Field({ nullable: true })
   productId?: string;
 
+  @IsOptional()
+  @IsString()
   @Field({ nullable: true })
   status?: string;
 }

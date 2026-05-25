@@ -3,36 +3,36 @@ import { IsNotEmpty, IsString, IsOptional, IsUUID, IsEnum, MaxLength } from 'cla
 
 @InputType('CreateNotificationTemplateInput')
 export class CreateNotificationTemplateInput {
-  @Field()
   @IsNotEmpty()
   @IsUUID()
+  @Field()
   tenantId: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsUUID()
+  @Field({ nullable: true })
   productId?: string;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
   @MaxLength(100)
+  @Field()
   eventType: string;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
   @IsEnum(['sms', 'email', 'push', 'in_app'])
+  @Field()
   channel: string;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   templateBody: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
   @MaxLength(10)
+  @Field({ nullable: true })
   language?: string;
 }

@@ -1,29 +1,42 @@
 import { InputType, ObjectType, Field, ID, Float } from '@nestjs/graphql';
+import { IsOptional, IsString, IsEnum, IsUUID } from 'class-validator';
 import { RecoveryStrategyTypeEnum } from './recovery-strategy.dto';
 
 @InputType()
 export class RecoveryOutcomeInput {
+  @IsEnum(RecoveryStrategyTypeEnum)
   @Field(() => RecoveryStrategyTypeEnum)
   strategyType!: RecoveryStrategyTypeEnum;
 
+  @IsOptional()
+  @IsString()
   @Field({ nullable: true, description: 'JSON string of strategy parameters' })
   strategyParams?: string;
 
+  @IsOptional()
+  @IsString()
   @Field({ nullable: true })
   notes?: string;
 
+  @IsOptional()
+  @IsUUID()
   @Field({ nullable: true })
   appliedBy?: string;
 }
 
 @InputType()
 export class UpdateRecoveryOutcomeInput {
+  @IsString()
   @Field()
   status!: string;
 
+  @IsOptional()
+  @IsString()
   @Field({ nullable: true, description: 'Amount recovered as Decimal string' })
   amountRecovered?: string;
 
+  @IsOptional()
+  @IsString()
   @Field({ nullable: true })
   notes?: string;
 }

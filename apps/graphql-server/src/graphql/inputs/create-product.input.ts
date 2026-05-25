@@ -1,124 +1,134 @@
 import { InputType, Field, Int } from '@nestjs/graphql';
-import { IsNotEmpty, IsOptional, IsString, IsInt, Min, IsDecimal } from 'class-validator';
+import { IsNotEmpty, IsObject, IsOptional, IsString, IsInt, Min, IsDecimal } from 'class-validator';
 import { GraphQLJSON } from 'graphql-type-json';
 import type { MoneyString } from '@lons/shared-types';
 
+/**
+ * FIX-STAB-1: class-validator decorators placed ABOVE @Field so the
+ * global ValidationPipe (whitelist + forbidNonWhitelisted) treats every
+ * property as whitelisted.
+ */
 @InputType()
 export class CreateProductInput {
-  @Field({ nullable: true, defaultValue: '' })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true, defaultValue: '' })
   code?: string;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   name!: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   description?: string;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   type!: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   lenderId?: string;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   currency!: string;
 
   /** Monetary amount as a string. See MoneyString docs in @lons/shared-types. */
-  @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
   @IsDecimal({ decimal_digits: '0,4', force_decimal: false })
+  @Field(() => String, { nullable: true })
   minAmount?: MoneyString;
 
-  @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
   @IsDecimal({ decimal_digits: '0,4', force_decimal: false })
+  @Field(() => String, { nullable: true })
   maxAmount?: MoneyString;
 
-  @Field(() => Int, { nullable: true })
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Field(() => Int, { nullable: true })
   minTenorDays?: number;
 
-  @Field(() => Int, { nullable: true })
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Field(() => Int, { nullable: true })
   maxTenorDays?: number;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   interestRateModel!: string;
 
   /**
    * Interest rate as a decimal string (e.g. "5.5" for 5.5%). Stored as
    * Decimal to avoid float precision loss in compounding/accrual math.
    */
-  @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
   @IsDecimal({ decimal_digits: '0,6', force_decimal: false })
+  @Field(() => String, { nullable: true })
   interestRate?: MoneyString;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   repaymentMethod!: string;
 
-  @Field(() => Int, { nullable: true, defaultValue: 0 })
   @IsOptional()
   @IsInt()
+  @Field(() => Int, { nullable: true, defaultValue: 0 })
   gracePeriodDays?: number;
 
-  @Field(() => Int, { nullable: true, defaultValue: 0 })
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Field(() => Int, { nullable: true, defaultValue: 0 })
   coolingOffHours?: number;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   approvalWorkflow?: string;
 
-  @Field(() => Int, { nullable: true, defaultValue: 1 })
   @IsOptional()
   @IsInt()
+  @Field(() => Int, { nullable: true, defaultValue: 1 })
   maxActiveLoans?: number;
 
   // JSON fields for structured data stored in Prisma JSON columns
-  @Field(() => GraphQLJSON, { nullable: true, description: 'Fee structure: { originationFee, serviceFee, latePenalty, insurance }' })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true, description: 'Fee structure: { originationFee, serviceFee, latePenalty, insurance }' })
   feeStructure?: Record<string, unknown>;
 
-  @Field(() => GraphQLJSON, { nullable: true, description: 'Penalty configuration' })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true, description: 'Penalty configuration' })
   penaltyConfig?: Record<string, unknown>;
 
-  @Field(() => GraphQLJSON, { nullable: true, description: 'Eligibility rules: { minCreditScore, minKycLevel, customRules }' })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true, description: 'Eligibility rules: { minCreditScore, minKycLevel, customRules }' })
   eligibilityRules?: Record<string, unknown>;
 
-  @Field(() => GraphQLJSON, { nullable: true, description: 'Approval thresholds: { autoApproveThreshold, slaHours }' })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true, description: 'Approval thresholds: { autoApproveThreshold, slaHours }' })
   approvalThresholds?: Record<string, unknown>;
 
-  @Field(() => GraphQLJSON, { nullable: true, description: 'Revenue sharing: { lenderSharePercent, insuranceEnabled, insuranceProvider, insuranceCoverageType }' })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true, description: 'Revenue sharing: { lenderSharePercent, insuranceEnabled, insuranceProvider, insuranceCoverageType }' })
   revenueSharing?: Record<string, unknown>;
 }

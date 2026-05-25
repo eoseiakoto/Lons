@@ -1,54 +1,56 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsOptional, IsString } from 'class-validator';
+import { IsObject, IsOptional, IsString } from 'class-validator';
 import { GraphQLJSON } from 'graphql-type-json';
 
 @InputType()
 export class UpdateLenderInput {
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   name?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   licenseNumber?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   country?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   fundingCapacity?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   fundingCurrency?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   minInterestRate?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   maxInterestRate?: string;
 
-  @Field(() => GraphQLJSON, { nullable: true })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true })
   settlementAccount?: Record<string, unknown>;
 
-  @Field(() => GraphQLJSON, { nullable: true })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true })
   riskParameters?: Record<string, unknown>;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   status?: string;
 }

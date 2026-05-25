@@ -1,5 +1,5 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsNotEmpty, IsString, IsOptional, IsEnum } from 'class-validator';
+import { IsNotEmpty, IsObject, IsString, IsOptional, IsEnum } from 'class-validator';
 import { GraphQLJSON } from 'graphql-type-json';
 import {
   FeedbackCategory,
@@ -7,57 +7,63 @@ import {
   FeedbackStatus,
 } from '@lons/shared-types';
 
+/**
+ * FIX-STAB-1: class-validator decorators placed ABOVE @Field so the
+ * global ValidationPipe (whitelist + forbidNonWhitelisted) treats every
+ * property as whitelisted.
+ */
 @InputType()
 export class SubmitFeedbackInput {
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   tenantId!: string;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   userId!: string;
 
-  @Field(() => FeedbackCategory)
   @IsNotEmpty()
   @IsEnum(FeedbackCategory)
+  @Field(() => FeedbackCategory)
   category!: FeedbackCategory;
 
-  @Field(() => FeedbackSeverity)
   @IsNotEmpty()
   @IsEnum(FeedbackSeverity)
+  @Field(() => FeedbackSeverity)
   severity!: FeedbackSeverity;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   description!: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   screenshotUrl?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   pageUrl?: string;
 
-  @Field(() => GraphQLJSON, { nullable: true })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true })
   debugContext?: unknown;
 }
 
 @InputType()
 export class UpdateFeedbackStatusInput {
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   id!: string;
 
-  @Field(() => FeedbackStatus)
   @IsNotEmpty()
   @IsEnum(FeedbackStatus)
+  @Field(() => FeedbackStatus)
   status!: FeedbackStatus;
 }

@@ -1,60 +1,61 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsOptional, IsString } from 'class-validator';
+import { IsEmail, IsObject, IsOptional, IsString } from 'class-validator';
 import { GraphQLJSON } from 'graphql-type-json';
 
 @InputType()
 export class UpdateTenantInput {
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   name?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   planTier?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   status?: string;
 
-  @Field(() => GraphQLJSON, { nullable: true, description: 'Structured tenant settings (validated against TenantSettingsSchema)' })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true, description: 'Structured tenant settings (validated against TenantSettingsSchema)' })
   settings?: Record<string, unknown>;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   logoUrl?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   primaryColor?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   timezone?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   defaultCurrency?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
-  @IsString()
+  @IsEmail()
+  @Field({ nullable: true })
   supportEmail?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   supportPhone?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   address?: string;
 }

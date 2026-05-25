@@ -1,95 +1,101 @@
 import { InputType, Field, Int } from '@nestjs/graphql';
-import { IsOptional, IsString, IsInt, Min, IsDecimal } from 'class-validator';
+import { IsDecimal, IsInt, IsObject, IsOptional, IsString, IsUUID, Min } from 'class-validator';
 import { GraphQLJSON } from 'graphql-type-json';
 import type { MoneyString } from '@lons/shared-types';
 
 @InputType()
 export class UpdateProductInput {
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   name?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   description?: string;
 
   /** Monetary amount as a string. See MoneyString docs in @lons/shared-types. */
-  @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
   @IsDecimal({ decimal_digits: '0,4', force_decimal: false })
+  @Field(() => String, { nullable: true })
   minAmount?: MoneyString;
 
-  @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
   @IsDecimal({ decimal_digits: '0,4', force_decimal: false })
+  @Field(() => String, { nullable: true })
   maxAmount?: MoneyString;
 
-  @Field(() => Int, { nullable: true })
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Field(() => Int, { nullable: true })
   minTenorDays?: number;
 
-  @Field(() => Int, { nullable: true })
   @IsOptional()
   @IsInt()
   @Min(1)
+  @Field(() => Int, { nullable: true })
   maxTenorDays?: number;
 
   /** Interest rate as a decimal string (e.g. "5.5" for 5.5%). */
-  @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
   @IsDecimal({ decimal_digits: '0,6', force_decimal: false })
+  @Field(() => String, { nullable: true })
   interestRate?: MoneyString;
 
-  @Field(() => Int, { nullable: true })
   @IsOptional()
   @IsInt()
+  @Field(() => Int, { nullable: true })
   gracePeriodDays?: number;
 
-  @Field(() => Int, { nullable: true })
   @IsOptional()
   @IsInt()
   @Min(0)
+  @Field(() => Int, { nullable: true })
   coolingOffHours?: number;
 
-  @Field(() => Int, { nullable: true })
   @IsOptional()
   @IsInt()
+  @Field(() => Int, { nullable: true })
   maxActiveLoans?: number;
 
   // JSON fields for structured data stored in Prisma JSON columns
-  @Field(() => GraphQLJSON, { nullable: true })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true })
   feeStructure?: Record<string, unknown>;
 
-  @Field(() => GraphQLJSON, { nullable: true })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true })
   penaltyConfig?: Record<string, unknown>;
 
-  @Field(() => GraphQLJSON, { nullable: true })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true })
   eligibilityRules?: Record<string, unknown>;
 
-  @Field(() => GraphQLJSON, { nullable: true })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true })
   approvalThresholds?: Record<string, unknown>;
 
-  @Field({ nullable: true, description: 'Lender UUID — set to null to remove lender assignment' })
   @IsOptional()
-  @IsString()
+  @IsUUID()
+  @Field({ nullable: true, description: 'Lender UUID — set to null to remove lender assignment' })
   lenderId?: string;
 
-  @Field(() => GraphQLJSON, { nullable: true, description: 'Revenue sharing: { lenderSharePercent, insuranceEnabled, insuranceProvider, insuranceCoverageType }' })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true, description: 'Revenue sharing: { lenderSharePercent, insuranceEnabled, insuranceProvider, insuranceCoverageType }' })
   revenueSharing?: Record<string, unknown>;
 
-  @Field(() => GraphQLJSON, { nullable: true })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true })
   notificationConfig?: Record<string, unknown>;
 }

@@ -1,4 +1,5 @@
 import { Field, InputType, Int } from '@nestjs/graphql';
+import { IsBoolean, IsInt, IsObject, IsOptional, IsString } from 'class-validator';
 import GraphQLJSON from 'graphql-type-json';
 
 /**
@@ -10,29 +11,31 @@ import GraphQLJSON from 'graphql-type-json';
  */
 @InputType()
 export class UpdatePlanTierConfigInput {
-  @Field({ nullable: true }) displayName?: string;
-  @Field(() => GraphQLJSON, { nullable: true }) allowedProductTypes?: unknown;
+  @IsOptional() @IsString() @Field({ nullable: true }) displayName?: string;
+  @IsOptional() @IsObject() @Field(() => GraphQLJSON, { nullable: true }) allowedProductTypes?: unknown;
 
-  @Field(() => Int, { nullable: true }) maxActiveProducts?: number | null;
-  @Field(() => Int, { nullable: true }) maxCustomers?: number | null;
+  @IsOptional() @IsInt() @Field(() => Int, { nullable: true }) maxActiveProducts?: number | null;
+  @IsOptional() @IsInt() @Field(() => Int, { nullable: true }) maxCustomers?: number | null;
   // Explicit `() => String` is required because TypeScript's emitted
   // metadata for `string | null` collapses to `Object`, which the
   // GraphQL schema builder rejects (UndefinedTypeError at boot).
+  @IsOptional()
+  @IsString()
   @Field(() => String, { nullable: true })
   maxMonthlyDisbursementVolumeUsd?: string | null;
-  @Field(() => Int, { nullable: true }) maxMonthlyTransactions?: number | null;
-  @Field(() => Int, { nullable: true }) maxLenderConfigs?: number | null;
-  @Field(() => Int, { nullable: true }) maxBnplMerchants?: number | null;
-  @Field(() => Int, { nullable: true }) maxPortalUsers?: number | null;
-  @Field(() => Int, { nullable: true }) dataRetentionMonths?: number;
+  @IsOptional() @IsInt() @Field(() => Int, { nullable: true }) maxMonthlyTransactions?: number | null;
+  @IsOptional() @IsInt() @Field(() => Int, { nullable: true }) maxLenderConfigs?: number | null;
+  @IsOptional() @IsInt() @Field(() => Int, { nullable: true }) maxBnplMerchants?: number | null;
+  @IsOptional() @IsInt() @Field(() => Int, { nullable: true }) maxPortalUsers?: number | null;
+  @IsOptional() @IsInt() @Field(() => Int, { nullable: true }) dataRetentionMonths?: number;
 
-  @Field(() => GraphQLJSON, { nullable: true }) featureFlags?: unknown;
+  @IsOptional() @IsObject() @Field(() => GraphQLJSON, { nullable: true }) featureFlags?: unknown;
 
-  @Field(() => Int, { nullable: true }) apiRateLimitPerMinute?: number;
-  @Field({ nullable: true }) restApiEnabled?: boolean;
-  @Field({ nullable: true }) websocketEnabled?: boolean;
-  @Field({ nullable: true }) bulkOperationsEnabled?: boolean;
-  @Field(() => Int, { nullable: true }) maxApiKeys?: number | null;
+  @IsOptional() @IsInt() @Field(() => Int, { nullable: true }) apiRateLimitPerMinute?: number;
+  @IsOptional() @IsBoolean() @Field({ nullable: true }) restApiEnabled?: boolean;
+  @IsOptional() @IsBoolean() @Field({ nullable: true }) websocketEnabled?: boolean;
+  @IsOptional() @IsBoolean() @Field({ nullable: true }) bulkOperationsEnabled?: boolean;
+  @IsOptional() @IsInt() @Field(() => Int, { nullable: true }) maxApiKeys?: number | null;
 
-  @Field(() => GraphQLJSON, { nullable: true }) brandingOptions?: unknown;
+  @IsOptional() @IsObject() @Field(() => GraphQLJSON, { nullable: true }) brandingOptions?: unknown;
 }

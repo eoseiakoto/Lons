@@ -3,25 +3,25 @@ import { IsOptional, IsString, IsEmail, IsIn } from 'class-validator';
 
 @InputType()
 export class UpdatePlatformUserInput {
-  @Field({ nullable: true })
   @IsOptional()
   @IsEmail()
+  @Field({ nullable: true })
   email?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   name?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
   @IsIn(['platform_admin', 'platform_support'])
+  @Field({ nullable: true })
   role?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
   @IsIn(['active', 'suspended'])
+  @Field({ nullable: true })
   status?: string;
 }

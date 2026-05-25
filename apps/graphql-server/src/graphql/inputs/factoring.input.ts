@@ -1,6 +1,5 @@
 import { Field, ID, InputType, Int } from '@nestjs/graphql';
 import {
-  IsBoolean,
   IsDateString,
   IsEnum,
   IsInt,
@@ -27,6 +26,11 @@ import {
  * Monetary values are Decimal-as-string per CLAUDE.md and validated with the
  * canonical 4-dp regex (`/^\d+(\.\d{1,4})?$/`). Dates submitted as ISO 8601
  * (`YYYY-MM-DD` for calendar dates).
+ *
+ * FIX-STAB-1: class-validator decorators placed ABOVE @Field so the
+ * global ValidationPipe (whitelist + forbidNonWhitelisted) treats every
+ * property as whitelisted. See invoice-verification.input.ts for the
+ * canonical pattern.
  */
 
 const DECIMAL_4DP_REGEX = /^\d+(\.\d{1,4})?$/;
@@ -36,160 +40,156 @@ const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
 @InputType()
 export class CreateDebtorInput {
-  @Field()
   @IsString()
   @MinLength(1)
+  @Field()
   companyName!: string;
 
   /** Required — ISO-3 country code (e.g. "GHA", "KEN"). */
-  @Field()
   @IsString()
   @Length(3, 3)
+  @Field()
   country!: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   tradingName?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   registrationNumber?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   taxId?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   industrySector?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   contactEmail?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   contactPhone?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   contactName?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   paymentTerms?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   externalCreditRating?: string;
 
   /** Decimal-as-string. */
-  @Field({ nullable: true })
   @IsOptional()
-  @Matches(DECIMAL_4DP_REGEX, {
-    message: 'exposureLimit must be a Decimal string with up to 4dp',
-  })
+  @Matches(DECIMAL_4DP_REGEX, { message: 'exposureLimit must be a Decimal string with up to 4dp' })
+  @Field({ nullable: true })
   exposureLimit?: string;
 }
 
 @InputType()
 export class UpdateDebtorInput {
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   companyName?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   tradingName?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   registrationNumber?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   taxId?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
   @Length(3, 3)
+  @Field({ nullable: true })
   country?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   industrySector?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   contactEmail?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   contactPhone?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   contactName?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   paymentTerms?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   externalCreditRating?: string;
 
   /** Decimal-as-string. */
-  @Field({ nullable: true })
   @IsOptional()
-  @Matches(DECIMAL_4DP_REGEX, {
-    message: 'exposureLimit must be a Decimal string with up to 4dp',
-  })
+  @Matches(DECIMAL_4DP_REGEX, { message: 'exposureLimit must be a Decimal string with up to 4dp' })
+  @Field({ nullable: true })
   exposureLimit?: string;
 }
 
 @InputType()
 export class DebtorFiltersInput {
-  @Field(() => DebtorStatusGql, { nullable: true })
   @IsOptional()
   @IsEnum(DebtorStatusGql)
+  @Field(() => DebtorStatusGql, { nullable: true })
   status?: DebtorStatusGql;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   industrySector?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
   @Length(3, 3)
+  @Field({ nullable: true })
   country?: string;
 
   /** Free-text search across companyName + registrationNumber. */
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   search?: string;
 }
 
@@ -197,134 +197,126 @@ export class DebtorFiltersInput {
 
 @InputType()
 export class SubmitInvoiceInput {
-  @Field()
   @IsString()
   @MinLength(1)
+  @Field()
   idempotencyKey!: string;
 
-  @Field(() => ID)
   @IsUUID()
+  @Field(() => ID)
   sellerId!: string;
 
-  @Field(() => ID)
   @IsUUID()
+  @Field(() => ID)
   debtorId!: string;
 
-  @Field(() => ID)
   @IsUUID()
+  @Field(() => ID)
   productId!: string;
 
-  @Field()
   @IsString()
   @MinLength(1)
+  @Field()
   invoiceNumber!: string;
 
   /** ISO 8601 calendar date (YYYY-MM-DD). */
-  @Field()
   @IsDateString()
   @Matches(ISO_DATE_REGEX, { message: 'issueDate must be YYYY-MM-DD' })
+  @Field()
   issueDate!: string;
 
   /** ISO 8601 calendar date (YYYY-MM-DD). Must be strictly future. */
-  @Field()
   @IsDateString()
   @Matches(ISO_DATE_REGEX, { message: 'dueDate must be YYYY-MM-DD' })
+  @Field()
   dueDate!: string;
 
   /** Decimal-as-string. Must be positive. */
+  @Matches(DECIMAL_4DP_REGEX, { message: 'faceValue must be a Decimal string with up to 4dp' })
   @Field()
-  @Matches(DECIMAL_4DP_REGEX, {
-    message: 'faceValue must be a Decimal string with up to 4dp',
-  })
   faceValue!: string;
 
   /** ISO 4217 currency code (e.g. "GHS"). */
-  @Field()
   @IsString()
   @Length(3, 3)
+  @Field()
   currency!: string;
 
-  @Field(() => RecourseTypeGql, { nullable: true })
   @IsOptional()
   @IsEnum(RecourseTypeGql)
+  @Field(() => RecourseTypeGql, { nullable: true })
   recourseType?: RecourseTypeGql;
 
   /** Optional supporting documents (invoice PDF, delivery note, etc.). */
-  @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
+  @Field(() => String, { nullable: true })
   documents?: string;
 
   /** Free-form metadata (JSON serialised as a string). */
-  @Field(() => String, { nullable: true })
   @IsOptional()
   @IsString()
+  @Field(() => String, { nullable: true })
   metadata?: string;
 }
 
 @InputType()
 export class RecordDebtorPaymentInput {
   /** Decimal-as-string. Must be positive. */
+  @Matches(DECIMAL_4DP_REGEX, { message: 'amountReceived must be a Decimal string with up to 4dp' })
   @Field()
-  @Matches(DECIMAL_4DP_REGEX, {
-    message: 'amountReceived must be a Decimal string with up to 4dp',
-  })
   amountReceived!: string;
 
-  @Field()
   @IsString()
   @MinLength(1)
+  @Field()
   paymentRef!: string;
 
-  @Field()
   @IsString()
   @MinLength(1)
+  @Field()
   idempotencyKey!: string;
 }
 
 @InputType()
 export class InvoiceFiltersInput {
-  @Field(() => InvoiceStatusGql, { nullable: true })
   @IsOptional()
   @IsEnum(InvoiceStatusGql)
+  @Field(() => InvoiceStatusGql, { nullable: true })
   status?: InvoiceStatusGql;
 
-  @Field(() => ID, { nullable: true })
   @IsOptional()
   @IsUUID()
+  @Field(() => ID, { nullable: true })
   sellerId?: string;
 
-  @Field(() => ID, { nullable: true })
   @IsOptional()
   @IsUUID()
+  @Field(() => ID, { nullable: true })
   debtorId?: string;
 
   /** ISO 8601 calendar date (YYYY-MM-DD) — inclusive lower bound. */
-  @Field({ nullable: true })
   @IsOptional()
   @IsDateString()
+  @Field({ nullable: true })
   dateRangeFrom?: string;
 
   /** ISO 8601 calendar date (YYYY-MM-DD) — inclusive upper bound. */
-  @Field({ nullable: true })
   @IsOptional()
   @IsDateString()
+  @Field({ nullable: true })
   dateRangeTo?: string;
 
   /** Decimal-as-string — inclusive lower bound. */
-  @Field({ nullable: true })
   @IsOptional()
-  @Matches(DECIMAL_4DP_REGEX, {
-    message: 'amountMin must be a Decimal string with up to 4dp',
-  })
+  @Matches(DECIMAL_4DP_REGEX, { message: 'amountMin must be a Decimal string with up to 4dp' })
+  @Field({ nullable: true })
   amountMin?: string;
 
   /** Decimal-as-string — inclusive upper bound. */
-  @Field({ nullable: true })
   @IsOptional()
-  @Matches(DECIMAL_4DP_REGEX, {
-    message: 'amountMax must be a Decimal string with up to 4dp',
-  })
+  @Matches(DECIMAL_4DP_REGEX, { message: 'amountMax must be a Decimal string with up to 4dp' })
+  @Field({ nullable: true })
   amountMax?: string;
 }
 
@@ -332,19 +324,15 @@ export class InvoiceFiltersInput {
 // factoring-related from one place.
 @InputType()
 export class FactoringPaginationInput {
-  @Field(() => Int, { nullable: true, defaultValue: 20 })
   @IsOptional()
   @IsInt()
   @Min(1)
   @Max(100)
+  @Field(() => Int, { nullable: true, defaultValue: 20 })
   first?: number;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   after?: string;
 }
-
-// Suppress unused imports — IsBoolean is reserved for forthcoming filter
-// fields (e.g., `verified?: boolean`) that the admin portal will need.
-void IsBoolean;

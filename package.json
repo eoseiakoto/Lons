@@ -19,6 +19,7 @@
     "db:generate": "pnpm --filter @lons/database db:generate",
     "encrypt-pii": "tsx scripts/encrypt-existing-pii.ts",
     "audit:permissions": "pnpm --filter @lons/database exec ts-node --transpile-only --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"target\":\"es2022\",\"esModuleInterop\":true,\"skipLibCheck\":true}' --skip-project ../../scripts/audit-permissions.ts",
+    "audit:input-decorators": "pnpm --filter @lons/database exec ts-node --transpile-only --compiler-options '{\"module\":\"commonjs\",\"moduleResolution\":\"node\",\"target\":\"es2022\",\"esModuleInterop\":true,\"skipLibCheck\":true}' --skip-project ../../scripts/audit-input-decorators.ts",
     "verify:synced": "bash scripts/verify-synced-files.sh",
     "test:regression": "jest --config tests/regression/jest.config.ts --runInBand",
     "test:staging": "jest --config tests/staging/jest.config.ts --runInBand",

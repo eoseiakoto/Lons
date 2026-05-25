@@ -1,5 +1,5 @@
 import { ObjectType, Field, ID, InputType } from '@nestjs/graphql';
-import { IsUrl, IsArray, IsString, IsOptional, IsIn } from 'class-validator';
+import { IsUrl, IsArray, IsString, IsOptional, IsIn, IsBoolean } from 'class-validator';
 
 @ObjectType()
 export class WebhookEndpointType {
@@ -30,40 +30,41 @@ export class WebhookEndpointType {
 
 @InputType()
 export class CreateWebhookEndpointInput {
-  @Field()
   @IsUrl({ require_tld: false })
+  @Field()
   url!: string;
 
-  @Field(() => [String])
   @IsArray()
   @IsString({ each: true })
+  @Field(() => [String])
   events!: string[];
 
-  @Field({ nullable: true, defaultValue: 'hmac' })
   @IsOptional()
   @IsIn(['hmac', 'bearer', 'basic_auth'])
+  @Field({ nullable: true, defaultValue: 'hmac' })
   authMethod?: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   secret?: string;
 }
 
 @InputType()
 export class UpdateWebhookEndpointInput {
-  @Field({ nullable: true })
   @IsOptional()
   @IsUrl({ require_tld: false })
+  @Field({ nullable: true })
   url?: string;
 
-  @Field(() => [String], { nullable: true })
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
+  @Field(() => [String], { nullable: true })
   events?: string[];
 
-  @Field({ nullable: true })
   @IsOptional()
+  @IsBoolean()
+  @Field({ nullable: true })
   active?: boolean;
 }

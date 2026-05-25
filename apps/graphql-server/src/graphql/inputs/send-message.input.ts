@@ -1,64 +1,75 @@
 import { InputType, Field } from '@nestjs/graphql';
-import { IsNotEmpty, IsString, IsOptional, IsEnum, IsArray, IsUUID } from 'class-validator';
+import {
+  IsArray,
+  IsDate,
+  IsEnum,
+  IsNotEmpty,
+  IsObject,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
 import { GraphQLJSON } from 'graphql-type-json';
 import { GqlMessageType, GqlMessagePriority } from '../types/message.type';
 
 @InputType()
 export class SendMessageInput {
-  @Field(() => GqlMessageType)
   @IsNotEmpty()
   @IsEnum(GqlMessageType)
+  @Field(() => GqlMessageType)
   type!: 'announcement' | 'direct' | 'system';
 
-  @Field(() => GqlMessagePriority, { nullable: true, defaultValue: 'normal' })
   @IsOptional()
   @IsEnum(GqlMessagePriority)
+  @Field(() => GqlMessagePriority, { nullable: true, defaultValue: 'normal' })
   priority?: 'low' | 'normal' | 'high' | 'urgent';
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   subject!: string;
 
-  @Field()
   @IsNotEmpty()
   @IsString()
+  @Field()
   body!: string;
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   tenantId?: string;
 
-  @Field(() => [String], { nullable: true })
   @IsOptional()
   @IsArray()
   @IsUUID('4', { each: true })
+  @Field(() => [String], { nullable: true })
   recipientIds?: string[];
 
-  @Field(() => GraphQLJSON, { nullable: true })
   @IsOptional()
+  @IsObject()
+  @Field(() => GraphQLJSON, { nullable: true })
   metadata?: Record<string, unknown>;
 
-  @Field({ nullable: true })
   @IsOptional()
+  @IsDate()
+  @Field({ nullable: true })
   expiresAt?: Date;
 }
 
 @InputType()
 export class MessageFilterInput {
-  @Field(() => GqlMessageType, { nullable: true })
   @IsOptional()
   @IsEnum(GqlMessageType)
+  @Field(() => GqlMessageType, { nullable: true })
   type?: 'announcement' | 'direct' | 'system';
 
-  @Field(() => GqlMessagePriority, { nullable: true })
   @IsOptional()
   @IsEnum(GqlMessagePriority)
+  @Field(() => GqlMessagePriority, { nullable: true })
   priority?: 'low' | 'normal' | 'high' | 'urgent';
 
-  @Field({ nullable: true })
   @IsOptional()
   @IsString()
+  @Field({ nullable: true })
   readStatus?: 'read' | 'unread';
 }
