@@ -50,6 +50,20 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # ── Drift audits (sub-second; no DB needed) ─────────────────────────
+      # Fail the pipeline immediately if either drift signal trips —
+      # cheaper than waiting for tests + build only to discover that a new
+      # resolver requires a permission the seed doesn't grant, or that a
+      # new @InputType field is missing its class-validator decorator and
+      # would 400 every call. See:
+      #   Docs/DELIVERY-NOTES-POST-SPRINT-18-2026-05-21.md §7
+      #   Docs/DEV-PROMPT-POST-SPRINT-18-STABILISATION-FIXES.md S19-STAB-2
+      - name: Audit permission catalog (resolver @Roles vs seed allPermissions)
+        run: pnpm audit:permissions
+
+      - name: Audit @InputType decorators (every @Field has class-validator coverage)
+        run: pnpm audit:input-decorators
+
       - name: Generate Prisma Client
         run: pnpm --filter database exec prisma generate
 
