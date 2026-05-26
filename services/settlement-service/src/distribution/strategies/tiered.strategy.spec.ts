@@ -138,5 +138,107 @@ describe('TieredStrategy', () => {
         }),
       ).toThrow(/upTo/);
     });
+
+    // ── F-S18-9-A semantic checks ──────────────────────────────────
+    // Sprint 18 PM review flagged that the strategy validated shape
+    // but not the boundary semantics of the tier list. Adding tests
+    // here locks in the behaviour so the next person editing the
+    // validator can't accidentally regress it.
+
+    it('throws when two tiers share the same upTo (duplicate boundary)', () => {
+      expect(() =>
+        strategy.calculate(baseInput, {
+          tiers: [
+            { upTo: '1000', platformPercentage: '8' },
+            { upTo: '1000', platformPercentage: '5' }, // duplicate
+            { upTo: null, platformPercentage: '3' },
+          ],
+        }),
+      ).toThrow(/strictly ascending|overlap or duplicate/);
+    });
+
+    it('throws when more than one tier is unbounded (multiple null upTo)', () => {
+      expect(() =>
+        strategy.calculate(baseInput, {
+          tiers: [
+            { upTo: '1000', platformPercentage: '8' },
+            { upTo: null, platformPercentage: '5' },
+            { upTo: null, platformPercentage: '3' }, // second null
+          ],
+        }),
+      ).toThrow(/at most one tier with upTo: null/);
+    });
+
+    it('throws when platformPercentage is outside [0, 100]', () => {
+      expect(() =>
+        strategy.calculate(baseInput, {
+          tiers: [
+            { upTo: '1000', platformPercentage: '110' }, // > 100
+            { upTo: null, platformPercentage: '3' },
+          ],
+        }),
+      ).toThrow(/between 0 and 100/);
+
+      expect(() =>
+        strategy.calculate(baseInput, {
+          tiers: [
+            { upTo: '1000', platformPercentage: '-5' }, // negative
+            { upTo: null, platformPercentage: '3' },
+          ],
+        }),
+      ).toThrow(/between 0 and 100/);
+    });
+
+    it('throws when upTo is zero or negative', () => {
+      expect(() =>
+        strategy.calculate(baseInput, {
+          tiers: [
+            { upTo: '0', platformPercentage: '8' },
+            { upTo: null, platformPercentage: '3' },
+          ],
+        }),
+      ).toThrow(/positive Decimal/);
+
+      expect(() =>
+        strategy.calculate(baseInput, {
+          tiers: [
+            { upTo: '-100', platformPercentage: '8' },
+            { upTo: null, platformPercentage: '3' },
+          ],
+        }),
+      ).toThrow(/positive Decimal/);
+    });
+
+    it('accepts a valid ascending config with a null top tier', () => {
+      expect(() =>
+        strategy.calculate(
+          { ...baseInput, monthlyDisbursementVolume: '100' },
+          {
+            tiers: [
+              { upTo: '500', platformPercentage: '8' },
+              { upTo: '2000', platformPercentage: '5' },
+              { upTo: null, platformPercentage: '3' },
+            ],
+          },
+        ),
+      ).not.toThrow();
+    });
+
+    it('accepts a valid config with NO null top tier (closed-set tiers)', () => {
+      // Operators can choose to cap the model — anything above the
+      // last numeric upTo falls through to the highest-tier rate by
+      // the strategy's "fall back to last" branch.
+      expect(() =>
+        strategy.calculate(
+          { ...baseInput, monthlyDisbursementVolume: '100' },
+          {
+            tiers: [
+              { upTo: '500', platformPercentage: '8' },
+              { upTo: '2000', platformPercentage: '5' },
+            ],
+          },
+        ),
+      ).not.toThrow();
+    });
   });
 });
