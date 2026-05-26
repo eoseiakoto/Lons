@@ -7,6 +7,11 @@ import { REDIS_CLIENT, computeSearchableHash } from '@lons/common';
 import { JwtService } from './jwt.service';
 import { PasswordService } from './password.service';
 import { MfaService } from './mfa.service';
+import {
+  MfaComplianceService,
+  MfaEnrollmentRequiredException,
+} from './mfa-compliance.service';
+import { PlanTierLiteral } from '@lons/shared-types';
 import { IAuthenticatedUser } from './interfaces/jwt-payload.interface';
 
 /**
@@ -20,6 +25,13 @@ export type LoginResult =
       accessToken: string;
       refreshToken: string;
       user: IAuthenticatedUser;
+      /**
+       * S19-STAB-5: present when the user is in the MFA grace window
+       * (compliance status = 'pending'). The UI surfaces a persistent
+       * banner counting down to the deadline. Absent when MFA is
+       * enrolled or not required.
+       */
+      mfaGraceDaysRemaining?: number;
     }
   | { requiresMfa: true; mfaToken: string };
 
@@ -38,6 +50,11 @@ export class AuthService {
     // Optional so existing tests that wire `AuthService` without MFA
     // still construct cleanly. Production wiring always injects.
     @Optional() private mfaService?: MfaService,
+    // S19-STAB-5: optional so tests can construct AuthService without
+    // the compliance service. When absent, login behaves as if MFA
+    // enforcement is disabled — useful for unit tests that don't
+    // care about tier policy.
+    @Optional() private mfaCompliance?: MfaComplianceService,
     // FIX-5: optional Redis client for MFA per-token attempt limiting.
     // Falls back to "no rate limit" when unavailable (still rate-limited
     // at the HTTP layer by the @Throttle on the resolver). Tests can
@@ -140,6 +157,50 @@ export class AuthService {
         },
       });
 
+      // S19-STAB-5: compute MFA compliance against tenant tier policy.
+      // Done AFTER the password verify so that the response doesn't
+      // leak "this email exists but must enrol MFA" before the caller
+      // has proven they own the account. Tenant rows live in the
+      // platform schema and aren't RLS-scoped, so a direct lookup off
+      // the singleton (outside the scoped tx) is fine.
+      let mfaGraceDaysRemaining: number | undefined;
+      if (this.mfaCompliance) {
+        const tenant = await this.prisma.tenant.findUnique({
+          where: { id: tenantId },
+          select: {
+            planTier: true,
+            planTierChangedAt: true,
+            createdAt: true,
+          },
+        });
+        if (tenant) {
+          const compliance = this.mfaCompliance.computeStatus({
+            planTier: tenant.planTier as PlanTierLiteral,
+            tenantPlanTierChangedAt: tenant.planTierChangedAt,
+            tenantCreatedAt: tenant.createdAt,
+            roleName: user.role.name,
+            userMfaEnabled: user.mfaEnabled,
+            userCreatedAt: user.createdAt,
+            userMfaDisabledAt: user.mfaDisabledAt,
+          });
+          if (compliance.status === 'overdue') {
+            // Grace window has expired — hard block. The resolver
+            // catches this and surfaces `requiresMfaEnrollment: true`
+            // so the client can drop the user into the enrolment
+            // flow instead of issuing an error toast.
+            throw new MfaEnrollmentRequiredException(
+              Math.abs(compliance.graceDaysRemaining ?? 0),
+            );
+          }
+          if (compliance.status === 'pending') {
+            // Soft nudge — tokens still issued, but the response
+            // carries the countdown so the UI can render a
+            // persistent banner.
+            mfaGraceDaysRemaining = compliance.graceDaysRemaining ?? undefined;
+          }
+        }
+      }
+
       // S15-6: if MFA is enabled, return a short-lived MFA token instead
       // of full credentials. The client surfaces an MFA challenge and
       // calls `verifyMfa` to redeem.
@@ -152,7 +213,11 @@ export class AuthService {
         return { requiresMfa: true, mfaToken };
       }
 
-      return this.issueTenantTokens(user, tenantId);
+      const tokens = this.issueTenantTokens(user, tenantId);
+      if (mfaGraceDaysRemaining !== undefined) {
+        return { ...tokens, mfaGraceDaysRemaining };
+      }
+      return tokens;
     });
   }
 

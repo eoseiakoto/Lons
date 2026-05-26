@@ -124,7 +124,21 @@
     "heroOrigination": "origination",
     "heroRecovery": "recovery",
     "heroDescription": "Lending platform used by banks, microfinance lenders, and telcos across Africa.",
-    "copyrightTagline": "Lending platform for financial institutions"
+    "copyrightTagline": "Lending platform for financial institutions",
+    "mfaRequired": {
+      "title": "التسجيل في المصادقة متعددة العوامل مطلوب",
+      "body": "تشترط خطة مؤسستك الآن المصادقة متعددة العوامل لهذا الدور. تواصل مع المسؤول لإعادة ضبط صلاحيتك — وبمجرد تمكنك من تسجيل الدخول، قم بتفعيل المصادقة متعددة العوامل من ملفك الشخصي."
+    }
+  },
+  "mfa": {
+    "grace": {
+      "title": "سيُطلب قريبًا التسجيل في المصادقة متعددة العوامل",
+      "lastDay": "اليوم هو آخر يوم للتسجيل في المصادقة متعددة العوامل.",
+      "oneDay": "بقي يوم واحد للتسجيل في المصادقة متعددة العوامل.",
+      "nDays": "بقي {n} أيام للتسجيل في المصادقة متعددة العوامل.",
+      "cta": "سجّل الآن",
+      "dismiss": "إغلاق التنبيه"
+    }
   },
   "dashboard": {
     "title": "لوحة المعلومات",
@@ -1670,7 +1684,14 @@
       "deactivationFailed": "Deactivation failed",
       "passwordRequired": "Password is required",
       "passwordsDoNotMatch": "Passwords do not match",
-      "passwordResetFailed": "Password reset failed"
+      "passwordResetFailed": "Password reset failed",
+      "mfaCompliance": {
+        "column": "الامتثال للمصادقة متعددة العوامل",
+        "enrolled": "مُسجَّل",
+        "notRequired": "غير مطلوب",
+        "pending": "قيد الانتظار",
+        "overdue": "متأخر"
+      }
     },
     "integrations": {
       "title": "Integration settings",

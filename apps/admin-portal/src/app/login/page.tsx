@@ -2,11 +2,11 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
-import { useAuth } from '@/lib/auth-context';
+import { useAuth, MfaEnrollmentRequiredError } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n/i18n-context';
 import { Providers } from '../providers';
 import { useTheme } from '@/lib/theme-context';
-import { Loader2, AlertCircle, ArrowRight, Sun, Moon } from 'lucide-react';
+import { Loader2, AlertCircle, ArrowRight, Sun, Moon, ShieldAlert } from 'lucide-react';
 
 // Entry animations use CSS (animation-delay cascade via --stagger) so they
 // render regardless of document.visibilityState. Framer-motion is reserved
@@ -985,6 +985,11 @@ function LoginForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  // S19-STAB-5: separate flag for the "enrolment required" dead-end.
+  // We render a different (more prominent) banner than the generic
+  // error one — distinct enough that operators don't try the same
+  // password again expecting it to work.
+  const [mfaEnrollmentRequired, setMfaEnrollmentRequired] = useState(false);
   const [loading, setLoading] = useState(false);
 
   // Mouse parallax tracked at the page level — drives both the skyline and
@@ -998,11 +1003,20 @@ function LoginForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setMfaEnrollmentRequired(false);
     setLoading(true);
     try {
       await login(tenantSlug, email, password);
     } catch (err: any) {
-      setError(err.message || 'Login failed');
+      // S19-STAB-5: dedicated UX for "tenant tier mandates MFA and
+      // your grace window has expired". Tokens are not issued — the
+      // user must contact their admin (who can either enrol them
+      // via password reset or temporarily downgrade the tier).
+      if (err instanceof MfaEnrollmentRequiredError) {
+        setMfaEnrollmentRequired(true);
+      } else {
+        setError(err.message || 'Login failed');
+      }
     } finally {
       setLoading(false);
     }
@@ -1118,6 +1132,34 @@ function LoginForm() {
                   </div>
 
                   <AnimatePresence initial={false}>
+                    {mfaEnrollmentRequired && (
+                      <motion.div
+                        key="login-mfa-required"
+                        initial={{ opacity: 0, y: -6, height: 0 }}
+                        animate={{ opacity: 1, y: 0, height: 'auto' }}
+                        exit={{ opacity: 0, y: -6, height: 0 }}
+                        transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+                        className="overflow-hidden"
+                      >
+                        <div
+                          role="alert"
+                          className="flex items-start gap-2.5 px-3 py-3 rounded-lg text-[13px]"
+                          style={{
+                            backgroundColor: 'var(--status-warning-soft)',
+                            color: 'var(--status-warning-text)',
+                            border: '1px solid var(--status-warning)',
+                          }}
+                        >
+                          <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" strokeWidth={2.25} />
+                          <div className="space-y-1">
+                            <p className="font-semibold">{t('login.mfaRequired.title')}</p>
+                            <p className="text-[12.5px] leading-relaxed opacity-90">
+                              {t('login.mfaRequired.body')}
+                            </p>
+                          </div>
+                        </div>
+                      </motion.div>
+                    )}
                     {error && (
                       <motion.div
                         key="login-error"

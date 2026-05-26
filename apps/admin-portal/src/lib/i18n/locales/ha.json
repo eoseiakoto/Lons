@@ -124,7 +124,21 @@
     "heroOrigination": "origination",
     "heroRecovery": "recovery",
     "heroDescription": "Lending platform used by banks, microfinance lenders, and telcos across Africa.",
-    "copyrightTagline": "Lending platform for financial institutions"
+    "copyrightTagline": "Lending platform for financial institutions",
+    "mfaRequired": {
+      "title": "Ana buƙatar rajistar MFA",
+      "body": "Tsarin ƙungiyarka yanzu yana buƙatar tabbatarwa mai matakai da yawa (MFA) don wannan matsayi. Tuntuɓi mai gudanarwa don sake saita izinin shiga — da zarar ka iya shiga, kunna MFA daga bayanan martabarka."
+    }
+  },
+  "mfa": {
+    "grace": {
+      "title": "Za a buƙaci rajistar MFA nan ba da daɗewa ba",
+      "lastDay": "Yau ita ce rana ta ƙarshe ta yin rajistar MFA.",
+      "oneDay": "Sauran kwana 1 don yin rajistar MFA.",
+      "nDays": "Sauran kwanaki {n} don yin rajistar MFA.",
+      "cta": "Yi rajista yanzu",
+      "dismiss": "Rufe sanarwa"
+    }
   },
   "dashboard": {
     "title": "Dashboard",
@@ -1670,7 +1684,14 @@
       "deactivationFailed": "Deactivation failed",
       "passwordRequired": "Password is required",
       "passwordsDoNotMatch": "Passwords do not match",
-      "passwordResetFailed": "Password reset failed"
+      "passwordResetFailed": "Password reset failed",
+      "mfaCompliance": {
+        "column": "Bin Ka'idar MFA",
+        "enrolled": "An yi rajista",
+        "notRequired": "Ba a buƙata",
+        "pending": "Ana jira",
+        "overdue": "Ya wuce lokaci"
+      }
     },
     "integrations": {
       "title": "Integration settings",

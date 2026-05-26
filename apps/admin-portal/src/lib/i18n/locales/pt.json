@@ -124,7 +124,21 @@
     "heroOrigination": "origination",
     "heroRecovery": "recovery",
     "heroDescription": "Lending platform used by banks, microfinance lenders, and telcos across Africa.",
-    "copyrightTagline": "Lending platform for financial institutions"
+    "copyrightTagline": "Lending platform for financial institutions",
+    "mfaRequired": {
+      "title": "Inscrição em MFA obrigatória",
+      "body": "O plano da sua organização agora exige autenticação multifator para esta função. Entre em contacto com o seu administrador para repor o seu acesso — assim que conseguir iniciar sessão, active a MFA a partir do seu perfil."
+    }
+  },
+  "mfa": {
+    "grace": {
+      "title": "Inscrição em MFA será obrigatória em breve",
+      "lastDay": "Hoje é o último dia para se inscrever na MFA.",
+      "oneDay": "Falta 1 dia para se inscrever na MFA.",
+      "nDays": "Faltam {n} dias para se inscrever na MFA.",
+      "cta": "Inscrever-se agora",
+      "dismiss": "Fechar aviso"
+    }
   },
   "dashboard": {
     "title": "Painel",
@@ -1670,7 +1684,14 @@
       "deactivationFailed": "Deactivation failed",
       "passwordRequired": "Password is required",
       "passwordsDoNotMatch": "Passwords do not match",
-      "passwordResetFailed": "Password reset failed"
+      "passwordResetFailed": "Password reset failed",
+      "mfaCompliance": {
+        "column": "Conformidade com MFA",
+        "enrolled": "Inscrito",
+        "notRequired": "Não obrigatório",
+        "pending": "Pendente",
+        "overdue": "Em atraso"
+      }
     },
     "integrations": {
       "title": "Integration settings",

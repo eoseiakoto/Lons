@@ -14,7 +14,16 @@ const USERS_QUERY = gql`
   query Users($pagination: PaginationInput) {
     users(pagination: $pagination) {
       edges {
-        node { id email name role { id name } mfaEnabled status lastLoginAt createdAt }
+        node {
+          id email name role { id name } mfaEnabled status lastLoginAt createdAt
+          # S19-STAB-5: tier-aware MFA compliance status — drives the
+          # badge column. Resolved by UserResolver.mfaCompliance on the
+          # backend; null only when compliance data can't be computed.
+          mfaCompliance {
+            status
+            graceDaysRemaining
+          }
+        }
       }
       pageInfo { hasNextPage endCursor }
       totalCount
@@ -52,6 +61,8 @@ const RESET_PASSWORD = gql`
   }
 `;
 
+type MfaComplianceStatus = 'not_required' | 'enrolled' | 'pending' | 'overdue';
+
 interface UserNode {
   id: string;
   email: string;
@@ -61,6 +72,67 @@ interface UserNode {
   status: string;
   lastLoginAt?: string;
   createdAt: string;
+  // S19-STAB-5: server-computed MFA compliance — null when not
+  // available (older API, missing data, or compliance service
+  // wasn't wired).
+  mfaCompliance?: {
+    status: MfaComplianceStatus;
+    graceDaysRemaining: number | null;
+  } | null;
+}
+
+/**
+ * S19-STAB-5 — colour-coded badge for the MFA column. Maps the four
+ * compliance states to design-system status tokens. Falls back to
+ * a "—" when the field is null (compliance couldn't be computed).
+ */
+function MfaComplianceBadge({
+  compliance,
+  t,
+}: {
+  compliance?: UserNode['mfaCompliance'];
+  t: (k: string) => string;
+}) {
+  if (!compliance) return <span className="text-[color:var(--text-tertiary)]">—</span>;
+
+  const styles: Record<MfaComplianceStatus, { bg: string; color: string; border: string; label: string }> = {
+    enrolled: {
+      bg: 'var(--status-success-soft)',
+      color: 'var(--status-success-text)',
+      border: 'var(--status-success)',
+      label: t('settings.users.mfaCompliance.enrolled'),
+    },
+    not_required: {
+      bg: 'var(--bg-muted)',
+      color: 'var(--text-secondary)',
+      border: 'var(--border-subtle)',
+      label: t('settings.users.mfaCompliance.notRequired'),
+    },
+    pending: {
+      bg: 'var(--status-warning-soft)',
+      color: 'var(--status-warning-text)',
+      border: 'var(--status-warning)',
+      label:
+        compliance.graceDaysRemaining !== null && compliance.graceDaysRemaining >= 0
+          ? `${t('settings.users.mfaCompliance.pending')} (${compliance.graceDaysRemaining}d)`
+          : t('settings.users.mfaCompliance.pending'),
+    },
+    overdue: {
+      bg: 'var(--status-error-soft)',
+      color: 'var(--status-error-text)',
+      border: 'var(--status-error)',
+      label: t('settings.users.mfaCompliance.overdue'),
+    },
+  };
+  const s = styles[compliance.status];
+  return (
+    <span
+      className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium"
+      style={{ backgroundColor: s.bg, color: s.color, border: `1px solid ${s.border}` }}
+    >
+      {s.label}
+    </span>
+  );
 }
 
 interface RoleNode {
@@ -210,6 +282,13 @@ export default function UsersPage() {
                   r.lastLoginAt ? new Date(r.lastLoginAt).toLocaleDateString() : t('common.never'),
               },
               { header: t('settings.users.mfa'), accessor: (r: UserNode) => r.mfaEnabled ? t('common.enabled') : t('settings.users.off') },
+              // S19-STAB-5: tier-policy compliance column. Surfaces
+              // pending grace countdowns (e.g. "Pending (3d)") and
+              // hard-overdue users that the next login will block.
+              {
+                header: t('settings.users.mfaCompliance.column'),
+                accessor: (r: UserNode) => <MfaComplianceBadge compliance={r.mfaCompliance} t={t} />,
+              },
               { header: t('settings.users.status'), accessor: (r: UserNode) => <StatusBadge status={r.status} /> },
             ]}
             data={users}
