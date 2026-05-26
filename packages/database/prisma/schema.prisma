@@ -393,6 +393,13 @@ model Tenant {
   country            String       @db.VarChar(3)
   schemaName         String       @unique @map("schema_name") @db.VarChar(63)
   planTier           PlanTier     @default(starter) @map("plan_tier")
+  /// S19-STAB-5: timestamp of the most recent plan tier change. Used by
+  /// the MFA compliance check to compute the 7-day grace period that
+  /// begins when a tenant upgrades to Growth or Enterprise. Null only
+  /// for hypothetical "freshly created in this exact transaction"
+  /// rows; the 20260526300000 migration backfills existing rows with
+  /// `created_at` and the tier-change mutation sets it on every write.
+  planTierChangedAt  DateTime?    @map("plan_tier_changed_at") @db.Timestamptz(6)
   status             TenantStatus @default(provisioning)
   platformFeePercent Decimal?     @map("platform_fee_percent") @db.Decimal(5, 2)
   settings           Json?
@@ -577,6 +584,12 @@ model User {
   /// Sprint 15 (S15-6): JSON-encoded array of unused backup codes,
   /// AES-256-GCM encrypted at rest. Each code is consumed once on use.
   mfaBackupCodes   String?    @map("mfa_backup_codes") @db.Text
+  /// S19-STAB-5: timestamp of the most recent MFA disablement (set by
+  /// the disableMfa mutation). Null for users who have never enrolled
+  /// or never disabled after enrollment. The compliance service treats
+  /// this as a grace-period anchor for the edge case "user was enrolled,
+  /// then disabled — give them a fresh 7-day window before hard-block."
+  mfaDisabledAt    DateTime?  @map("mfa_disabled_at") @db.Timestamptz(6)
   lastLoginAt      DateTime?  @map("last_login_at") @db.Timestamptz(6)
   lockedUntil      DateTime?  @map("locked_until") @db.Timestamptz(6)
   failedLoginCount Int        @default(0) @map("failed_login_count")
