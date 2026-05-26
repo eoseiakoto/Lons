@@ -199,6 +199,58 @@ Set these in `.env` (local) or your secret manager (staging/prod) **before** the
 2. This table
 3. The PR description's "Migration Impact" section if the boot would fail without it
 
+### 6.1 Two-role connection model (S19-STAB-1 follow-up)
+
+After the `20260526200000_lons_app_runtime_role` migration, the database uses a two-role split:
+
+| Role | Used by | RLS behaviour | DDL behaviour |
+|---|---|---|---|
+| `lons` (owner) | `prisma migrate deploy`, `pnpm db:seed`, `pnpm db:fresh-start`, manual psql admin sessions | Bypasses RLS by being the owner | Full DDL — CREATE, ALTER, DROP, GRANT, REVOKE |
+| `lons_app` (runtime) | graphql-server, rest-server, scheduler, every other application service | Subject to RLS — must SET LOCAL `app.current_tenant` or `app.is_platform_admin` per query | DML only — SELECT / INSERT / UPDATE / DELETE. No DDL. |
+
+This is wired at the Prisma layer via `directUrl` in `packages/database/prisma/schema.prisma`:
+- `DATABASE_URL` → `lons_app` (runtime)
+- `DIRECT_DATABASE_URL` → `lons` (migrations + seed)
+
+The seed (`prisma/seed.ts`) constructs its PrismaClient with an explicit `datasourceUrl` override pointing at `DIRECT_DATABASE_URL` so it picks up the owner connection despite Prisma's runtime client defaulting to `DATABASE_URL`.
+
+### 6.1.a Bootstrap on a fresh environment
+
+The `lons_app` role is created by the migration itself, on first `prisma migrate deploy`. Order matters:
+
+1. **docker compose up** (or whatever provisions Postgres) creates only the `lons` role with its password.
+2. **`prisma migrate deploy`** runs as `lons` via `DIRECT_DATABASE_URL`, applies the chain, and `20260526200000_lons_app_runtime_role` creates the `lons_app` role with the dev password `lons_app_dev_password`.
+3. **Application services** start with `DATABASE_URL=postgresql://lons_app:lons_app_dev_password@...` and connect successfully.
+
+### 6.1.b Production / staging — replace the dev password
+
+The migration hardcodes `lons_app_dev_password` for local-dev convenience. In any non-local environment this must be replaced with a strong, secret-managed password BEFORE application services start. Two acceptable approaches:
+
+```sql
+-- Approach A: rotate the password immediately after migration
+-- (run as lons owner, after `prisma migrate deploy` finishes):
+ALTER ROLE lons_app WITH PASSWORD '<strong-secret-from-vault>';
+```
+
+```bash
+# Approach B: pre-create lons_app with the production password before
+# migrations run. The migration's DO $$ ... IF NOT EXISTS guard skips
+# the CREATE ROLE if the role already exists, so the password set
+# during pre-creation is preserved.
+psql -U postgres -c "CREATE ROLE lons_app WITH LOGIN PASSWORD '<strong-secret>';"
+pnpm exec prisma migrate deploy
+```
+
+Either way: `DATABASE_URL` for the production application services must reference the same secret.
+
+### 6.1.c What enforces what
+
+| Behaviour | Mechanism | Where |
+|---|---|---|
+| App can't read other tenants' rows | RLS policies on 58 tables, lons_app non-owner role | Migrations `20260526100000` + `20260526200000` |
+| App can write audit logs but not modify them | `audit_writer` role membership, INSERT+SELECT, REVOKE on UPDATE/DELETE/TRUNCATE | Migration `20260526000000` + `20260526200000` |
+| App can't run DDL by mistake | `lons_app` has DML only, no CREATE/ALTER/DROP | `20260526200000` GRANT statements |
+
 ---
 
 ## 7. Helper commands

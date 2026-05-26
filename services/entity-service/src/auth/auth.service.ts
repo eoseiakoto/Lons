@@ -84,59 +84,76 @@ export class AuthService {
     // through `emailHash` (SHA-256 of normalised lowercase). The encrypted
     // `email` column itself is decrypted by the field-encryption middleware
     // when the row is returned, so downstream code still sees plaintext.
+    //
+    // S19-STAB-1: The `users` table is tenant-scoped and now carries a
+    // tenant_isolation RLS policy. The application connects as `lons_app`
+    // (non-owner), so RLS enforces — a naked `prisma.user.findFirst`
+    // with no tenant context set returns zero rows and we'd report
+    // "Invalid credentials" for every valid login. Wrap the lookup +
+    // subsequent writes in `enterTenantContext({ tenantId })`. The
+    // tenant id came from the AuthResolver's `findBySlug` step before
+    // this method was called, so passing it here is safe.
     const emailHash = computeSearchableHash(email);
-    const user = await this.prisma.user.findFirst({
-      where: { tenantId, emailHash, deletedAt: null },
-      include: { role: true },
-    });
-
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    // Check lockout
-    if (user.lockedUntil && user.lockedUntil > new Date()) {
-      const remainingMinutes = Math.ceil(
-        (user.lockedUntil.getTime() - Date.now()) / 60000,
-      );
-      throw new UnauthorizedException(
-        `Account locked. Try again in ${remainingMinutes} minutes`,
-      );
-    }
-
-    if (user.status !== 'active') {
-      throw new UnauthorizedException('Account is not active');
-    }
-
-    const isValid = await this.passwordService.verify(user.passwordHash, password);
-    if (!isValid) {
-      await this.recordFailedLogin(user.id);
-      throw new UnauthorizedException('Invalid credentials');
-    }
-
-    // Reset failed login count on success
-    await this.prisma.user.update({
-      where: { id: user.id },
-      data: {
-        failedLoginCount: 0,
-        lockedUntil: null,
-        lastLoginAt: new Date(),
-      },
-    });
-
-    // S15-6: if MFA is enabled, return a short-lived MFA token instead
-    // of full credentials. The client surfaces an MFA challenge and
-    // calls `verifyMfa` to redeem.
-    if (user.mfaEnabled) {
-      const mfaToken = this.jwtService.signMfaToken({
-        sub: user.id,
-        tenantId,
-        userType: 'user',
+    return this.prisma.enterTenantContext({ tenantId }, async () => {
+      // Use `scoped()` to get the in-context transaction client. The
+      // RLS middleware's SET LOCAL only takes effect on the tx
+      // connection, not on the pooled singleton — calls through
+      // `this.prisma.user.*` would run on a fresh pooled connection
+      // with no session vars set and RLS would return zero rows.
+      const tx = this.prisma.scoped();
+      const user = await tx.user.findFirst({
+        where: { tenantId, emailHash, deletedAt: null },
+        include: { role: true },
       });
-      return { requiresMfa: true, mfaToken };
-    }
 
-    return this.issueTenantTokens(user, tenantId);
+      if (!user) {
+        throw new UnauthorizedException('Invalid credentials');
+      }
+
+      // Check lockout
+      if (user.lockedUntil && user.lockedUntil > new Date()) {
+        const remainingMinutes = Math.ceil(
+          (user.lockedUntil.getTime() - Date.now()) / 60000,
+        );
+        throw new UnauthorizedException(
+          `Account locked. Try again in ${remainingMinutes} minutes`,
+        );
+      }
+
+      if (user.status !== 'active') {
+        throw new UnauthorizedException('Account is not active');
+      }
+
+      const isValid = await this.passwordService.verify(user.passwordHash, password);
+      if (!isValid) {
+        await this.recordFailedLogin(user.id);
+        throw new UnauthorizedException('Invalid credentials');
+      }
+
+      // Reset failed login count on success
+      await tx.user.update({
+        where: { id: user.id },
+        data: {
+          failedLoginCount: 0,
+          lockedUntil: null,
+          lastLoginAt: new Date(),
+        },
+      });
+
+      // S15-6: if MFA is enabled, return a short-lived MFA token instead
+      // of full credentials. The client surfaces an MFA challenge and
+      // calls `verifyMfa` to redeem.
+      if (user.mfaEnabled) {
+        const mfaToken = this.jwtService.signMfaToken({
+          sub: user.id,
+          tenantId,
+          userType: 'user',
+        });
+        return { requiresMfa: true, mfaToken };
+      }
+
+      return this.issueTenantTokens(user, tenantId);
+    });
   }
 
   /**
@@ -217,14 +234,22 @@ export class AuthService {
       return this.issuePlatformTokens(platformUser);
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
-      include: { role: true },
+    // S19-STAB-1: `users` is RLS-protected; this method is called from
+    // the public verifyMfa mutation (no interceptor wrap), so we must
+    // enter tenant context ourselves before the lookup. Use scoped()
+    // to access the in-context tx client (the singleton's pooled
+    // connection wouldn't have the SET LOCAL session vars).
+    return this.prisma.enterTenantContext({ tenantId: payload.tenantId }, async () => {
+      const tx = this.prisma.scoped();
+      const user = await tx.user.findUnique({
+        where: { id: payload.sub },
+        include: { role: true },
+      });
+      if (!user || user.status !== 'active' || user.deletedAt) {
+        throw new UnauthorizedException('User not found or inactive');
+      }
+      return this.issueTenantTokens(user, payload.tenantId);
     });
-    if (!user || user.status !== 'active' || user.deletedAt) {
-      throw new UnauthorizedException('User not found or inactive');
-    }
-    return this.issueTenantTokens(user, payload.tenantId);
   }
 
   private issueTenantTokens(
@@ -379,31 +404,38 @@ export class AuthService {
       };
     }
 
-    const user = await this.prisma.user.findUnique({
-      where: { id: payload.sub },
-      include: { role: true },
+    // S19-STAB-1: `refreshTokens` is a public mutation (no
+    // interceptor wrap). Enter tenant context for the user lookup so
+    // RLS admits the row. Use scoped() to access the in-context tx
+    // client — the pooled singleton would miss the SET LOCAL.
+    return this.prisma.enterTenantContext({ tenantId: payload.tenantId }, async () => {
+      const tx = this.prisma.scoped();
+      const user = await tx.user.findUnique({
+        where: { id: payload.sub },
+        include: { role: true },
+      });
+
+      if (!user || user.status !== 'active' || user.deletedAt) {
+        throw new UnauthorizedException('User not found or inactive');
+      }
+
+      const permissions = (user.role.permissions as string[]) || [];
+
+      return {
+        accessToken: this.jwtService.signAccessToken({
+          sub: user.id,
+          tenantId: payload.tenantId,
+          role: user.role.name,
+          permissions,
+          email: user.email,
+          name: user.name ?? undefined,
+        }),
+        refreshToken: this.jwtService.signRefreshToken({
+          sub: user.id,
+          tenantId: payload.tenantId,
+        }),
+      };
     });
-
-    if (!user || user.status !== 'active' || user.deletedAt) {
-      throw new UnauthorizedException('User not found or inactive');
-    }
-
-    const permissions = (user.role.permissions as string[]) || [];
-
-    return {
-      accessToken: this.jwtService.signAccessToken({
-        sub: user.id,
-        tenantId: payload.tenantId,
-        role: user.role.name,
-        permissions,
-        email: user.email,
-        name: user.name ?? undefined,
-      }),
-      refreshToken: this.jwtService.signRefreshToken({
-        sub: user.id,
-        tenantId: payload.tenantId,
-      }),
-    };
   }
 
   async changePassword(

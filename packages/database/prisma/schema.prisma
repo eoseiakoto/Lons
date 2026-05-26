@@ -3,9 +3,29 @@ generator client {
   binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
+// Two-role connection model (S19-STAB-1 follow-up):
+//   - `url`       → DATABASE_URL          → lons_app runtime role.
+//                                            Subject to RLS policies.
+//                                            Used by every PrismaClient
+//                                            constructed at application
+//                                            startup (graphql-server,
+//                                            rest-server, scheduler, etc.).
+//   - `directUrl` → DIRECT_DATABASE_URL   → lons owner role.
+//                                            Bypasses RLS as the owner.
+//                                            Used by `prisma migrate
+//                                            deploy`, `prisma db pull`,
+//                                            `prisma migrate resolve`,
+//                                            and the seed (which
+//                                            constructs PrismaClient
+//                                            with an explicit
+//                                            datasourceUrl override).
+// See Docs/MIGRATION-PLAYBOOK.md §6 and migration
+// 20260526200000_lons_app_runtime_role for the role-architecture
+// rationale.
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
 }
 
 // ============================================================================

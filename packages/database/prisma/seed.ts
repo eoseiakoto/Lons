@@ -3,7 +3,15 @@ import * as argon2 from 'argon2';
 import { computeSearchableHash } from '@lons/common';
 import { DEFAULT_SCORECARD } from '@lons/shared-types';
 
-const prisma = new PrismaClient();
+// The seed writes across every tenant + creates platform-level rows,
+// so it needs the `lons` owner role's RLS bypass (S19-STAB-1 + role
+// provisioning in 20260526200000). Prisma's default PrismaClient
+// reads DATABASE_URL, which points at the non-owner `lons_app` —
+// override here to use DIRECT_DATABASE_URL (the owner) so the seed
+// isn't blocked by RLS policies.
+const prisma = new PrismaClient({
+  datasourceUrl: process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL,
+});
 
 // ---------------------------------------------------------------------------
 // Canonical permission catalog
