@@ -18,6 +18,8 @@ import {
   ApiSecurity,
   ApiHeader,
   ApiQuery,
+  ApiParam,
+  ApiBody,
 } from '@nestjs/swagger';
 import { CustomerService } from '@lons/entity-service';
 import { AuditAction } from '@lons/common';
@@ -38,11 +40,19 @@ export class CustomerController {
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(IdempotencyInterceptor)
   @AuditAction('create.customer', 'customer')
-  @ApiOperation({ summary: 'Create or sync a customer' })
-  @ApiResponse({ status: 201, description: 'Customer created or synced' })
+  @ApiOperation({
+    summary: 'Create or sync a customer',
+    description:
+      'Creates a new customer or returns an existing one if the dedup engine matches an existing record. ' +
+      'Authentication: API key + secret (X-API-Key / X-API-Secret). ' +
+      'Idempotent via the optional X-Idempotency-Key header — repeated calls with the same key return the cached response.',
+  })
+  @ApiBody({ type: CreateCustomerDto })
+  @ApiResponse({ status: 201, description: 'Customer created or matched to an existing record (see isDuplicate flag).' })
   @ApiResponse({ status: 400, description: 'Validation error' })
-  @ApiResponse({ status: 401, description: 'Unauthorized — invalid API key' })
-  @ApiHeader({ name: 'X-Idempotency-Key', required: false, description: 'Idempotency key for duplicate prevention' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
+  @ApiHeader({ name: 'X-Idempotency-Key', required: false, description: 'Prevents duplicate operations on retry.' })
   async create(@Req() req: any, @Body() body: CreateCustomerDto): Promise<any> {
     const tenantId = req.tenantId;
     // S17-8: create() now returns { customer, isDuplicate, matchedRule }
@@ -68,17 +78,28 @@ export class CustomerController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get customer details by ID' })
+  @ApiOperation({
+    summary: 'Get a customer by ID',
+    description: 'Returns full customer details, scoped to the authenticated tenant.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid', description: 'Customer UUID' })
   @ApiResponse({ status: 200, description: 'Customer details' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
   @ApiResponse({ status: 404, description: 'Customer not found' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async findOne(@Req() req: any, @Param('id') id: string): Promise<any> {
     const tenantId = req.tenantId;
     return this.customerService.findById(tenantId, id);
   }
 
   @Get()
-  @ApiOperation({ summary: 'List customers with pagination' })
+  @ApiOperation({
+    summary: 'List customers',
+    description: 'Paginated list of customers for the authenticated tenant. Use `search` for free-text filtering.',
+  })
   @ApiResponse({ status: 200, description: 'Paginated list of customers' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   @ApiQuery({ name: 'search', required: false, description: 'Search by name, phone, or external ID' })
   async findAll(
     @Req() req: any,

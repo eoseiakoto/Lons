@@ -14,6 +14,7 @@ import {
   ApiResponse,
   ApiSecurity,
   ApiHeader,
+  ApiBody,
 } from '@nestjs/swagger';
 import { ApiKeyRotationService } from '@lons/entity-service';
 import { AuditAction } from '@lons/common';
@@ -36,14 +37,18 @@ export class ApiKeyController {
   @UseInterceptors(IdempotencyInterceptor)
   @AuditAction('rotate.apiKey', 'api_key')
   @ApiOperation({
-    summary: 'Rotate API secret',
-    description: 'Generates a new API key/secret pair. The old key remains valid for the specified grace period (default 24 hours).',
+    summary: 'Rotate an API secret',
+    description:
+      'Generates a new API key/secret pair. The old key remains valid for the specified grace period (default 24 hours, max 168 hours). ' +
+      'Authentication: API key + secret. Idempotent via X-Idempotency-Key.',
   })
+  @ApiBody({ type: RotateApiKeyDto })
   @ApiResponse({ status: 200, description: 'New API key and secret returned. Store the secret securely — it cannot be retrieved again.' })
   @ApiResponse({ status: 400, description: 'Validation error' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
   @ApiResponse({ status: 404, description: 'API key not found' })
-  @ApiHeader({ name: 'X-Idempotency-Key', required: false, description: 'Idempotency key for duplicate prevention' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
+  @ApiHeader({ name: 'X-Idempotency-Key', required: false, description: 'Prevents duplicate operations on retry.' })
   async rotate(@Req() req: any, @Body() body: RotateApiKeyDto) {
     const tenantId = req.tenantId;
     const result = await this.apiKeyRotationService.rotateApiKey(

@@ -74,8 +74,10 @@ export class SubmitInvoiceDto {
   dueDate!: string;
 
   @ApiProperty({
-    description: 'Decimal-as-string. e.g. "100000.00".',
-    example: '100000.00',
+    description:
+      'Face value of the invoice as a decimal string (max 4 dp). ' +
+      'Money MUST be a string per CLAUDE.md §Money.',
+    example: '100000.0000',
   })
   @IsString()
   @Matches(MONEY_REGEX)
@@ -219,8 +221,10 @@ export class CreateDebtorDto {
   externalCreditRating?: string;
 
   @ApiPropertyOptional({
-    description: 'Decimal-as-string exposure cap for this debtor.',
-    example: '500000.00',
+    description:
+      'Exposure cap for this debtor as a decimal string (max 4 dp). ' +
+      'Money MUST be a string per CLAUDE.md §Money.',
+    example: '500000.0000',
   })
   @IsOptional()
   @IsString()

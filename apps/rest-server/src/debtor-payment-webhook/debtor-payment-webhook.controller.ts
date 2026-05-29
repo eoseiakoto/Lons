@@ -12,7 +12,7 @@ import {
   RawBodyRequest,
   Req,
 } from '@nestjs/common';
-import { ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import * as crypto from 'crypto';
 import type { Request } from 'express';
 
@@ -62,14 +62,21 @@ export class DebtorPaymentWebhookController {
   @AuditAction('debtor_payment_webhook.received', 'invoice')
   @ApiOperation({
     summary: 'Payment provider reports a debtor invoice payment',
+    description:
+      'Inbound webhook from a payment provider (bank, mobile money operator). ' +
+      'Authenticated via HMAC SHA-256 in X-Signature. ' +
+      'Returns 202 immediately; matching and application happen asynchronously.',
   })
+  @ApiParam({ name: 'provider', type: String, description: 'Payment provider identifier (e.g. "bank-x", "mtn-momo").' })
+  @ApiBody({ type: DebtorPaymentWebhookDto })
   @ApiResponse({
     status: 202,
     description:
       'Payment accepted; matching and application happen asynchronously',
   })
-  @ApiResponse({ status: 400, description: 'Payload missing all matchers' })
+  @ApiResponse({ status: 400, description: 'Payload missing all matchers or provider unconfigured.' })
   @ApiResponse({ status: 401, description: 'HMAC signature invalid' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   @ApiHeader({
     name: 'X-Signature',
     required: true,

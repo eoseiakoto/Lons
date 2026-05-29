@@ -13,7 +13,7 @@ import {
   RawBodyRequest,
   Req,
 } from '@nestjs/common';
-import { ApiHeader, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { ApiBody, ApiHeader, ApiOperation, ApiParam, ApiResponse, ApiTags } from '@nestjs/swagger';
 import * as crypto from 'crypto';
 import type { Request } from 'express';
 
@@ -57,10 +57,18 @@ export class WalletWebhookController {
   @Post(':provider/insufficient-balance')
   @HttpCode(HttpStatus.ACCEPTED)
   @AuditAction('wallet_webhook.insufficient_balance', 'wallet_webhook')
-  @ApiOperation({ summary: 'Wallet provider reports an insufficient-balance event' })
+  @ApiOperation({
+    summary: 'Wallet provider reports an insufficient-balance event',
+    description:
+      'Inbound webhook from the wallet provider. Authenticated via HMAC SHA-256 in the X-Signature header (provider-specific shared secret). ' +
+      'Returns 202 immediately; the drawdown is processed asynchronously.',
+  })
+  @ApiParam({ name: 'provider', type: String, description: 'Wallet provider identifier (e.g. "mtn-momo", "m-pesa").' })
   @ApiResponse({ status: 202, description: 'Event accepted; drawdown processing happens asynchronously' })
+  @ApiResponse({ status: 400, description: 'Provider is not configured (missing WEBHOOK_SECRET_{PROVIDER}).' })
   @ApiResponse({ status: 401, description: 'HMAC signature invalid' })
   @ApiResponse({ status: 404, description: 'Wallet ID not mapped to a customer' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   @ApiHeader({ name: 'X-Signature', required: true, description: 'HMAC SHA-256 of the request body, hex-encoded' })
   async insufficientBalance(
     @Param('provider') provider: string,
@@ -100,11 +108,19 @@ export class WalletWebhookController {
   @Post(':provider/transaction-notification')
   @HttpCode(HttpStatus.ACCEPTED)
   @AuditAction('wallet_webhook.transaction_notification', 'wallet_webhook')
-  @ApiOperation({ summary: 'Wallet provider reports a credit/debit on the wallet' })
+  @ApiOperation({
+    summary: 'Wallet provider reports a credit/debit on the wallet',
+    description:
+      'Inbound webhook from the wallet provider. Authenticated via HMAC SHA-256 in X-Signature. ' +
+      'Only credit events drive auto-repayment; debit notifications are accepted but ignored.',
+  })
+  @ApiParam({ name: 'provider', type: String, description: 'Wallet provider identifier.' })
   @ApiResponse({ status: 202, description: 'Event accepted' })
+  @ApiResponse({ status: 400, description: 'Provider is not configured.' })
   @ApiResponse({ status: 401, description: 'HMAC signature invalid' })
   @ApiResponse({ status: 404, description: 'Wallet ID not mapped' })
-  @ApiHeader({ name: 'X-Signature', required: true })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
+  @ApiHeader({ name: 'X-Signature', required: true, description: 'HMAC SHA-256 of the request body, hex-encoded' })
   async transactionNotification(
     @Param('provider') provider: string,
     @Req() req: RawBodyRequest<Request>,

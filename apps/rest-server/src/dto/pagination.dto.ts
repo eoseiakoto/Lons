@@ -1,13 +1,13 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsOptional, IsInt, Min, Max } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class PaginationQueryDto {
-  @ApiProperty({
-    required: false,
+  @ApiPropertyOptional({
     default: 1,
     minimum: 1,
-    description: 'Page number (1-based)',
+    description: 'Page number (1-based).',
+    example: 1,
   })
   @IsOptional()
   @Type(() => Number)
@@ -15,12 +15,12 @@ export class PaginationQueryDto {
   @Min(1)
   page?: number = 1;
 
-  @ApiProperty({
-    required: false,
+  @ApiPropertyOptional({
     default: 20,
     minimum: 1,
     maximum: 100,
-    description: 'Number of records per page',
+    description: 'Number of records per page. Max 100.',
+    example: 20,
   })
   @IsOptional()
   @Type(() => Number)
@@ -31,21 +31,24 @@ export class PaginationQueryDto {
 }
 
 export class PaginationMetaDto {
-  @ApiProperty({ description: 'Current page number' })
+  @ApiProperty({ description: 'Current page number (1-based).', example: 1 })
   page!: number;
 
-  @ApiProperty({ description: 'Items per page' })
+  @ApiProperty({ description: 'Items per page.', example: 20 })
   limit!: number;
 
-  @ApiProperty({ description: 'Total number of records' })
+  @ApiProperty({ description: 'Total number of records across all pages.', example: 247 })
   total!: number;
 
-  @ApiProperty({ description: 'Total number of pages' })
+  @ApiProperty({ description: 'Total number of pages.', example: 13 })
   totalPages!: number;
 }
 
 export class PaginatedResponseDto<T> {
+  @ApiProperty({ description: 'Page of records.', isArray: true })
   data!: T[];
+
+  @ApiProperty({ description: 'Pagination metadata.', type: PaginationMetaDto })
   meta!: PaginationMetaDto;
 }
 

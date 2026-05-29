@@ -41,14 +41,19 @@ function HasAtLeastOneMatcher(validationOptions?: ValidationOptions) {
 }
 
 export class DebtorPaymentWebhookDto {
-  @ApiProperty({ description: "Provider's transaction reference" })
+  @ApiProperty({
+    description: "Provider's transaction reference (used for idempotency).",
+    example: 'bank-x-txn-2026-05-29-abcd1234',
+  })
   @IsString()
   @IsNotEmpty()
   transactionRef!: string;
 
   @ApiProperty({
-    description: 'Amount received as a Decimal-as-string (max 4 dp)',
-    example: '50000.00',
+    description:
+      'Amount received as a decimal string (max 4 dp). ' +
+      'Money MUST be a string per CLAUDE.md §Money.',
+    example: '50000.0000',
   })
   @IsString()
   @IsNotEmpty()
