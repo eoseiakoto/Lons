@@ -789,6 +789,57 @@ async function main() {
   }
   console.log(`  PlanTierConfig: 3 tiers upserted (starter / growth / enterprise)`);
 
+  // S19-12: platform-default field-level authorisation rules. Tenants
+  // can override per-field via the admin UI later; these defaults
+  // apply to every tenant unless overridden. Idempotent — uses raw
+  // SQL because Prisma's upsert doesn't gracefully handle a unique
+  // constraint that includes a nullable column (tenantId IS NULL).
+  console.log('[1.7/8] Seeding platform-default FieldAuthConfig (PII redaction rules)...');
+  const defaultFieldRules: Array<{ resource: string; field: string; perms: string[] }> = [
+    // Customer PII fields — require explicit `customer:read_pii` permission.
+    { resource: 'customer', field: 'nationalId',     perms: ['customer:read_pii'] },
+    { resource: 'customer', field: 'phonePrimary',   perms: ['customer:read_pii'] },
+    { resource: 'customer', field: 'phoneSecondary', perms: ['customer:read_pii'] },
+    { resource: 'customer', field: 'email',          perms: ['customer:read_pii'] },
+    { resource: 'customer', field: 'dateOfBirth',    perms: ['customer:read_pii'] },
+    // Debtor PII (factoring counterparty).
+    { resource: 'debtor', field: 'registrationNumber', perms: ['customer:read_pii'] },
+    { resource: 'debtor', field: 'contactEmail',       perms: ['customer:read_pii'] },
+    { resource: 'debtor', field: 'contactPhone',       perms: ['customer:read_pii'] },
+  ];
+  // NOTE: Postgres UNIQUE treats NULLs as distinct, so the
+  // @@unique([tenantId, resourceType, fieldName]) constraint does
+  // NOT prevent duplicate platform-default rows (tenantId IS NULL).
+  // Use check-then-create/update — the same idempotent pattern we
+  // use for the tenant-null ScorecardConfig rows.
+  for (const rule of defaultFieldRules) {
+    const existing = await prisma.fieldAuthConfig.findFirst({
+      where: { tenantId: null, resourceType: rule.resource, fieldName: rule.field },
+    });
+    if (existing) {
+      await prisma.fieldAuthConfig.update({
+        where: { id: existing.id },
+        data: {
+          requiredPermissions: rule.perms,
+          behavior: 'redact',
+          isActive: true,
+        },
+      });
+    } else {
+      await prisma.fieldAuthConfig.create({
+        data: {
+          tenantId: null,
+          resourceType: rule.resource,
+          fieldName: rule.field,
+          requiredPermissions: rule.perms,
+          behavior: 'redact',
+          isActive: true,
+        },
+      });
+    }
+  }
+  console.log(`  Platform FieldAuthConfig: ${defaultFieldRules.length} rules seeded`);
+
   // -----------------------------------------------------------------------
   // Loop through each tenant
   // -----------------------------------------------------------------------

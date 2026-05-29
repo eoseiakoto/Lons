@@ -7,9 +7,11 @@ import { JwtService } from './jwt.service';
 import { PasswordService } from './password.service';
 import { MfaService } from './mfa.service';
 import { MfaComplianceService } from './mfa-compliance.service';
+import { FieldAuthService } from './field-auth.service';
 import { AuthGuard } from './guards/auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { RlsTenantContextInterceptor } from './interceptors/rls-tenant-context.interceptor';
+import { FieldAuthInterceptor } from './interceptors/field-auth.interceptor';
 
 @Module({
   imports: [ConfigModule],
@@ -21,6 +23,13 @@ import { RlsTenantContextInterceptor } from './interceptors/rls-tenant-context.i
     MfaService,
     // S19-STAB-5 — tier-based MFA enforcement compliance check.
     MfaComplianceService,
+    // S19-12 — field-level authorisation rule loader + interceptor.
+    // Service is exported for tests + admin-config writes; the
+    // interceptor is opt-in per-resolver via @UseInterceptors +
+    // @FieldAuthResource('<resource-type>'), so it doesn't impose
+    // overhead on resolvers that don't need it.
+    FieldAuthService,
+    FieldAuthInterceptor,
     {
       provide: APP_GUARD,
       useClass: AuthGuard,
@@ -36,6 +45,14 @@ import { RlsTenantContextInterceptor } from './interceptors/rls-tenant-context.i
       useClass: RlsTenantContextInterceptor,
     },
   ],
-  exports: [AuthService, JwtService, PasswordService, MfaService, MfaComplianceService],
+  exports: [
+    AuthService,
+    JwtService,
+    PasswordService,
+    MfaService,
+    MfaComplianceService,
+    FieldAuthService,
+    FieldAuthInterceptor,
+  ],
 })
 export class AuthModule {}
