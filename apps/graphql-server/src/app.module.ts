@@ -39,7 +39,11 @@ import {
   MetricsInterceptor,
   RedisClientModule,
   PLAN_TIER_CONFIG_SERVICE,
+  // F-ABC-1/-2: DB-driven per-tenant rate-limit resolver.
+  RateLimitConfigService,
+  REDIS_CLIENT,
 } from '@lons/common';
+import type Redis from 'ioredis';
 import { PrismaService } from '@lons/database';
 
 import { ApiKeyResolver } from './graphql/resolvers/api-key.resolver';
@@ -261,6 +265,23 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
       provide: 'AUDIT_SERVICE',
       useFactory: (prisma: PrismaService) => new AuditService(prisma),
       inject: [PrismaService],
+    },
+    // F-ABC-1/-2: per-tenant DB-driven rate-limit resolver.
+    // TenantThrottlerGuard picks this up via @Optional() injection —
+    // without this registration, the guard silently falls back to
+    // DEFAULT_LIMITS (starter tier) for every tenant.
+    //
+    // RateLimitConfigService takes PrismaService under the
+    // 'PRISMA_SERVICE' string token (declared in its constructor to
+    // keep the service free of @lons/database circular import).
+    // We alias PrismaService → 'PRISMA_SERVICE' here, then construct
+    // the service with the live Redis client.
+    { provide: 'PRISMA_SERVICE', useExisting: PrismaService },
+    {
+      provide: RateLimitConfigService,
+      useFactory: (prisma: PrismaService, redis: Redis) =>
+        new RateLimitConfigService(prisma as any, redis),
+      inject: [PrismaService, REDIS_CLIENT],
     },
     { provide: APP_INTERCEPTOR, useClass: AuditEventInterceptor },
     { provide: APP_INTERCEPTOR, useClass: MetricsInterceptor },
