@@ -185,7 +185,13 @@ export class UserResolver {
     @CurrentTenant() tenantId: string,
     @Args('id', { type: () => ID }) id: string,
   ): Promise<UserType> {
-    await this.mfaService.adminResetMfa('user', id);
+    // MFA-RLS fix (MfaService): pass tenantId so the service can
+    // re-enter context for the RLS-scoped `users` update. Without
+    // it, the singleton `this.prisma.user.update` inside the service
+    // would target a connection without SET LOCAL → 0 rows affected
+    // → "User not found" surfaced as a P2025 from the subsequent
+    // userService.findById.
+    await this.mfaService.adminResetMfa('user', id, tenantId);
     return this.userService.findById(tenantId, id) as unknown as UserType;
   }
 

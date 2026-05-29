@@ -156,17 +156,28 @@ export class AuthResolver {
     // lose AsyncLocalStorage context on async boundaries — manifests
     // as "User not found" when the SP Admin tries to enrol from the
     // enrollment-only flow. Re-establish context at the resolver
-    // boundary so downstream queries (verifyPassword + the user.email
-    // lookup + every mfaService Prisma call) all run with SET LOCAL
-    // in effect. Nested with the interceptor's own context, that's
-    // a savepoint — harmless.
+    // boundary so the verifyPassword + user.email lookup run with
+    // SET LOCAL in effect.
+    //
+    // MFA-RLS fix (MfaService): `mfaService.initiateEnrollment` now
+    // takes `user.tenantId` as the 4th arg and wraps its own Prisma
+    // calls in `enterTenantContext`. That's redundant with the
+    // outer wrap here for `initiateMfaEnrollment` (becomes a
+    // savepoint — harmless) but mandatory for `verifyMfa` which
+    // calls `mfaService.verifyCode` from a Public resolver with
+    // no outer wrap.
     return this.prisma.enterTenantContext({ tenantId: user.tenantId }, async () => {
       await this.authService.verifyPassword(user.userId, user.tenantId, password, false);
       const tx = this.prisma.scoped();
       const email = (await tx.user.findUniqueOrThrow({
         where: { id: user.userId },
       })).email;
-      return this.mfaService.initiateEnrollment('user', user.userId, email);
+      return this.mfaService.initiateEnrollment(
+        'user',
+        user.userId,
+        email,
+        user.tenantId,
+      );
     });
   }
 
@@ -187,8 +198,17 @@ export class AuthResolver {
     // MFA portal fix: same RLS context concern as initiateMfaEnrollment.
     // mfaService.confirmEnrollment does prisma.user.findUnique + .update,
     // both of which need SET LOCAL active.
+    //
+    // MFA-RLS fix (MfaService): pass user.tenantId so the service
+    // can re-enter context for its own Prisma calls (safe even when
+    // this resolver wraps too — nested context is a savepoint).
     return this.prisma.enterTenantContext({ tenantId: user.tenantId }, async () => {
-      return this.mfaService.confirmEnrollment('user', user.userId, code);
+      return this.mfaService.confirmEnrollment(
+        'user',
+        user.userId,
+        code,
+        user.tenantId,
+      );
     });
   }
 
@@ -212,9 +232,12 @@ export class AuthResolver {
     }
     // MFA portal fix: tenant-user RLS context wrap. See
     // initiateMfaEnrollment for the full rationale.
+    //
+    // MFA-RLS fix (MfaService): pass tenantId to mfaService.disableMfa
+    // so it can re-enter context for its own update.
     return this.prisma.enterTenantContext({ tenantId: user.tenantId }, async () => {
       await this.authService.verifyPassword(user.userId, user.tenantId, password, false);
-      await this.mfaService.disableMfa('user', user.userId);
+      await this.mfaService.disableMfa('user', user.userId, user.tenantId);
       return true;
     });
   }
@@ -239,9 +262,17 @@ export class AuthResolver {
     }
     // MFA portal fix: tenant-user RLS context wrap. See
     // initiateMfaEnrollment for the full rationale.
+    //
+    // MFA-RLS fix (MfaService): pass tenantId to
+    // regenerateBackupCodes so it can re-enter context for its
+    // own loadUser + update.
     return this.prisma.enterTenantContext({ tenantId: user.tenantId }, async () => {
       await this.authService.verifyPassword(user.userId, user.tenantId, password, false);
-      return this.mfaService.regenerateBackupCodes('user', user.userId);
+      return this.mfaService.regenerateBackupCodes(
+        'user',
+        user.userId,
+        user.tenantId,
+      );
     });
   }
 

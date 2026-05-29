@@ -37,6 +37,21 @@ function hashBackupCode(code: string): string {
  * generic-ifying by branching on `userType` rather than wrapping the
  * model in a polymorphic adapter — there are only two cases and the
  * Prisma client gives us strong typing for free.
+ *
+ * **MFA-RLS fix (MfaService).** Every method that touches the
+ * tenant-scoped `users` table now requires a `tenantId` parameter
+ * (REQUIRED when `userType === 'user'`). The tenant branch wraps the
+ * Prisma call in `enterTenantContext({ tenantId }) + scoped()` so
+ * RLS's `SET LOCAL app.current_tenant` is in effect. Without this,
+ * the singleton `this.prisma` reference doesn't inherit the
+ * resolver's context (Prisma's RLS middleware only auto-routes when
+ * it can see the AsyncLocalStorage chain — calls from a service's
+ * own injected Prisma reference bypass the wrap on the singleton's
+ * middleware chain because `ctx.tx` is set, but `next(params)` then
+ * dispatches on the singleton's connection, not the tx).
+ *
+ * Platform-user calls (`this.prisma.platformUser.*`) are unaffected
+ * — `platform_users` isn't RLS-scoped.
  */
 @Injectable()
 export class MfaService {
@@ -51,11 +66,14 @@ export class MfaService {
    * confirms enrollment by submitting their first TOTP code via
    * `confirmEnrollment`. This guard catches the case where the user
    * scans the QR but the authenticator app fails to register.
+   *
+   * MFA-RLS fix: `tenantId` is REQUIRED when `userType === 'user'`.
    */
   async initiateEnrollment(
     userType: 'user' | 'platform_user',
     userId: string,
     userEmail: string,
+    tenantId?: string,
   ): Promise<{
     secret: string;
     otpauthUri: string;
@@ -77,13 +95,10 @@ export class MfaService {
     // field-encryption middleware no longer encrypts this column
     // (see encrypted-fields.config.ts).
     if (userType === 'user') {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: {
-          mfaSecret: secret,
-          mfaBackupCodes: JSON.stringify(hashedCodes),
-          // `mfaEnabled` stays false until confirmEnrollment.
-        },
+      await this.tenantUserUpdate(userId, tenantId, {
+        mfaSecret: secret,
+        mfaBackupCodes: JSON.stringify(hashedCodes),
+        // `mfaEnabled` stays false until confirmEnrollment.
       });
     } else {
       await this.prisma.platformUser.update({
@@ -101,13 +116,18 @@ export class MfaService {
   /**
    * Step 2: confirm enrollment by submitting the first TOTP code. On
    * success, flips `mfaEnabled = true` so the next login requires MFA.
+   *
+   * MFA-RLS fix: `tenantId` is REQUIRED when `userType === 'user'`.
+   * Threaded through to `loadUser` so the secret-fetching findUnique
+   * runs inside tenant context too.
    */
   async confirmEnrollment(
     userType: 'user' | 'platform_user',
     userId: string,
     code: string,
+    tenantId?: string,
   ): Promise<boolean> {
-    const user = await this.loadUser(userType, userId);
+    const user = await this.loadUser(userType, userId, tenantId);
     if (!user.mfaSecret) {
       throw new ValidationError(
         'MFA enrollment has not been initiated for this user',
@@ -117,10 +137,7 @@ export class MfaService {
       return false;
     }
     if (userType === 'user') {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { mfaEnabled: true },
-      });
+      await this.tenantUserUpdate(userId, tenantId, { mfaEnabled: true });
     } else {
       await this.prisma.platformUser.update({
         where: { id: userId },
@@ -133,13 +150,19 @@ export class MfaService {
   /**
    * Verify a login-time TOTP code OR a backup code. Returns true on
    * either path. Consumes the backup code if matched.
+   *
+   * MFA-RLS fix: `tenantId` is REQUIRED when `userType === 'user'`.
+   * Threaded to `loadUser` and `consumeBackupCode`. Called from
+   * `AuthService.verifyMfaAndLogin` which extracts `tenantId` from
+   * the MFA token payload before invoking.
    */
   async verifyCode(
     userType: 'user' | 'platform_user',
     userId: string,
     code: string,
+    tenantId?: string,
   ): Promise<boolean> {
-    const user = await this.loadUser(userType, userId);
+    const user = await this.loadUser(userType, userId, tenantId);
     if (!user.mfaEnabled || !user.mfaSecret) {
       return false;
     }
@@ -151,26 +174,33 @@ export class MfaService {
     }
     // Backup code fallback.
     if (!user.mfaBackupCodes) return false;
-    return this.consumeBackupCode(userType, userId, user.mfaBackupCodes, normalized);
+    return this.consumeBackupCode(
+      userType,
+      userId,
+      user.mfaBackupCodes,
+      normalized,
+      tenantId,
+    );
   }
 
+  /**
+   * MFA-RLS fix: `tenantId` is REQUIRED when `userType === 'user'`.
+   */
   async disableMfa(
     userType: 'user' | 'platform_user',
     userId: string,
+    tenantId?: string,
   ): Promise<void> {
     if (userType === 'user') {
       // S19-STAB-5: stamp `mfaDisabledAt` so the compliance service
       // can start a fresh 7-day grace window from this moment if the
       // tenant tier requires MFA. PlatformUser rows don't carry that
       // column (platform admins are governed by a separate policy).
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: {
-          mfaEnabled: false,
-          mfaSecret: null,
-          mfaBackupCodes: null,
-          mfaDisabledAt: new Date(),
-        },
+      await this.tenantUserUpdate(userId, tenantId, {
+        mfaEnabled: false,
+        mfaSecret: null,
+        mfaBackupCodes: null,
+        mfaDisabledAt: new Date(),
       });
     } else {
       await this.prisma.platformUser.update({
@@ -201,20 +231,20 @@ export class MfaService {
    *
    * The accountability trail is the resolver's @AuditAction
    * decorator, which records (actor, target, before/after).
+   *
+   * MFA-RLS fix: `tenantId` is REQUIRED when `userType === 'user'`.
    */
   async adminResetMfa(
     userType: 'user' | 'platform_user',
     userId: string,
+    tenantId?: string,
   ): Promise<void> {
     if (userType === 'user') {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: {
-          mfaEnabled: false,
-          mfaSecret: null,
-          mfaBackupCodes: null,
-          mfaDisabledAt: new Date(),
-        },
+      await this.tenantUserUpdate(userId, tenantId, {
+        mfaEnabled: false,
+        mfaSecret: null,
+        mfaBackupCodes: null,
+        mfaDisabledAt: new Date(),
       });
     } else {
       await this.prisma.platformUser.update({
@@ -232,12 +262,15 @@ export class MfaService {
    * Regenerate the 10 backup codes after the user exhausts them. Does
    * not change the TOTP secret. Returns the new codes once — caller is
    * responsible for showing them to the user immediately.
+   *
+   * MFA-RLS fix: `tenantId` is REQUIRED when `userType === 'user'`.
    */
   async regenerateBackupCodes(
     userType: 'user' | 'platform_user',
     userId: string,
+    tenantId?: string,
   ): Promise<string[]> {
-    const user = await this.loadUser(userType, userId);
+    const user = await this.loadUser(userType, userId, tenantId);
     if (!user.mfaEnabled) {
       throw new ValidationError('MFA is not enabled — enrol first');
     }
@@ -246,7 +279,7 @@ export class MfaService {
     const hashedCodes = plaintextCodes.map(hashBackupCode);
     const data = { mfaBackupCodes: JSON.stringify(hashedCodes) };
     if (userType === 'user') {
-      await this.prisma.user.update({ where: { id: userId }, data });
+      await this.tenantUserUpdate(userId, tenantId, data);
     } else {
       await this.prisma.platformUser.update({ where: { id: userId }, data });
     }
@@ -266,11 +299,41 @@ export class MfaService {
     );
   }
 
+  /**
+   * MFA-RLS fix: centralised RLS-aware `prisma.user.update` helper.
+   *
+   * Wraps in `enterTenantContext({ tenantId }) + scoped()` so the
+   * call runs on the in-context tx client (which has `SET LOCAL
+   * app.current_tenant` active). Refuses to run when `tenantId` is
+   * missing — surfaces the developer error at the call site rather
+   * than silently writing to whatever row matches across tenants.
+   *
+   * Nested inside an already-active context this becomes a savepoint
+   * — harmless, just an extra round-trip.
+   */
+  private async tenantUserUpdate(
+    userId: string,
+    tenantId: string | undefined,
+    data: Parameters<PrismaService['user']['update']>[0]['data'],
+  ): Promise<void> {
+    if (!tenantId) {
+      throw new Error(
+        `MfaService: tenantId is required for tenant-user operations (userId=${userId}). ` +
+          `Caller must pass user.tenantId.`,
+      );
+    }
+    await this.prisma.enterTenantContext({ tenantId }, async () => {
+      const tx = this.prisma.scoped();
+      await tx.user.update({ where: { id: userId }, data });
+    });
+  }
+
   private async consumeBackupCode(
     userType: 'user' | 'platform_user',
     userId: string,
     rawCodesJson: string,
     submittedCode: string,
+    tenantId?: string,
   ): Promise<boolean> {
     // FIX-6: column now stores hashes — hash the submission and compare.
     let storedHashes: string[];
@@ -288,10 +351,7 @@ export class MfaService {
     storedHashes.splice(idx, 1);
     const newJson = JSON.stringify(storedHashes);
     if (userType === 'user') {
-      await this.prisma.user.update({
-        where: { id: userId },
-        data: { mfaBackupCodes: newJson },
-      });
+      await this.tenantUserUpdate(userId, tenantId, { mfaBackupCodes: newJson });
     } else {
       await this.prisma.platformUser.update({
         where: { id: userId },
@@ -301,15 +361,33 @@ export class MfaService {
     return true;
   }
 
-  private async loadUser(userType: 'user' | 'platform_user', userId: string) {
+  /**
+   * MFA-RLS fix: tenant lookups go through `scoped()` after
+   * (re)entering tenant context. Same fail-fast on missing tenantId
+   * as `tenantUserUpdate`.
+   */
+  private async loadUser(
+    userType: 'user' | 'platform_user',
+    userId: string,
+    tenantId?: string,
+  ) {
     if (userType === 'user') {
-      const u = await this.prisma.user.findUnique({ where: { id: userId } });
-      if (!u) throw new NotFoundError('User', userId);
-      return {
-        mfaEnabled: u.mfaEnabled,
-        mfaSecret: u.mfaSecret,
-        mfaBackupCodes: u.mfaBackupCodes,
-      };
+      if (!tenantId) {
+        throw new Error(
+          `MfaService.loadUser: tenantId is required for tenant-user operations (userId=${userId}). ` +
+            `Caller must pass user.tenantId.`,
+        );
+      }
+      return this.prisma.enterTenantContext({ tenantId }, async () => {
+        const tx = this.prisma.scoped();
+        const u = await tx.user.findUnique({ where: { id: userId } });
+        if (!u) throw new NotFoundError('User', userId);
+        return {
+          mfaEnabled: u.mfaEnabled,
+          mfaSecret: u.mfaSecret,
+          mfaBackupCodes: u.mfaBackupCodes,
+        };
+      });
     }
     const u = await this.prisma.platformUser.findUnique({
       where: { id: userId },
