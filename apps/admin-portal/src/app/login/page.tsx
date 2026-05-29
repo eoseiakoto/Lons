@@ -979,7 +979,7 @@ function ThemeFloatToggle() {
 }
 
 function LoginForm() {
-  const { login } = useAuth();
+  const { login, verifyMfa } = useAuth();
   const router = useRouter();
   const { t } = useI18n();
   const cities = useFootprint();
@@ -996,6 +996,14 @@ function LoginForm() {
   const [mfaEnrollmentRequired, setMfaEnrollmentRequired] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  /**
+   * MFA portal fix: when login() resolves to a non-null challenge,
+   * swap the form to a TOTP entry screen. mfaToken is held in
+   * component state only — it must never outlive the login flow.
+   */
+  const [mfaChallenge, setMfaChallenge] = useState<{ mfaToken: string } | null>(null);
+  const [totpCode, setTotpCode] = useState('');
+
   // Mouse parallax tracked at the page level — drives both the skyline and
   // any future depth layers. Tracks horizontal cursor delta from page center.
   const mx = useMotionValue(0);
@@ -1010,12 +1018,20 @@ function LoginForm() {
     setMfaEnrollmentRequired(false);
     setLoading(true);
     try {
-      await login(tenantSlug, email, password);
+      const challenge = await login(tenantSlug, email, password);
+      // MFA portal fix: SP user has MFA enabled — swap to TOTP entry.
+      // No tokens were stored; the challenge is the user's only
+      // credential at this point.
+      if (challenge) {
+        setMfaChallenge(challenge);
+        setTotpCode('');
+        setError('');
+      }
     } catch (err: any) {
       // S19-STAB-5: dedicated UX for "tenant tier mandates MFA and
-      // your grace window has expired". Tokens are not issued — the
-      // user must contact their admin (who can either enrol them
-      // via password reset or temporarily downgrade the tier).
+      // your grace window has expired". The restricted enrollment-only
+      // session is already stored by auth-context.login before the
+      // throw — we just route to the enrolment card.
       if (err instanceof MfaEnrollmentRequiredError) {
         // MFA-lockout fix: auth-context.login already stored the
         // restricted access token before throwing. Redirect to the
@@ -1033,6 +1049,38 @@ function LoginForm() {
     } finally {
       setLoading(false);
     }
+  };
+
+  /**
+   * MFA portal fix: exchange the in-progress mfaToken + TOTP/backup
+   * code for a full session. The mutation accepts a 6-digit TOTP or
+   * an 8-char hex backup code (case-folded server-side).
+   */
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaChallenge) return;
+    setError('');
+    setLoading(true);
+    try {
+      await verifyMfa(mfaChallenge.mfaToken, totpCode.trim());
+      // Success: verifyMfa hydrates session + router.push('/dashboard').
+      // This component unmounts on navigation.
+    } catch (err: any) {
+      setError(err?.graphQLErrors?.[0]?.message || err.message || 'Verification failed');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * MFA portal fix: "Use a different account" — return to the
+   * email/password screen. Drops the mfaToken (the backend's
+   * per-token attempt counter ages out automatically).
+   */
+  const handleMfaCancel = () => {
+    setMfaChallenge(null);
+    setTotpCode('');
+    setError('');
   };
 
   return (
@@ -1091,121 +1139,194 @@ function LoginForm() {
                 {/* Desktop header */}
                 <div className="hidden lg:block mb-6">
                   <h2 className="text-[22px] font-semibold tracking-tight text-[color:var(--text-primary)]">
-                    {t('login.signIn')}
+                    {mfaChallenge ? t('login.mfaChallenge.title') : t('login.signIn')}
                   </h2>
                   <p className="text-[13px] text-[color:var(--text-secondary)] mt-0.5">
-                    {t('login.title')}
+                    {mfaChallenge ? t('login.mfaChallenge.subtitle') : t('login.title')}
                   </p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-[12px] font-medium tracking-wide text-[color:var(--text-secondary)] mb-1.5">
-                      {t('login.organization')}
-                    </label>
-                    <input
-                      type="text"
-                      value={tenantSlug}
-                      onChange={(e) =>
-                        setTenantSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))
-                      }
-                      className="input-field"
-                      placeholder={t('login.orgPlaceholder')}
-                      required
-                      autoFocus
-                    />
-                  </div>
+                {/*
+                  MFA portal fix: two screens share this card. The
+                  credentials form is shown until login() returns a
+                  challenge; then we render the TOTP entry form in
+                  the same envelope (no layout shift).
+                */}
+                {!mfaChallenge ? (
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                      <label className="block text-[12px] font-medium tracking-wide text-[color:var(--text-secondary)] mb-1.5">
+                        {t('login.organization')}
+                      </label>
+                      <input
+                        type="text"
+                        value={tenantSlug}
+                        onChange={(e) =>
+                          setTenantSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))
+                        }
+                        className="input-field"
+                        placeholder={t('login.orgPlaceholder')}
+                        required
+                        autoFocus
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-[12px] font-medium tracking-wide text-[color:var(--text-secondary)] mb-1.5">
-                      {t('login.email')}
-                    </label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="input-field"
-                      placeholder={t('login.emailPlaceholder')}
-                      required
-                    />
-                  </div>
+                    <div>
+                      <label className="block text-[12px] font-medium tracking-wide text-[color:var(--text-secondary)] mb-1.5">
+                        {t('login.email')}
+                      </label>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="input-field"
+                        placeholder={t('login.emailPlaceholder')}
+                        required
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-[12px] font-medium tracking-wide text-[color:var(--text-secondary)] mb-1.5">
-                      {t('login.password')}
-                    </label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="input-field"
-                      placeholder="••••••••"
-                      required
-                    />
-                  </div>
+                    <div>
+                      <label className="block text-[12px] font-medium tracking-wide text-[color:var(--text-secondary)] mb-1.5">
+                        {t('login.password')}
+                      </label>
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="input-field"
+                        placeholder="••••••••"
+                        required
+                      />
+                    </div>
 
-                  <AnimatePresence initial={false}>
-                    {mfaEnrollmentRequired && (
-                      <motion.div
-                        key="login-mfa-required"
-                        initial={{ opacity: 0, y: -6, height: 0 }}
-                        animate={{ opacity: 1, y: 0, height: 'auto' }}
-                        exit={{ opacity: 0, y: -6, height: 0 }}
-                        transition={{ type: 'spring', stiffness: 280, damping: 26 }}
-                        className="overflow-hidden"
-                      >
-                        <div
-                          role="alert"
-                          className="flex items-start gap-2.5 px-3 py-3 rounded-lg text-[13px]"
-                          style={{
-                            backgroundColor: 'var(--status-warning-soft)',
-                            color: 'var(--status-warning-text)',
-                            border: '1px solid var(--status-warning)',
-                          }}
+                    <AnimatePresence initial={false}>
+                      {mfaEnrollmentRequired && (
+                        <motion.div
+                          key="login-mfa-required"
+                          initial={{ opacity: 0, y: -6, height: 0 }}
+                          animate={{ opacity: 1, y: 0, height: 'auto' }}
+                          exit={{ opacity: 0, y: -6, height: 0 }}
+                          transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+                          className="overflow-hidden"
                         >
-                          <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" strokeWidth={2.25} />
-                          <div className="space-y-1">
-                            <p className="font-semibold">{t('login.mfaRequired.title')}</p>
-                            <p className="text-[12.5px] leading-relaxed opacity-90">
-                              {t('login.mfaRequired.body')}
-                            </p>
+                          <div
+                            role="alert"
+                            className="flex items-start gap-2.5 px-3 py-3 rounded-lg text-[13px]"
+                            style={{
+                              backgroundColor: 'var(--status-warning-soft)',
+                              color: 'var(--status-warning-text)',
+                              border: '1px solid var(--status-warning)',
+                            }}
+                          >
+                            <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" strokeWidth={2.25} />
+                            <div className="space-y-1">
+                              <p className="font-semibold">{t('login.mfaRequired.title')}</p>
+                              <p className="text-[12.5px] leading-relaxed opacity-90">
+                                {t('login.mfaRequired.body')}
+                              </p>
+                            </div>
                           </div>
-                        </div>
-                      </motion.div>
-                    )}
-                    {error && (
-                      <motion.div
-                        key="login-error"
-                        initial={{ opacity: 0, y: -6, height: 0 }}
-                        animate={{ opacity: 1, y: 0, height: 'auto' }}
-                        exit={{ opacity: 0, y: -6, height: 0 }}
-                        transition={{ type: 'spring', stiffness: 280, damping: 26 }}
-                        className="overflow-hidden"
-                      >
-                        <div
-                          role="alert"
-                          className="flex items-start gap-2 px-3 py-2.5 rounded-lg text-[13px]"
-                          style={{
-                            backgroundColor: 'var(--status-error-soft)',
-                            color: 'var(--status-error-text)',
-                            border: '1px solid var(--status-error)',
-                          }}
+                        </motion.div>
+                      )}
+                      {error && (
+                        <motion.div
+                          key="login-error"
+                          initial={{ opacity: 0, y: -6, height: 0 }}
+                          animate={{ opacity: 1, y: 0, height: 'auto' }}
+                          exit={{ opacity: 0, y: -6, height: 0 }}
+                          transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+                          className="overflow-hidden"
                         >
-                          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" strokeWidth={2.25} />
-                          <span>{error}</span>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                          <div
+                            role="alert"
+                            className="flex items-start gap-2 px-3 py-2.5 rounded-lg text-[13px]"
+                            style={{
+                              backgroundColor: 'var(--status-error-soft)',
+                              color: 'var(--status-error-text)',
+                              border: '1px solid var(--status-error)',
+                            }}
+                          >
+                            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" strokeWidth={2.25} />
+                            <span>{error}</span>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
-                  <div className="pt-1">
-                    <SignInButton
-                      loading={loading}
-                      label={t('login.signIn')}
-                      loadingLabel={t('login.signingIn')}
-                    />
-                  </div>
-                </form>
+                    <div className="pt-1">
+                      <SignInButton
+                        loading={loading}
+                        label={t('login.signIn')}
+                        loadingLabel={t('login.signingIn')}
+                      />
+                    </div>
+                  </form>
+                ) : (
+                  <form onSubmit={handleMfaSubmit} className="space-y-4">
+                    <p className="text-[13px] leading-relaxed text-[color:var(--text-secondary)]">
+                      {t('login.mfaChallenge.help')}
+                    </p>
+
+                    <div>
+                      <label className="block text-[12px] font-medium tracking-wide text-[color:var(--text-secondary)] mb-1.5">
+                        {t('login.mfaChallenge.codeLabel')}
+                      </label>
+                      <input
+                        type="text"
+                        value={totpCode}
+                        onChange={(e) => setTotpCode(e.target.value)}
+                        className="input-field tracking-[0.3em] text-center text-[18px]"
+                        placeholder="••••••"
+                        autoComplete="one-time-code"
+                        inputMode="text"
+                        maxLength={8}
+                        required
+                        autoFocus
+                      />
+                    </div>
+
+                    <AnimatePresence initial={false}>
+                      {error && (
+                        <motion.div
+                          key="mfa-error"
+                          initial={{ opacity: 0, y: -6, height: 0 }}
+                          animate={{ opacity: 1, y: 0, height: 'auto' }}
+                          exit={{ opacity: 0, y: -6, height: 0 }}
+                          transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+                          className="overflow-hidden"
+                        >
+                          <div
+                            role="alert"
+                            className="flex items-start gap-2 px-3 py-2.5 rounded-lg text-[13px]"
+                            style={{
+                              backgroundColor: 'var(--status-error-soft)',
+                              color: 'var(--status-error-text)',
+                              border: '1px solid var(--status-error)',
+                            }}
+                          >
+                            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" strokeWidth={2.25} />
+                            <span>{error}</span>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <div className="pt-1 space-y-2">
+                      <SignInButton
+                        loading={loading}
+                        label={t('login.mfaChallenge.verify')}
+                        loadingLabel={t('login.mfaChallenge.verifying')}
+                      />
+                      <button
+                        type="button"
+                        onClick={handleMfaCancel}
+                        className="w-full text-center text-[12px] text-[color:var(--text-tertiary)] hover:text-[color:var(--text-secondary)] transition-colors"
+                      >
+                        {t('login.mfaChallenge.useDifferentAccount')}
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
             </div>
 

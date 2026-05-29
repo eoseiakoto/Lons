@@ -18,7 +18,25 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (tenantId: string, email: string, password: string) => Promise<void>;
+  /**
+   * Submit slug + email + password. Resolves to:
+   *   - `null` when login completes normally (tokens stored, redirect fired).
+   *   - An `MfaChallenge` when the user has MFA enabled — the LoginForm
+   *     swaps to a TOTP entry screen and submits via `verifyMfa`.
+   * Still throws `MfaEnrollmentRequiredError` when the tenant tier
+   * mandates MFA and the user is overdue (separate flow — restricted
+   * enrollment-only token is stored before the throw).
+   */
+  login: (
+    tenantId: string,
+    email: string,
+    password: string,
+  ) => Promise<MfaChallenge | null>;
+  /**
+   * Exchange a valid MFA token + TOTP/backup code for a full session.
+   * Throws on invalid/expired token or wrong code.
+   */
+  verifyMfa: (mfaToken: string, code: string) => Promise<void>;
   logout: () => void;
   hasPermission: (permission: string) => boolean;
   refreshUser: () => Promise<void>;
@@ -27,7 +45,8 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
-  login: async () => {},
+  login: async () => null,
+  verifyMfa: async () => {},
   logout: () => {},
   hasPermission: () => false,
   refreshUser: async () => {},
@@ -40,9 +59,41 @@ const LOGIN_MUTATION = gql`
       refreshToken
       requiresMfaEnrollment
       mfaGraceDaysRemaining
+      # MFA portal fix: existing MFA-enabled SP users return
+      # { requiresMfa: true, mfaToken } — neither field was selected
+      # before, so the frontend got an undefined accessToken + the
+      # JWT parse failed silently. Surfacing both fields here so the
+      # caller can branch into the TOTP challenge flow.
+      requiresMfa
+      mfaToken
     }
   }
 `;
+
+/**
+ * MFA portal fix: redeem the one-time MFA challenge token for a
+ * full tenant session. Backend rate-limits this at 5 attempts per
+ * 5-minute token AND per IP; frontend just dispatches.
+ */
+const VERIFY_MFA_MUTATION = gql`
+  mutation VerifyMfa($mfaToken: String!, $code: String!) {
+    verifyMfa(mfaToken: $mfaToken, code: $code) {
+      accessToken
+      refreshToken
+    }
+  }
+`;
+
+/**
+ * MFA portal fix: returned by `login()` when the SP user has MFA
+ * enabled. The LoginForm renders a TOTP entry screen and submits
+ * the code via `verifyMfa(challenge.mfaToken, code)`. Held in React
+ * state only (never localStorage) — the mfaToken is a 5-minute
+ * bearer for the exchange.
+ */
+export interface MfaChallenge {
+  mfaToken: string;
+}
 
 /**
  * S19-STAB-5 — thrown by `login()` when the server refuses tokens
@@ -138,7 +189,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [user, fetchTenantName]);
 
-  const login = useCallback(async (slug: string, email: string, password: string) => {
+  const login = useCallback(
+    async (
+      slug: string,
+      email: string,
+      password: string,
+    ): Promise<MfaChallenge | null> => {
     const { data } = await apolloClient.mutate({
       mutation: LOGIN_MUTATION,
       variables: { slug, email, password },
@@ -149,7 +205,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshToken,
       requiresMfaEnrollment,
       mfaGraceDaysRemaining,
+      requiresMfa,
+      mfaToken,
     } = data.loginBySlug;
+
+    // MFA portal fix: SP user has MFA enabled and the backend
+    // returned a short-lived MFA challenge token. Hand it back so
+    // the LoginForm can render a TOTP entry screen and submit via
+    // verifyMfa(mfaToken, code). The mfaToken is intentionally NOT
+    // stored to localStorage — it's a one-use bearer.
+    if (requiresMfa) {
+      if (!mfaToken) {
+        throw new Error(
+          'Login response advertised requiresMfa=true but did not include an mfaToken.',
+        );
+      }
+      return { mfaToken };
+    }
 
     // MFA-lockout fix: the server now ALSO issues an `accessToken`
     // alongside `requiresMfaEnrollment: true` — the token is
@@ -220,7 +292,45 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     });
 
     router.push('/dashboard');
+    return null;
   }, [router]);
+
+  /**
+   * MFA portal fix: redeem the in-progress mfaToken + TOTP/backup
+   * code for a full tenant session. Mirrors the post-login
+   * hydration: stores both tokens, parses JWT, sets the user,
+   * redirects to /dashboard. Refreshes any persisted grace
+   * countdown so the banner refreshes for the now-enrolled user
+   * (on a normal MFA-enabled login the grace key shouldn't be
+   * relevant — defensive: clear it).
+   */
+  const verifyMfa = useCallback(
+    async (mfaToken: string, code: string): Promise<void> => {
+      const { data } = await apolloClient.mutate({
+        mutation: VERIFY_MFA_MUTATION,
+        variables: { mfaToken, code },
+      });
+      const { accessToken, refreshToken } = data.verifyMfa;
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.setItem('refreshToken', refreshToken);
+      // The user has just completed MFA — they're enrolled,
+      // therefore not in grace. Drop any stale countdown.
+      localStorage.removeItem(MFA_GRACE_KEY);
+
+      const payload = parseJwt(accessToken);
+      if (!payload) throw new Error('Invalid token');
+      setUser({
+        userId: payload.sub as string,
+        tenantId: payload.tenantId as string,
+        role: payload.role as string,
+        permissions: (payload.permissions as string[]) || [],
+        email: payload.email as string | undefined,
+        name: payload.name as string | undefined,
+      });
+      router.push('/dashboard');
+    },
+    [router],
+  );
 
   const logout = useCallback(() => {
     localStorage.removeItem('accessToken');
@@ -257,7 +367,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  return React.createElement(AuthContext.Provider, { value: { user, loading, login, logout, hasPermission, refreshUser } }, children);
+  return React.createElement(AuthContext.Provider, { value: { user, loading, login, verifyMfa, logout, hasPermission, refreshUser } }, children);
 }
 
 export function useAuth() {

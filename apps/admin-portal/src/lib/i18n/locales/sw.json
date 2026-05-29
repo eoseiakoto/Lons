@@ -128,6 +128,15 @@
     "mfaRequired": {
       "title": "Usajili wa MFA unahitajika",
       "body": "Mpango wa shirika lako unahitaji uthibitisho wa hatua nyingi (MFA) kwa jukumu hili. Kamilisha usajili hapa chini ili kurejesha ufikiaji kamili."
+    },
+    "mfaChallenge": {
+      "title": "Uthibitisho wa hatua mbili",
+      "subtitle": "Weka msimbo kutoka kwa programu yako ya uthibitisho",
+      "help": "Weka msimbo wa tarakimu 6 kutoka kwa programu yako ya uthibitisho, au mojawapo ya misimbo yako ya akiba ya herufi 8.",
+      "codeLabel": "Msimbo wa uthibitisho",
+      "verify": "Thibitisha",
+      "verifying": "Inathibitisha...",
+      "useDifferentAccount": "Tumia akaunti tofauti"
     }
   },
   "mfa": {

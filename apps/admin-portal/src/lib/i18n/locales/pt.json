@@ -128,6 +128,15 @@
     "mfaRequired": {
       "title": "Inscrição em MFA obrigatória",
       "body": "O plano da sua organização exige autenticação multifator para esta função. Conclua a inscrição abaixo para restaurar o acesso completo."
+    },
+    "mfaChallenge": {
+      "title": "Autenticação de dois fatores",
+      "subtitle": "Insira o código do seu aplicativo autenticador",
+      "help": "Insira o código de 6 dígitos do seu aplicativo autenticador, ou um dos seus códigos de backup de 8 caracteres.",
+      "codeLabel": "Código de verificação",
+      "verify": "Verificar",
+      "verifying": "Verificando...",
+      "useDifferentAccount": "Usar outra conta"
     }
   },
   "mfa": {
