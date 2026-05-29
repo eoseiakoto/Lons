@@ -39,11 +39,18 @@ export class UsageController {
 
   @Get()
   @AuditAction('read.usageSnapshot', 'usage')
-  @ApiOperation({ summary: 'Current usage snapshot for the calling tenant' })
+  @ApiOperation({
+    summary: 'Get current plan usage snapshot',
+    description:
+      'Returns plan limits and current counters (DB + Redis) for the authenticated tenant. ' +
+      'Authentication: API key + secret. Mirrors the GraphQL `currentUsage` query.',
+  })
   @ApiResponse({
     status: 200,
     description: 'Plan limits + current counters (DB + Redis).',
   })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async getCurrentUsage(@Req() req: ApiKeyRequest): Promise<unknown> {
     const tenantId = req.tenantId;
     if (!tenantId) {

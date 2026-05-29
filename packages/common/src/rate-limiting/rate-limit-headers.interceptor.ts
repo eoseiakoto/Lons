@@ -27,8 +27,15 @@ import { Observable, tap } from 'rxjs';
  */
 @Injectable()
 export class RateLimitHeadersInterceptor implements NestInterceptor {
-  /** Default limit shown in headers when no accurate value is available. */
-  private readonly defaultLimit = 1_000;
+  /**
+   * F-ABC-3 / F-ABC-4: fallback limit shown ONLY when the throttler
+   * guard hasn't stamped `req._rateLimitConfig` (e.g. excluded
+   * routes like /health, or test environments without the guard
+   * wired). Aligned with RATE_LIMIT_TIERS.starter — previously
+   * defaulted to 1000 which gave every client misleadingly high
+   * limits in the headers.
+   */
+  private readonly fallbackLimit = 100;
 
   /** Default window size in seconds. */
   private readonly defaultWindowSeconds = 60;
@@ -41,29 +48,45 @@ export class RateLimitHeadersInterceptor implements NestInterceptor {
           return;
         }
 
-        const res = context.switchToHttp().getResponse<{
+        const http = context.switchToHttp();
+        const res = http.getResponse<{
           setHeader?: (name: string, value: string | number) => void;
           getHeader?: (name: string) => string | number | undefined;
         }>();
+        const req = http.getRequest<Record<string, unknown> | undefined>();
 
         if (!res || typeof res.setHeader !== 'function') {
           return;
         }
 
-        // Do not overwrite headers already written by the ThrottlerGuard or a
-        // more specific middleware.
+        // Don't overwrite headers already written by an upstream
+        // middleware (e.g. a custom header-writing guard).
         const alreadySet =
           typeof res.getHeader === 'function' &&
           !!res.getHeader('X-RateLimit-Limit');
+        if (alreadySet) return;
 
-        if (!alreadySet) {
-          const resetAt =
-            Math.floor(Date.now() / 1_000) + this.defaultWindowSeconds;
+        // F-ABC-3: prefer the per-tenant values stamped by
+        // TenantThrottlerGuard.handleRequest. The guard publishes
+        // the resolved (limit, remaining, resetAt) on the request
+        // object after the throttler check. Fall back to the
+        // static starter-tier values only when the guard hasn't
+        // run for this route.
+        const resolved = req?._rateLimitConfig as
+          | { limit: number; remaining: number; resetAt: number }
+          | undefined;
 
-          res.setHeader('X-RateLimit-Limit', this.defaultLimit);
-          res.setHeader('X-RateLimit-Remaining', this.defaultLimit - 1);
-          res.setHeader('X-RateLimit-Reset', resetAt);
+        if (resolved) {
+          res.setHeader('X-RateLimit-Limit', resolved.limit);
+          res.setHeader('X-RateLimit-Remaining', Math.max(0, resolved.remaining));
+          res.setHeader('X-RateLimit-Reset', resolved.resetAt);
+          return;
         }
+
+        const resetAt = Math.floor(Date.now() / 1_000) + this.defaultWindowSeconds;
+        res.setHeader('X-RateLimit-Limit', this.fallbackLimit);
+        res.setHeader('X-RateLimit-Remaining', this.fallbackLimit - 1);
+        res.setHeader('X-RateLimit-Reset', resetAt);
       }),
     );
   }

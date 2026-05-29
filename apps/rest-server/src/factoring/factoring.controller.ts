@@ -12,7 +12,10 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import {
+  ApiBody,
   ApiOperation,
+  ApiParam,
+  ApiQuery,
   ApiResponse,
   ApiSecurity,
   ApiTags,
@@ -76,10 +79,19 @@ export class FactoringController {
   @Post('invoices/submit')
   @HttpCode(HttpStatus.CREATED)
   @AuditAction('submit.invoice', 'invoice')
-  @ApiOperation({ summary: 'Submit an invoice for factoring' })
+  @ApiOperation({
+    summary: 'Submit an invoice for factoring',
+    description:
+      'Submits an invoice for the financing offer pipeline. Requires the enterprise plan tier. ' +
+      'Idempotent via the required idempotencyKey body field.',
+  })
+  @ApiBody({ type: SubmitInvoiceDto })
   @ApiResponse({ status: 201, description: 'Invoice submitted; verification routing decided.' })
   @ApiResponse({ status: 400, description: 'Validation error (face value, dates, debtor status, concentration breach).' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 403, description: 'Tenant plan does not include invoice factoring (requires enterprise tier).' })
   @ApiResponse({ status: 404, description: 'Seller, debtor, or product not found.' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async submitInvoice(
     @Req() req: ApiKeyRequest,
     @Body() body: SubmitInvoiceDto,
@@ -102,9 +114,15 @@ export class FactoringController {
   }
 
   @Get('invoices/:id')
-  @ApiOperation({ summary: 'Read an invoice — status, offer terms, and lifecycle timestamps' })
+  @ApiOperation({
+    summary: 'Get an invoice by ID',
+    description: 'Returns invoice details — status, offer terms, and lifecycle timestamps.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid', description: 'Invoice UUID' })
   @ApiResponse({ status: 200, description: 'Invoice details.' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
   @ApiResponse({ status: 404, description: 'Invoice not found.' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async getInvoice(
     @Req() req: ApiKeyRequest,
     @Param('id') id: string,
@@ -127,10 +145,18 @@ export class FactoringController {
   @Post('invoices/:id/accept')
   @HttpCode(HttpStatus.OK)
   @AuditAction('accept.invoiceOffer', 'invoice')
-  @ApiOperation({ summary: 'Seller accepts the financing offer' })
+  @ApiOperation({
+    summary: 'Accept the financing offer',
+    description: 'Seller accepts the offer; invoice moves to offer_accepted. Requires the enterprise plan tier.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid', description: 'Invoice UUID' })
+  @ApiBody({ type: AcceptOfferDto })
   @ApiResponse({ status: 200, description: 'Offer accepted; invoice moves to offer_accepted.' })
   @ApiResponse({ status: 400, description: 'Invoice is not in offer_generated state.' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 403, description: 'Tenant plan does not include invoice factoring.' })
   @ApiResponse({ status: 404, description: 'Invoice not found.' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async acceptOffer(
     @Req() req: ApiKeyRequest,
     @Param('id') id: string,
@@ -145,10 +171,18 @@ export class FactoringController {
   @Post('invoices/:id/decline')
   @HttpCode(HttpStatus.OK)
   @AuditAction('decline.invoiceOffer', 'invoice')
-  @ApiOperation({ summary: 'Seller declines the financing offer' })
+  @ApiOperation({
+    summary: 'Decline the financing offer',
+    description: 'Seller declines the offer; invoice moves to cancelled. Requires the enterprise plan tier.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid', description: 'Invoice UUID' })
+  @ApiBody({ type: DeclineOfferDto, required: false })
   @ApiResponse({ status: 200, description: 'Offer declined; invoice moves to cancelled.' })
   @ApiResponse({ status: 400, description: 'Invoice is not in offer_generated state.' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 403, description: 'Tenant plan does not include invoice factoring.' })
   @ApiResponse({ status: 404, description: 'Invoice not found.' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async declineOffer(
     @Req() req: ApiKeyRequest,
     @Param('id') id: string,
@@ -161,8 +195,19 @@ export class FactoringController {
   // ─── Debtors ───────────────────────────────────────────────────────────
 
   @Get('debtors')
-  @ApiOperation({ summary: 'List debtors (cursor pagination)' })
+  @ApiOperation({
+    summary: 'List debtors',
+    description: 'Cursor-paginated list of debtors for the authenticated tenant.',
+  })
+  @ApiQuery({ name: 'cursor', required: false, description: 'Cursor — debtor id of the last row from the previous page.' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Page size, max 100.' })
+  @ApiQuery({ name: 'status', required: false, enum: ['active', 'suspended', 'blacklisted'] })
+  @ApiQuery({ name: 'industrySector', required: false })
+  @ApiQuery({ name: 'country', required: false, description: 'ISO-3 country code.' })
+  @ApiQuery({ name: 'search', required: false, description: 'Free-text search across companyName + registrationNumber.' })
   @ApiResponse({ status: 200, description: 'Page of debtors with optional nextCursor.' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async listDebtors(
     @Req() req: ApiKeyRequest,
     @Query() query: DebtorListQueryDto,
@@ -186,9 +231,16 @@ export class FactoringController {
   @Post('debtors')
   @HttpCode(HttpStatus.CREATED)
   @AuditAction('create.debtor', 'debtor')
-  @ApiOperation({ summary: 'Create a debtor' })
+  @ApiOperation({
+    summary: 'Create a debtor',
+    description: 'Creates a debtor record. Requires the enterprise plan tier. Optionally idempotent via the idempotencyKey body field.',
+  })
+  @ApiBody({ type: CreateDebtorDto })
   @ApiResponse({ status: 201, description: 'Debtor created.' })
   @ApiResponse({ status: 400, description: 'Validation error.' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 403, description: 'Tenant plan does not include invoice factoring.' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async createDebtor(
     @Req() req: ApiKeyRequest,
     @Body() body: CreateDebtorDto,
@@ -214,9 +266,15 @@ export class FactoringController {
   }
 
   @Get('debtors/:id')
-  @ApiOperation({ summary: 'Read a debtor' })
+  @ApiOperation({
+    summary: 'Get a debtor by ID',
+    description: 'Returns the debtor record.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid', description: 'Debtor UUID' })
   @ApiResponse({ status: 200, description: 'Debtor details.' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
   @ApiResponse({ status: 404, description: 'Debtor not found.' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async getDebtor(
     @Req() req: ApiKeyRequest,
     @Param('id') id: string,

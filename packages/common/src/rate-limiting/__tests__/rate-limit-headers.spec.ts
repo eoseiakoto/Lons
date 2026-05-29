@@ -42,13 +42,17 @@ describe('RateLimitHeadersInterceptor', () => {
     interceptor = new RateLimitHeadersInterceptor();
   });
 
+  // F-ABC-3/-4: fallback limit (when the throttler guard hasn't
+  // stamped req._rateLimitConfig) is now 100 to match
+  // RATE_LIMIT_TIERS.starter — previously 1000, which gave every
+  // client misleadingly high headers regardless of tier.
   it('sets X-RateLimit-Limit header on successful responses', (done) => {
     const setHeader = jest.fn();
     const ctx = buildHttpContext({ setHeader });
 
     interceptor.intercept(ctx, buildCallHandler()).subscribe({
       complete: () => {
-        expect(setHeader).toHaveBeenCalledWith('X-RateLimit-Limit', 1_000);
+        expect(setHeader).toHaveBeenCalledWith('X-RateLimit-Limit', 100);
         done();
       },
     });
@@ -60,7 +64,7 @@ describe('RateLimitHeadersInterceptor', () => {
 
     interceptor.intercept(ctx, buildCallHandler()).subscribe({
       complete: () => {
-        expect(setHeader).toHaveBeenCalledWith('X-RateLimit-Remaining', 999);
+        expect(setHeader).toHaveBeenCalledWith('X-RateLimit-Remaining', 99);
         done();
       },
     });
@@ -138,10 +142,36 @@ describe('RateLimitHeadersInterceptor', () => {
       }),
     } as unknown as ExecutionContext;
 
-    // Should not throw; should still set the headers.
+    // Should not throw; should still set the headers (with the
+    // F-ABC-4 starter-aligned fallback of 100, not the old 1000).
     interceptor.intercept(ctx, buildCallHandler()).subscribe({
       complete: () => {
-        expect(setHeader).toHaveBeenCalledWith('X-RateLimit-Limit', 1_000);
+        expect(setHeader).toHaveBeenCalledWith('X-RateLimit-Limit', 100);
+        done();
+      },
+    });
+  });
+
+  // F-ABC-3: when the throttler guard has stamped
+  // req._rateLimitConfig with per-tenant values, the interceptor
+  // must surface those instead of the static fallback.
+  it('reads per-tenant limits from req._rateLimitConfig when present', (done) => {
+    const setHeader = jest.fn();
+    const ctx = {
+      getType: () => 'http',
+      switchToHttp: () => ({
+        getResponse: () => ({ setHeader, getHeader: () => undefined }),
+        getRequest: () => ({
+          _rateLimitConfig: { limit: 500, remaining: 487, resetAt: 1_700_000_000 },
+        }),
+      }),
+    } as unknown as ExecutionContext;
+
+    interceptor.intercept(ctx, buildCallHandler()).subscribe({
+      complete: () => {
+        expect(setHeader).toHaveBeenCalledWith('X-RateLimit-Limit', 500);
+        expect(setHeader).toHaveBeenCalledWith('X-RateLimit-Remaining', 487);
+        expect(setHeader).toHaveBeenCalledWith('X-RateLimit-Reset', 1_700_000_000);
         done();
       },
     });

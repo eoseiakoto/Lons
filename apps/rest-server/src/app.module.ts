@@ -15,6 +15,9 @@ import {
   AuditEventInterceptor,
   RedisClientModule,
   PLAN_TIER_CONFIG_SERVICE,
+  // F-ABC-1/-2: DB-driven per-tenant rate-limit resolver.
+  RateLimitConfigService,
+  REDIS_CLIENT,
 } from '@lons/common';
 import {
   EntityServiceModule,
@@ -91,6 +94,23 @@ import { UsageRestModule } from './usage/usage.module';
     { provide: APP_INTERCEPTOR, useClass: AuditEventInterceptor },
     // Sprint 14 (S14-9) — bind PLAN_TIER_CONFIG_SERVICE for TenantPlanGuard.
     { provide: PLAN_TIER_CONFIG_SERVICE, useExisting: PlanTierConfigService },
+    // F-ABC-1/-2: per-tenant DB-driven rate-limit resolver.
+    // TenantThrottlerGuard picks it up via @Optional() injection —
+    // without this registration the guard silently falls back to
+    // DEFAULT_LIMITS (starter tier) for every tenant. We also alias
+    // PrismaService → 'PRISMA_SERVICE' since RateLimitConfigService
+    // declares its Prisma dep on the string token to stay
+    // import-free of @lons/database (circular).
+    { provide: 'PRISMA_SERVICE', useExisting: PrismaService },
+    {
+      provide: RateLimitConfigService,
+      // Redis typed as `unknown` to avoid pulling ioredis into
+      // rest-server's dep tree — the service handles the type
+      // internally and only does duck-typed get/setex/del calls.
+      useFactory: (prisma: PrismaService, redis: unknown) =>
+        new RateLimitConfigService(prisma as any, redis as any),
+      inject: [PrismaService, REDIS_CLIENT],
+    },
   ],
 })
 export class AppModule implements NestModule {

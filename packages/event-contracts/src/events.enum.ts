@@ -56,6 +56,30 @@ export enum EventType {
   RECONCILIATION_COMPLETED = 'reconciliation.completed',
   COLLECTIONS_ACTION_LOGGED = 'collections_action.logged',
 
+  // ── Collections workflow (Sprint 19 S19-5..9) ───────────────────────
+  // State-machine + write-off + NPL + broken-PTP fanout. Every
+  // material transition emits one event so the notification service,
+  // analytics, and downstream listeners stay decoupled from the
+  // state machine itself.
+  COLLECTIONS_CASE_CREATED = 'collections.case.created',
+  COLLECTIONS_CASE_TRANSITIONED = 'collections.case.transitioned',
+  COLLECTIONS_CASE_ASSIGNED = 'collections.case.assigned',
+  COLLECTIONS_PTP_RECORDED = 'collections.ptp.recorded',
+  COLLECTIONS_PTP_BROKEN = 'collections.ptp.broken',
+  COLLECTIONS_CASE_ESCALATED = 'collections.case.escalated',
+  COLLECTIONS_CASE_CLOSED = 'collections.case.closed',
+  COLLECTIONS_WRITE_OFF_REQUESTED = 'collections.write_off.requested',
+  COLLECTIONS_WRITE_OFF_APPROVED = 'collections.write_off.approved',
+  COLLECTIONS_WRITE_OFF_REJECTED = 'collections.write_off.rejected',
+  COLLECTIONS_NPL_SUSPENDED = 'collections.npl.suspended',
+  COLLECTIONS_CREDIT_BUREAU_REPORTED = 'collections.credit_bureau.reported',
+
+  // ── Authorization observability (Sprint 19 S19-13) ──────────────────
+  // Emitted on every field-level or mutation-level access denial.
+  // Wired to the audit log + monitoring alert when a single user
+  // crosses 10 failures in 5 minutes.
+  AUTHORIZATION_FAILURE = 'authorization.failure',
+
   // Notification events (Phase 4)
   NOTIFICATION_SENT = 'notification.sent',
   NOTIFICATION_FAILED = 'notification.failed',

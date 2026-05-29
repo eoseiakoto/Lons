@@ -19,6 +19,8 @@ import {
   ApiSecurity,
   ApiHeader,
   ApiQuery,
+  ApiParam,
+  ApiBody,
 } from '@nestjs/swagger';
 import { LoanRequestService, OfferService } from '@lons/process-engine';
 import { AuditAction } from '@lons/common';
@@ -42,11 +44,19 @@ export class LoanRequestController {
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(IdempotencyInterceptor)
   @AuditAction('create.loanRequest', 'loan_request')
-  @ApiOperation({ summary: 'Submit a loan request' })
+  @ApiOperation({
+    summary: 'Submit a loan request',
+    description:
+      'Creates a new loan request and runs pre-qualification + scoring. ' +
+      'Authentication: API key + secret. ' +
+      'Idempotent via X-Idempotency-Key — repeated calls return the original request.',
+  })
+  @ApiBody({ type: CreateLoanRequestDto })
   @ApiResponse({ status: 201, description: 'Loan request created' })
   @ApiResponse({ status: 400, description: 'Validation error' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiHeader({ name: 'X-Idempotency-Key', required: false, description: 'Idempotency key for duplicate prevention' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
+  @ApiHeader({ name: 'X-Idempotency-Key', required: false, description: 'Prevents duplicate operations on retry.' })
   async create(
     @Req() req: any,
     @Body() body: CreateLoanRequestDto,
@@ -65,20 +75,31 @@ export class LoanRequestController {
   }
 
   @Get(':id')
-  @ApiOperation({ summary: 'Get loan request status and details' })
+  @ApiOperation({
+    summary: 'Get a loan request by ID',
+    description: 'Returns the loan request and its current decision state.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid', description: 'Loan request UUID' })
   @ApiResponse({ status: 200, description: 'Loan request details' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
   @ApiResponse({ status: 404, description: 'Loan request not found' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async findOne(@Req() req: any, @Param('id') id: string): Promise<any> {
     const tenantId = req.tenantId;
     return this.loanRequestService.findById(tenantId, id);
   }
 
   @Get()
-  @ApiOperation({ summary: 'List loan requests with filters and pagination' })
+  @ApiOperation({
+    summary: 'List loan requests',
+    description: 'Paginated list of loan requests for the authenticated tenant with optional filters.',
+  })
   @ApiResponse({ status: 200, description: 'Paginated list of loan requests' })
-  @ApiQuery({ name: 'customerId', required: false, description: 'Filter by customer ID' })
-  @ApiQuery({ name: 'status', required: false, description: 'Filter by status' })
-  @ApiQuery({ name: 'productId', required: false, description: 'Filter by product ID' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
+  @ApiQuery({ name: 'customerId', required: false, description: 'Filter by customer UUID' })
+  @ApiQuery({ name: 'status', required: false, description: 'Filter by loan request status' })
+  @ApiQuery({ name: 'productId', required: false, description: 'Filter by product UUID' })
   async findAll(
     @Req() req: any,
     @Query() pagination: PaginationQueryDto,
@@ -103,10 +124,19 @@ export class LoanRequestController {
   @HttpCode(HttpStatus.OK)
   @UseInterceptors(IdempotencyInterceptor)
   @AuditAction('accept.loanOffer', 'loan_request')
-  @ApiOperation({ summary: 'Accept a loan offer' })
+  @ApiOperation({
+    summary: 'Accept a loan offer',
+    description:
+      'Accepts the offer produced for this loan request, moving the contract into the funding pipeline. ' +
+      'Idempotent via X-Idempotency-Key.',
+  })
+  @ApiParam({ name: 'id', type: String, format: 'uuid', description: 'Loan request UUID' })
   @ApiResponse({ status: 200, description: 'Offer accepted' })
+  @ApiResponse({ status: 400, description: 'Offer not in an acceptable state (already accepted, expired, etc.)' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
   @ApiResponse({ status: 404, description: 'Loan request not found' })
-  @ApiHeader({ name: 'X-Idempotency-Key', required: false })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
+  @ApiHeader({ name: 'X-Idempotency-Key', required: false, description: 'Prevents duplicate operations on retry.' })
   async accept(@Req() req: any, @Param('id') id: string): Promise<any> {
     const tenantId = req.tenantId;
     return this.offerService.acceptOffer(tenantId, id);

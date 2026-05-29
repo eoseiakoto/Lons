@@ -1,26 +1,54 @@
-import { Injectable, ExecutionContext, HttpException } from '@nestjs/common';
+import { Injectable, ExecutionContext, HttpException, Optional } from '@nestjs/common';
 import {
   ThrottlerGuard,
   ThrottlerModuleOptions,
   ThrottlerStorage,
+  ThrottlerOptions,
+  ThrottlerGetTrackerFunction,
+  ThrottlerGenerateKeyFunction,
   InjectThrottlerOptions,
   InjectThrottlerStorage,
 } from '@nestjs/throttler';
 import type { ThrottlerLimitDetail } from '@nestjs/throttler/dist/throttler.guard.interface';
 import { Reflector } from '@nestjs/core';
 import { RATE_CATEGORY_KEY, RateCategory } from './rate-category.decorator';
+import { RateLimitConfigService } from './rate-limit-config.service';
 
 /**
  * Default per-category rate limits (ttl in ms, limit in requests per ttl).
  *
- * These can be overridden per-tenant by extending this guard and overriding
- * `getLimitsForTenant`.
+ * F-ABC-1 (PM review of S19-11): reconciled to match
+ * RATE_LIMIT_TIERS.starter × category multipliers. The prior values
+ * (1000/200/100) were 10× the starter tier — if the config service
+ * was unavailable, every tenant silently got enterprise-grade
+ * limits. Now the fallback matches the smallest tier so a degraded
+ * resolver fails closed, not open.
+ *
+ * Production behaviour: `RateLimitConfigService.getConfigForTenant`
+ * returns the per-tenant tier; these constants are only used when
+ * the service isn't injected (unit tests) or when no tenant config
+ * is found.
  */
 const DEFAULT_LIMITS: Record<RateCategory, { ttl: number; limit: number }> = {
-  read: { ttl: 60_000, limit: 1_000 },
-  write: { ttl: 60_000, limit: 200 },
-  scoring: { ttl: 60_000, limit: 100 },
+  read:    { ttl: 60_000, limit: 100 },  // RATE_LIMIT_TIERS.starter × 1.0
+  write:   { ttl: 60_000, limit: 20 },   // RATE_LIMIT_TIERS.starter × 0.2
+  scoring: { ttl: 60_000, limit: 10 },   // RATE_LIMIT_TIERS.starter × 0.1
 };
+
+/**
+ * F-ABC-1: shape attached to the request object after the throttler
+ * check resolves. RateLimitHeadersInterceptor reads this to populate
+ * X-RateLimit-* headers with the ACTUAL per-tenant values rather
+ * than its previous static defaults. The underscore prefix marks
+ * it as an internal/framework field — not part of any public
+ * request shape.
+ */
+export interface ResolvedRateLimit {
+  limit: number;
+  remaining: number;
+  /** Unix timestamp in SECONDS (not ms) — matches the X-RateLimit-Reset header convention. */
+  resetAt: number;
+}
 
 /**
  * TenantThrottlerGuard extends ThrottlerGuard to:
@@ -48,8 +76,79 @@ export class TenantThrottlerGuard extends ThrottlerGuard {
     @InjectThrottlerOptions() options: ThrottlerModuleOptions,
     @InjectThrottlerStorage() storageService: ThrottlerStorage,
     reflector: Reflector,
+    // F-ABC-1: per-tenant DB-driven limit resolver. @Optional so
+    // tests + environments without DI can fall back to DEFAULT_LIMITS.
+    @Optional() private readonly rateLimitConfig?: RateLimitConfigService,
   ) {
     super(options, storageService, reflector);
+  }
+
+  /**
+   * F-ABC-1: override the parent's handleRequest to substitute the
+   * per-tenant (limit, ttl) before the throttler hits storage.
+   *
+   * @nestjs/throttler v5's ThrottlerGuard.canActivate iterates over
+   * each configured throttler and calls handleRequest(context, limit,
+   * ttl, throttler, getTracker, generateKey). The `limit` + `ttl`
+   * arguments come from the ThrottlerModule's static configuration.
+   * To make limits per-tenant + per-category, we ignore those
+   * arguments and resolve fresh ones via RateLimitConfigService.
+   *
+   * Falls back to DEFAULT_LIMITS when:
+   *   - the config service isn't injected (unit-test wiring); OR
+   *   - getConfigForTenant returns null (no tenant billing row).
+   *
+   * Side effect: after the storage check, attaches the resolved
+   * (limit, remaining, resetAt) to req._rateLimitConfig so
+   * RateLimitHeadersInterceptor can emit accurate X-RateLimit-*
+   * headers instead of its static fallback.
+   */
+  protected async handleRequest(
+    context: ExecutionContext,
+    _limit: number,
+    _ttl: number,
+    throttler: ThrottlerOptions,
+    getTracker: ThrottlerGetTrackerFunction,
+    generateKey: ThrottlerGenerateKeyFunction,
+  ): Promise<boolean> {
+    const tenantId = this.resolveTenantId(context);
+    const category = this.resolveCategory(context);
+    const resolved = await this.getLimitsForTenant(tenantId, category);
+
+    // Hand off to the parent with the resolved values. The parent
+    // builds the storage key, increments the counter, and either
+    // returns true or calls throwThrottlingException — we don't
+    // duplicate that logic.
+    const allowed = await super.handleRequest(
+      context,
+      resolved.limit,
+      resolved.ttl,
+      throttler,
+      getTracker,
+      generateKey,
+    );
+
+    // F-ABC-3: stamp the resolved limits on the request so the
+    // headers interceptor can emit accurate values. We re-derive
+    // `remaining` by reading the storage's last result via a fresh
+    // count would be racy — instead approximate as (limit - 1) on
+    // the first request, decreasing as the same client repeats.
+    // The interceptor only uses this when the field is present;
+    // when absent it falls back to its static defaults.
+    const { req } = this.getRequestResponse(context);
+    if (req) {
+      // We don't have direct access to the storage record from
+      // here (super.handleRequest swallows it), so the best we can
+      // do is publish the LIMIT + a synthesized resetAt. The
+      // interceptor uses this to set X-RateLimit-Limit accurately;
+      // remaining/reset are best-effort.
+      const existing = (req._rateLimitConfig as ResolvedRateLimit | undefined) ?? null;
+      const remaining = existing ? Math.max(0, existing.remaining - 1) : resolved.limit - 1;
+      const resetAt = existing?.resetAt ?? Math.floor(Date.now() / 1_000) + Math.ceil(resolved.ttl / 1_000);
+      req._rateLimitConfig = { limit: resolved.limit, remaining, resetAt };
+    }
+
+    return allowed;
   }
 
   /**
@@ -183,16 +282,33 @@ export class TenantThrottlerGuard extends ThrottlerGuard {
   }
 
   /**
-   * Return the rate-limit configuration for a given tenant and category.
+   * F-ABC-1: Resolve per-tenant + per-category limits.
    *
-   * Override this method to load per-tenant limits from a database or config
-   * service instead of using the static defaults.
+   * Now async — RateLimitConfigService does DB + Redis IO. When the
+   * service isn't injected (unit tests with no DI wiring), falls
+   * back to DEFAULT_LIMITS so existing tests that construct the
+   * guard with `new TenantThrottlerGuard(...)` still work.
+   *
+   * Resolution chain:
+   *   1. RateLimitConfigService.getConfigForTenant — DB → Redis cache
+   *   2. applyCategory(config, category) — multiplier per category
+   *   3. Fallback: starter-tier DEFAULT_LIMITS
    */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  protected getLimitsForTenant(
-    _tenantId: string,
+  protected async getLimitsForTenant(
+    tenantId: string,
     category: RateCategory,
-  ): { ttl: number; limit: number } {
-    return DEFAULT_LIMITS[category];
+  ): Promise<{ ttl: number; limit: number }> {
+    if (!this.rateLimitConfig) {
+      return DEFAULT_LIMITS[category];
+    }
+    try {
+      const config = await this.rateLimitConfig.getConfigForTenant(tenantId);
+      return this.rateLimitConfig.applyCategory(config, category);
+    } catch {
+      // Resolver failure (DB / Redis outage) must not crash the
+      // request — fall back to the starter tier so the system
+      // degrades closed (low limits) rather than open.
+      return DEFAULT_LIMITS[category];
+    }
   }
 }

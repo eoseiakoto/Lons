@@ -1,4 +1,5 @@
 import { Controller, Get } from '@nestjs/common';
+import { ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { PrismaService } from '@lons/database';
 import { Public } from '@lons/entity-service';
 
@@ -46,6 +47,7 @@ interface FootprintCity {
   code: string; // ISO-2 for display
 }
 
+@ApiTags('Public')
 @Controller('public')
 export class PublicController {
   constructor(private readonly prisma: PrismaService) {}
@@ -55,6 +57,13 @@ export class PublicController {
   // the login screen to power the rotating "Active in ..." indicator.
   @Public()
   @Get('footprint')
+  @ApiOperation({
+    summary: 'List cities with active tenants',
+    description:
+      'Returns the set of cities where Lōns has active tenants. Unauthenticated — used by the login screen rotator.',
+  })
+  @ApiResponse({ status: 200, description: 'Array of city + ISO country codes.' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
   async getFootprint(): Promise<{ cities: FootprintCity[] }> {
     const rows = await this.prisma.tenant.findMany({
       where: { status: 'active', deletedAt: null },

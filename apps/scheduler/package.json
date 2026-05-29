@@ -21,6 +21,7 @@
     "@lons/overdraft-service": "workspace:*",
     "@lons/notification-service": "workspace:*",
     "@lons/integration-service": "workspace:*",
+    "@lons/recovery-service": "workspace:*",
     "@nestjs/common": "^10.3.0",
     "@nestjs/config": "^3.2.0",
     "@nestjs/core": "^10.3.0",

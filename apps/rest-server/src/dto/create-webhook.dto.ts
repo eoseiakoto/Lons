@@ -1,13 +1,17 @@
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { IsString, IsArray, IsOptional, IsBoolean, IsUrl } from 'class-validator';
 
 export class CreateWebhookDto {
-  @ApiProperty({ description: 'Webhook target URL', example: 'https://example.com/hooks/lons' })
+  @ApiProperty({
+    description: 'HTTPS URL to receive event POSTs. Must be reachable from Lōns servers.',
+    example: 'https://example.com/hooks/lons',
+    format: 'uri',
+  })
   @IsUrl()
   url!: string;
 
   @ApiProperty({
-    description: 'List of event types to subscribe to',
+    description: 'List of event types to subscribe to. Use `*` (alone) to subscribe to every event.',
     example: ['contract.state_changed', 'repayment.received'],
     type: [String],
   })
@@ -15,7 +19,11 @@ export class CreateWebhookDto {
   @IsString({ each: true })
   events!: string[];
 
-  @ApiProperty({ required: false, default: true, description: 'Whether the webhook is active' })
+  @ApiPropertyOptional({
+    description: 'Whether the webhook is active immediately. Defaults to true.',
+    default: true,
+    example: true,
+  })
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;

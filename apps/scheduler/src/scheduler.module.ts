@@ -19,8 +19,11 @@ import { NotificationServiceModule } from '@lons/notification-service';
 // `EmiDataSyncJob` is unreachable from the scheduler app and the EMI
 // sync is dead code.
 import { EmiDataModule } from '@lons/integration-service';
+// S19-9 — broken-PTP scheduler needs the collections state machine.
+import { RecoveryServiceModule } from '@lons/recovery-service';
 
 import { InterestAccrualJob } from './jobs/interest-accrual.job';
+import { BrokenPtpJob } from './jobs/broken-ptp.job';
 import { AgingJob } from './jobs/aging.job';
 import { ReconciliationJob } from './jobs/reconciliation.job';
 import { AuditPartitionManager } from './jobs/audit-partition-manager';
@@ -68,6 +71,8 @@ import { EmiSyncJob } from './jobs/emi-sync.job';
     // FIX-BA-4 — exposes EmiDataSyncJob + EmiIntegrationConfigService
     // so the cron wrapper can iterate active configs per tenant.
     EmiDataModule,
+    // S19-9 — CollectionsStateMachine for the broken-PTP scheduler.
+    RecoveryServiceModule,
   ],
   providers: [
     InterestAccrualJob,
@@ -98,6 +103,8 @@ import { EmiSyncJob } from './jobs/emi-sync.job';
     // tenants and active EMI integration configs and dispatches the
     // worker `EmiDataSyncJob` for each.
     EmiSyncJob,
+    // S19-9 — hourly broken-PTP detection sweep across all tenants.
+    BrokenPtpJob,
   ],
 })
 export class SchedulerModule {}

@@ -858,6 +858,8 @@ model Product {
   scorecardConfigs ScorecardConfig[]
   // Sprint 18 S18-9 — per-product revenue distribution configuration.
   revenueDistributionConfigs RevenueDistributionConfig[]
+  // S19-6 — per-product compound/tiered penalty calculator config.
+  penaltyConfigs   PenaltyConfig[]
 
   @@unique([tenantId, code])
   @@index([tenantId])
@@ -1035,6 +1037,11 @@ model Contract {
   ledgerEntries      LedgerEntry[]
   notifications      Notification[]
   collectionsActions CollectionsAction[]
+  // S19-5: collections cases for this contract. At most one active
+  // (non-soft-deleted) case at a time — enforced at the service layer
+  // (CollectionsCaseService.createCase) so a closed-and-soft-deleted
+  // case can be re-opened later without an INSERT conflict.
+  collectionsCases   CollectionsCase[]  @relation("ContractCollectionsCase")
   invoice            Invoice?
 
   @@unique([tenantId, contractNumber])
@@ -2737,4 +2744,352 @@ model UpgradeRequest {
   @@index([tenantId])
   @@index([status])
   @@map("upgrade_requests")
+}
+
+// ============================================================================
+// Sprint 19 — Collections workflow (S19-5..9)
+// ============================================================================
+
+/// S19-5 / FR-CW-* — collections case lifecycle.
+///
+/// Default forward path:
+///   new → contacted → promise_to_pay → recovered → closed
+/// Branches: broken_ptp loops back via contacted; escalated routes to
+/// legal or write_off_pending; written_off / recovered are terminal
+/// except for the close transition.
+///
+/// Transitions are NOT hardcoded — they live in
+/// CollectionsWorkflowConfig.transitions (JSON map) so tenants can
+/// customise the workflow (e.g. add a `field_visit` substate) without
+/// a schema migration. The state machine resolves the map per-call.
+enum CollectionsStatus {
+  new
+  contacted
+  promise_to_pay
+  broken_ptp
+  escalated
+  legal
+  write_off_pending
+  written_off
+  recovered
+  closed
+
+  @@map("collections_status")
+}
+
+model CollectionsCase {
+  id                     String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId               String             @map("tenant_id") @db.Uuid
+  contractId             String             @map("contract_id") @db.Uuid
+  customerId             String             @map("customer_id") @db.Uuid
+
+  /// Current state in the collections workflow.
+  status                 CollectionsStatus  @default(new)
+  /// Previous status — preserved on every transition for quick
+  /// "undo" UX and audit trail without a JOIN to transitions.
+  previousStatus         CollectionsStatus? @map("previous_status")
+
+  /// Collections officer currently owning the case. Null = unassigned.
+  assignedToId           String?            @map("assigned_to_id") @db.Uuid
+  /// 1 (highest) to 5 (lowest). Drives queue ordering on the
+  /// collections dashboard.
+  priority               Int                @default(3)
+
+  /// Outstanding at the moment the case was opened — frozen for
+  /// historical comparison.
+  outstandingAmount      Decimal            @map("outstanding_amount") @db.Decimal(19, 4)
+  /// Updated by aging job / payment-allocation hook as payments land.
+  currentOutstanding     Decimal            @map("current_outstanding") @db.Decimal(19, 4)
+  currency               String             @db.VarChar(3)
+
+  /// DPD when the case was opened. Frozen.
+  dpdAtEntry             Int                @map("dpd_at_entry")
+  /// Updated daily by the aging job.
+  currentDpd             Int                @map("current_dpd")
+
+  /// Promise-to-pay tracking — populated when status flips to
+  /// promise_to_pay; cleared on transition out.
+  ptpDate                DateTime?          @map("ptp_date") @db.Timestamptz(6)
+  ptpAmount              Decimal?           @map("ptp_amount") @db.Decimal(19, 4)
+  /// Grace period in days after ptpDate before BrokenPtpJob trips.
+  /// Falls back to CollectionsWorkflowConfig.ptpGraceDays.
+  ptpGraceDays           Int?               @map("ptp_grace_days")
+
+  /// Incremented on each escalated transition — informational only;
+  /// transition validity is governed by the state machine.
+  escalationLevel        Int                @default(0) @map("escalation_level")
+  /// Free-text reason captured at the most recent transition.
+  statusReason           String?            @map("status_reason") @db.Text
+
+  /// Write-off workflow snapshot (S19-8). Tracks pending / approved /
+  /// rejected at the most-recently-actioned level so the case
+  /// dashboard can show "awaiting L2" without a JOIN.
+  writeOffApprovalStatus String?            @map("write_off_approval_status") @db.VarChar(50)
+  writeOffAmount         Decimal?           @map("write_off_amount") @db.Decimal(19, 4)
+
+  /// Extensible bag for tenant-specific metadata (e.g. external
+  /// case-ID from a legacy collections system). Indexed schema-less.
+  metadata               Json?
+
+  lastContactAt          DateTime?          @map("last_contact_at") @db.Timestamptz(6)
+  nextActionDate         DateTime?          @map("next_action_date") @db.Timestamptz(6)
+  contactAttempts        Int                @default(0) @map("contact_attempts")
+
+  closedAt               DateTime?          @map("closed_at") @db.Timestamptz(6)
+  closedReason           String?            @map("closed_reason") @db.VarChar(255)
+  createdAt              DateTime           @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt              DateTime           @updatedAt @map("updated_at") @db.Timestamptz(6)
+  deletedAt              DateTime?          @map("deleted_at") @db.Timestamptz(6)
+
+  contract               Contract           @relation("ContractCollectionsCase", fields: [contractId], references: [id])
+  transitions            CollectionsCaseTransition[]
+  writeOffApprovals      WriteOffApproval[]
+
+  /// NOTE: no unique on (tenantId, contractId). "At most one active
+  /// case per contract" is enforced in
+  /// CollectionsCaseService.createCase by querying for any row with
+  /// deletedAt = null. This lets a contract have a history of cases
+  /// (one active + N closed-and-soft-deleted) without the schema
+  /// blocking re-opens.
+  @@index([tenantId])
+  @@index([contractId])
+  @@index([customerId])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([ptpDate])
+  @@index([nextActionDate])
+  @@map("collections_cases")
+}
+
+/// Append-only transition log. Drives the "case history" timeline on
+/// the operator UI and feeds the auditor view of who-did-what-when.
+/// No updates / no deletes — enforced at the migration / RLS layer.
+model CollectionsCaseTransition {
+  id          String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId    String            @map("tenant_id") @db.Uuid
+  caseId      String            @map("case_id") @db.Uuid
+  fromStatus  CollectionsStatus @map("from_status")
+  toStatus    CollectionsStatus @map("to_status")
+  reason      String?           @db.Text
+  actorId     String            @map("actor_id") @db.Uuid
+  /// 'user' = collections officer or manager via the API;
+  /// 'system' = internal event handler (e.g. auto-create on aging);
+  /// 'scheduler' = cron job (e.g. broken-PTP detection).
+  actorType   String            @map("actor_type") @db.VarChar(20)
+  metadata    Json?
+  createdAt   DateTime          @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  case        CollectionsCase   @relation(fields: [caseId], references: [id])
+
+  @@index([tenantId])
+  @@index([caseId])
+  @@index([createdAt])
+  @@map("collections_case_transitions")
+}
+
+/// Per-tenant workflow customisation. One row per tenant; the state
+/// machine consults this on every transition. Missing row → fall
+/// back to DEFAULT_TRANSITIONS hardcoded in
+/// services/recovery-service/src/collections/collections-state-machine.ts.
+model CollectionsWorkflowConfig {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId            String   @map("tenant_id") @db.Uuid
+
+  /// Transition map: { [fromStatus]: [allowedToStatus...] }. Stored
+  /// as JSON so tenants can extend (custom states require migration;
+  /// custom transitions between standard states do not).
+  transitions         Json
+  /// Auto-escalation rules:
+  ///   [{ fromStatus: 'contacted', afterDays: 14, toStatus: 'escalated' }, ...]
+  /// Evaluated by a future S19-9-adjacent scheduler. Null = no
+  /// auto-escalation; manual transitions only.
+  autoEscalation      Json?    @map("auto_escalation")
+  /// Default grace days for PTPs that don't specify their own.
+  ptpGraceDays        Int      @default(3) @map("ptp_grace_days")
+  /// DPD threshold above which the CONTRACT_AGED listener opens a
+  /// case automatically. 0 = disable auto-open (manual only).
+  autoCaseCreationDpd Int      @default(30) @map("auto_case_creation_dpd")
+  /// Soft cap on contact attempts before auto-escalation suggests
+  /// the case moves out of contacted state. Informational — the
+  /// system doesn't enforce; it just flags on the dashboard.
+  maxContactAttempts  Int      @default(5) @map("max_contact_attempts")
+
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([tenantId])
+  @@index([tenantId])
+  @@map("collections_workflow_configs")
+}
+
+// ============================================================================
+// Sprint 19 — Write-off approvals (S19-8)
+// ============================================================================
+
+enum WriteOffApprovalLevel {
+  l1_officer
+  l2_manager
+  l3_director
+
+  @@map("write_off_approval_level")
+}
+
+enum WriteOffApprovalDecision {
+  pending
+  approved
+  rejected
+
+  @@map("write_off_approval_decision")
+}
+
+/// One row per (case, level). Created in lockstep when a write-off
+/// is requested — the requester's L1 row is `approved` immediately;
+/// L2/L3 rows start `pending`. All approvals (or any rejection) flip
+/// the case to written_off / escalated respectively.
+model WriteOffApproval {
+  id        String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId  String                   @map("tenant_id") @db.Uuid
+  caseId    String                   @map("case_id") @db.Uuid
+  level     WriteOffApprovalLevel
+  decision  WriteOffApprovalDecision @default(pending)
+
+  amount    Decimal                  @db.Decimal(19, 4)
+  currency  String                   @db.VarChar(3)
+  reason    String?                  @db.Text
+
+  /// Who decided. Null for pending rows.
+  actorId   String?                  @map("actor_id") @db.Uuid
+  decidedAt DateTime?                @map("decided_at") @db.Timestamptz(6)
+
+  createdAt DateTime                 @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime                 @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  case      CollectionsCase          @relation(fields: [caseId], references: [id])
+
+  @@unique([caseId, level])
+  @@index([tenantId])
+  @@index([caseId])
+  @@index([decision])
+  @@map("write_off_approvals")
+}
+
+/// Per-tenant amount thresholds that determine which approval levels
+/// are required. Resolution (in service):
+///   amount <= L1 threshold → L1 only
+///   amount <= L2 threshold → L1 + L2
+///   amount  > L2 threshold → L1 + L2 + L3
+/// Currency-scoped so multi-currency tenants can configure
+/// independent thresholds per ccy.
+model WriteOffThreshold {
+  id                 String                @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId           String                @map("tenant_id") @db.Uuid
+  level              WriteOffApprovalLevel
+  maxAmountThreshold Decimal               @map("max_amount_threshold") @db.Decimal(19, 4)
+  currency           String                @db.VarChar(3)
+
+  createdAt          DateTime              @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime              @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, level, currency])
+  @@index([tenantId])
+  @@map("write_off_thresholds")
+}
+
+// ============================================================================
+// Sprint 19 — Penalty configuration (S19-6)
+// ============================================================================
+
+enum PenaltyMode {
+  /// Daily penalty = outstanding_principal * dailyRate.
+  /// Default and backwards-compatible.
+  simple
+  /// Daily penalty = (outstanding_principal + accumulated_penalty)
+  /// * dailyRate. Compounds over the life of the delinquency.
+  compound
+
+  @@map("penalty_mode")
+}
+
+/// Per-(tenant, product) penalty calculator configuration. Missing
+/// row → fall back to legacy simple mode using the product's
+/// existing penalty rate, preserving Sprint 10-18 behaviour for
+/// any product without an explicit config.
+model PenaltyConfig {
+  id                   String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId             String      @map("tenant_id") @db.Uuid
+  productId            String      @map("product_id") @db.Uuid
+  mode                 PenaltyMode @default(simple)
+
+  /// Per-DPD rate tiers, JSON shape:
+  ///   [{ fromDpd: 1, toDpd: 30, dailyRateBps: "10.00" },
+  ///    { fromDpd: 31, toDpd: 60, dailyRateBps: "20.00" },
+  ///    { fromDpd: 61, toDpd: null, dailyRateBps: "30.00" }]
+  /// dailyRateBps is basis points expressed as a decimal STRING —
+  /// 10 bps = 0.10 % per day. No floats.
+  rateTiers            Json        @map("rate_tiers")
+
+  /// Cap on total accumulated penalty as a percentage of original
+  /// principal. e.g. 100.0000 = penalty stops accruing once it
+  /// equals the original principal. Null = no cap.
+  maxPenaltyPct        Decimal?    @map("max_penalty_pct") @db.Decimal(7, 4)
+  /// 'daily' | 'weekly' | 'monthly'. Only meaningful in compound
+  /// mode. Daily is the default and matches the existing accrual
+  /// scheduler cadence.
+  compoundingFrequency String?     @map("compounding_frequency") @db.VarChar(20)
+
+  isActive             Boolean     @default(true) @map("is_active")
+  createdAt            DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt            DateTime    @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  product              Product     @relation(fields: [productId], references: [id])
+
+  @@unique([tenantId, productId])
+  @@index([tenantId])
+  @@map("penalty_configs")
+}
+
+// ============================================================================
+// Sprint 19 — Field-level authorisation config (S19-12)
+// ============================================================================
+
+/// Drives the FieldAuthInterceptor's redaction decisions.
+/// `tenantId` is nullable: a row with tenantId = NULL is a
+/// platform-default that applies to every tenant unless overridden.
+/// Tenant-specific rows take precedence at the (resourceType,
+/// fieldName) granularity.
+///
+/// Examples:
+///   - Platform default: { tenantId: NULL, resource: 'customer',
+///     field: 'nationalId', requiredPermissions: ['customer:read_pii'],
+///     behavior: 'redact' }
+///   - Tenant override:  { tenantId: <growth-tenant>, resource:
+///     'customer', field: 'email', requiredPermissions:
+///     ['customer:read'], behavior: 'redact' }  // looser than default
+model FieldAuthConfig {
+  id                  String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  /// NULL = platform default (applies to all tenants).
+  tenantId            String?  @map("tenant_id") @db.Uuid
+  /// Logical resource name (e.g. 'customer', 'debtor', 'contract').
+  /// Matches the @ResourceType decorator on the GraphQL type.
+  resourceType        String   @map("resource_type") @db.VarChar(100)
+  /// GraphQL field name (camelCase). Multi-field rules use a wildcard
+  /// '*' in a future extension; for now one row per field.
+  fieldName           String   @map("field_name") @db.VarChar(100)
+  /// User must have AT LEAST ONE of these permissions to see the
+  /// field. Empty array = field is always denied (effectively
+  /// admin-only via tenant:admin which is checked separately).
+  requiredPermissions String[] @map("required_permissions")
+  /// 'redact' — return null instead of the real value (preferred);
+  /// 'error'  — throw ForbiddenException (use for fields where
+  /// the caller MUST know they were blocked).
+  behavior            String   @default("redact") @db.VarChar(20)
+  isActive            Boolean  @default(true) @map("is_active")
+
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([tenantId, resourceType, fieldName])
+  @@index([tenantId])
+  @@index([resourceType])
+  @@map("field_auth_configs")
 }

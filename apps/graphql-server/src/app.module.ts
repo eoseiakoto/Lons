@@ -39,7 +39,11 @@ import {
   MetricsInterceptor,
   RedisClientModule,
   PLAN_TIER_CONFIG_SERVICE,
+  // F-ABC-1/-2: DB-driven per-tenant rate-limit resolver.
+  RateLimitConfigService,
+  REDIS_CLIENT,
 } from '@lons/common';
+import type Redis from 'ioredis';
 import { PrismaService } from '@lons/database';
 
 import { ApiKeyResolver } from './graphql/resolvers/api-key.resolver';
@@ -54,6 +58,13 @@ import { ContractResolver } from './graphql/resolvers/contract.resolver';
 import { RepaymentResolver } from './graphql/resolvers/repayment.resolver';
 import { SettlementResolver } from './graphql/resolvers/settlement.resolver';
 import { CollectionsResolver } from './graphql/resolvers/collections.resolver';
+// S19-5: new case-centric collections workflow surface (parallel to the
+// legacy CollectionsResolver which wraps the append-only action log).
+import { CollectionsCaseResolver } from './graphql/resolvers/collections-case.resolver';
+// S19-8: multi-level write-off approval workflow.
+import { WriteOffResolver } from './graphql/resolvers/write-off.resolver';
+// S19-6: per-product penalty config (compound + tiered rates).
+import { PenaltyConfigResolver } from './graphql/resolvers/penalty-config.resolver';
 import { AuditResolver } from './graphql/resolvers/audit.resolver';
 import { PlatformAuditResolver } from './graphql/resolvers/platform-audit.resolver';
 import { IntegrationResolver } from './graphql/resolvers/integration.resolver';
@@ -155,6 +166,9 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
     RepaymentResolver,
     SettlementResolver,
     CollectionsResolver,
+    CollectionsCaseResolver,
+    WriteOffResolver,
+    PenaltyConfigResolver,
     AuditResolver,
     PlatformAuditResolver,
     IntegrationResolver,
@@ -251,6 +265,23 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
       provide: 'AUDIT_SERVICE',
       useFactory: (prisma: PrismaService) => new AuditService(prisma),
       inject: [PrismaService],
+    },
+    // F-ABC-1/-2: per-tenant DB-driven rate-limit resolver.
+    // TenantThrottlerGuard picks this up via @Optional() injection —
+    // without this registration, the guard silently falls back to
+    // DEFAULT_LIMITS (starter tier) for every tenant.
+    //
+    // RateLimitConfigService takes PrismaService under the
+    // 'PRISMA_SERVICE' string token (declared in its constructor to
+    // keep the service free of @lons/database circular import).
+    // We alias PrismaService → 'PRISMA_SERVICE' here, then construct
+    // the service with the live Redis client.
+    { provide: 'PRISMA_SERVICE', useExisting: PrismaService },
+    {
+      provide: RateLimitConfigService,
+      useFactory: (prisma: PrismaService, redis: Redis) =>
+        new RateLimitConfigService(prisma as any, redis),
+      inject: [PrismaService, REDIS_CLIENT],
     },
     { provide: APP_INTERCEPTOR, useClass: AuditEventInterceptor },
     { provide: APP_INTERCEPTOR, useClass: MetricsInterceptor },

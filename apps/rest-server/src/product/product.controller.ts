@@ -18,10 +18,15 @@ export class ProductController {
   constructor(private readonly productService: ProductService) {}
 
   @Get()
-  @ApiOperation({ summary: 'List available loan products' })
-  @ApiResponse({ status: 200, description: 'List of products' })
-  @ApiQuery({ name: 'type', required: false, description: 'Filter by product type (OVERDRAFT, MICRO_LOAN, BNPL, INVOICE_FACTORING)' })
-  @ApiQuery({ name: 'status', required: false, description: 'Filter by status (ACTIVE, INACTIVE, DRAFT)' })
+  @ApiOperation({
+    summary: 'List loan products',
+    description: 'Returns all loan products available to the authenticated tenant. Filter by type and status.',
+  })
+  @ApiResponse({ status: 200, description: 'List of loan products' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
+  @ApiQuery({ name: 'type', required: false, description: 'Filter by product type', enum: ['OVERDRAFT', 'MICRO_LOAN', 'BNPL', 'INVOICE_FACTORING'] })
+  @ApiQuery({ name: 'status', required: false, description: 'Filter by status', enum: ['ACTIVE', 'INACTIVE', 'DRAFT'] })
   async findAll(
     @Req() req: any,
     @Query('type') type?: string,

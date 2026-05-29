@@ -18,6 +18,7 @@ import {
   ApiSecurity,
   ApiHeader,
   ApiQuery,
+  ApiBody,
 } from '@nestjs/swagger';
 import { PaymentService } from '@lons/repayment-service';
 import { AuditAction } from '@lons/common';
@@ -38,11 +39,19 @@ export class RepaymentController {
   @HttpCode(HttpStatus.CREATED)
   @UseInterceptors(IdempotencyInterceptor)
   @AuditAction('record.repayment', 'repayment')
-  @ApiOperation({ summary: 'Record a repayment' })
-  @ApiResponse({ status: 201, description: 'Repayment recorded' })
+  @ApiOperation({
+    summary: 'Record a repayment',
+    description:
+      'Records a repayment against a contract. Amounts are decimal strings per CLAUDE.md §Money. ' +
+      'Idempotent via X-Idempotency-Key — repeated calls return the same recorded payment.',
+  })
+  @ApiBody({ type: CreateRepaymentDto })
+  @ApiResponse({ status: 201, description: 'Repayment recorded; waterfall allocation applied.' })
   @ApiResponse({ status: 400, description: 'Validation error' })
-  @ApiResponse({ status: 401, description: 'Unauthorized' })
-  @ApiHeader({ name: 'X-Idempotency-Key', required: false, description: 'Idempotency key for duplicate prevention' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 404, description: 'Contract not found' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
+  @ApiHeader({ name: 'X-Idempotency-Key', required: false, description: 'Prevents duplicate operations on retry.' })
   async create(
     @Req() req: any,
     @Body() body: CreateRepaymentDto,
@@ -62,9 +71,14 @@ export class RepaymentController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List repayments with filters' })
+  @ApiOperation({
+    summary: 'List repayments',
+    description: 'Paginated list of repayments for the authenticated tenant. Filter by contract.',
+  })
   @ApiResponse({ status: 200, description: 'Paginated list of repayments' })
-  @ApiQuery({ name: 'contractId', required: false, description: 'Filter by contract ID' })
+  @ApiResponse({ status: 401, description: 'Missing or invalid API key' })
+  @ApiResponse({ status: 429, description: 'Rate limit exceeded' })
+  @ApiQuery({ name: 'contractId', required: false, description: 'Filter by contract UUID' })
   async findAll(
     @Req() req: any,
     @Query() pagination: PaginationQueryDto,

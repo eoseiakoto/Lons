@@ -84,33 +84,61 @@ export class RedisThrottlerStorage implements ThrottlerStorage, OnModuleDestroy 
   // ---------------------------------------------------------------------------
 
   /**
-   * Lua script that atomically increments a key and sets its TTL only if the
-   * key is new (NX semantics via the return value of INCR).  PTTL is returned
-   * so the caller knows exactly how much time remains in the window.
+   * S19-11: TRUE SLIDING-WINDOW Lua script via Redis sorted sets.
+   *
+   * Replaces the prior fixed-window INCR+PEXPIRE approach, which
+   * allowed a 2x burst at window boundaries (e.g. 100 requests in
+   * the last second of one minute + 100 requests in the first
+   * second of the next minute = 200 requests in 2 seconds).
+   *
+   * Algorithm:
+   *   1. ZREMRANGEBYSCORE — drop entries older than (now - window).
+   *   2. ZADD — record current request with timestamp as score.
+   *      Member value is `<ts>:<random>` to keep members unique
+   *      (sorted sets dedupe on member value).
+   *   3. ZCARD — count entries in the window = totalHits.
+   *   4. PEXPIRE — keep the key alive for window+1ms so idle
+   *      tenants don't bloat the keyspace.
    *
    * KEYS[1] = throttler key
-   * ARGV[1] = TTL in milliseconds
+   * ARGV[1] = window length in milliseconds
+   * ARGV[2] = current timestamp in milliseconds (passed from
+   *           Node — avoids relying on Redis clock skew across
+   *           a cluster)
+   * ARGV[3] = unique member suffix (random; required because
+   *           Redis Lua has no math.random in scripts that
+   *           cluster-replicate deterministically)
    *
-   * Returns: [totalHits, pttlRemaining]
+   * Returns: [totalHits, timeToExpire-ms]
+   *
+   * Cost per call: O(log N) for ZADD + O(M) for ZREMRANGEBYSCORE
+   * where M is the number of expired entries. For sensibly sized
+   * windows (60s, hundreds of requests) this is negligible.
    */
-  private static readonly LUA_INCREMENT = `
-    local hits = redis.call('INCR', KEYS[1])
-    if hits == 1 then
-      redis.call('PEXPIRE', KEYS[1], ARGV[1])
-    end
-    local pttl = redis.call('PTTL', KEYS[1])
-    if pttl < 0 then
-      pttl = tonumber(ARGV[1])
-    end
-    return {hits, pttl}
+  private static readonly LUA_SLIDING_WINDOW = `
+    local key = KEYS[1]
+    local window = tonumber(ARGV[1])
+    local now = tonumber(ARGV[2])
+    local member = tostring(now) .. ':' .. ARGV[3]
+    redis.call('ZREMRANGEBYSCORE', key, '-inf', now - window)
+    redis.call('ZADD', key, now, member)
+    local hits = redis.call('ZCARD', key)
+    redis.call('PEXPIRE', key, window + 1)
+    return {hits, window}
   `;
 
   private async redisIncrement(key: string, ttl: number): Promise<ThrottlerStorageRecord> {
+    const now = Date.now();
+    // Random suffix — keeps the ZSET member unique within the same
+    // millisecond. 16 bits is plenty for de-dup at sub-ms granularity.
+    const suffix = Math.floor(Math.random() * 65536).toString(36);
     const result = (await this.redis!.eval(
-      RedisThrottlerStorage.LUA_INCREMENT,
+      RedisThrottlerStorage.LUA_SLIDING_WINDOW,
       1,
       key,
       ttl.toString(),
+      now.toString(),
+      suffix,
     )) as [number, number];
 
     const [totalHits, timeToExpire] = result;

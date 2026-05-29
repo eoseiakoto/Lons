@@ -29,7 +29,7 @@ const prisma = new PrismaClient({
 // Audit guard: scripts/audit-permissions.ts fails CI if any @Roles(...)
 // string in apps/ or services/ is missing from this array.
 const allPermissions = [
-  'tenant:create', 'tenant:read', 'tenant:update', 'tenant:suspend',
+  'tenant:create', 'tenant:read', 'tenant:update', 'tenant:suspend', 'tenant:admin',
   'user:create', 'user:read', 'user:update', 'user:deactivate',
   'role:create', 'role:read', 'role:update', 'role:delete',
   'product:create', 'product:read', 'product:update', 'product:activate', 'product:delete',
@@ -40,7 +40,11 @@ const allPermissions = [
   'contract:create', 'contract:read', 'contract:update',
   'repayment:create', 'repayment:read',
   'audit:read', 'analytics:read',
-  'collections:read', 'collections:write',
+  // S19-5..9: collections workflow permissions
+  'collections:read', 'collections:create', 'collections:update', 'collections:write',
+  'collections:transition', 'collections:assign', 'collections:ptp', 'collections:escalate',
+  'collections:write_off_recommend', 'collections:write_off_approve', 'collections:write_off_final',
+  'collections:legal_action', 'collections:reassign',
   'monitoring:read', 'monitoring:write',
   'usage:read',
   // Invoice factoring (Sprint 14)
@@ -51,6 +55,15 @@ const allPermissions = [
   'factoring:verify',
   // BNPL credit lines (Sprint 15)
   'bnpl_credit_line:create', 'bnpl_credit_line:read', 'bnpl_credit_line:adjust',
+  // Overdraft (Sprint 10B)
+  'creditline:read', 'creditline:update',
+  // BNPL purchases (Sprint 11)
+  'bnpl_purchase:read', 'bnpl_purchase:update',
+  // Settlement + ledger + reconciliation + reports (operations visibility)
+  'settlement:read', 'ledger:read', 'reconciliation:read', 'webhook:read',
+  'scoring:read', 'report:read', 'report:export', 'dashboard:read',
+  // Notifications
+  'notification:create',
   // Billing + integrations
   'billing:read', 'billing:manage', 'integration:read',
 ];
@@ -77,23 +90,36 @@ async function createRoles(tenantId: string) {
       ],
       isSystem: true,
     },
+    // S19-1: expanded for S10-S18 features (overdraft, BNPL, factoring,
+    // settlement, scoring, reporting). Read-only role — no write perms.
     sp_analyst: {
       name: 'SP Analyst',
       permissions: [
         'product:read', 'customer:read', 'loan_request:read',
         'contract:read', 'repayment:read', 'analytics:read',
+        'creditline:read', 'bnpl_purchase:read', 'invoice:read',
+        'settlement:read', 'collections:read', 'scoring:read',
+        'report:read', 'report:export', 'dashboard:read',
       ],
       isSystem: true,
     },
+    // S19-1: expanded for full audit-trail visibility across all
+    // Sprint 10-18 surfaces. Includes PII access for compliance review.
     sp_auditor: {
       name: 'SP Auditor',
       permissions: [
         'product:read', 'customer:read', 'customer:read_pii',
         'loan_request:read', 'contract:read', 'repayment:read',
         'audit:read', 'analytics:read',
+        'creditline:read', 'bnpl_purchase:read', 'invoice:read',
+        'settlement:read', 'collections:read', 'scoring:read',
+        'ledger:read', 'reconciliation:read', 'webhook:read',
+        'report:read', 'report:export',
       ],
       isSystem: true,
     },
+    // S19-1: expanded for the S19-5..9 collections workflow. Officer
+    // tier — can recommend write-off (L1) but cannot approve (L2/L3).
     sp_collections: {
       name: 'SP Collections',
       permissions: [
@@ -101,6 +127,36 @@ async function createRoles(tenantId: string) {
         'contract:read', 'contract:update',
         'repayment:read', 'repayment:create',
         'loan_request:read',
+        'collections:read', 'collections:create', 'collections:update',
+        'collections:transition', 'collections:assign',
+        'collections:ptp', 'collections:escalate',
+        'collections:write_off_recommend',
+        'creditline:read', 'bnpl_purchase:read', 'invoice:read',
+        'scoring:read', 'notification:create',
+      ],
+      isSystem: true,
+    },
+    // S19-1: new 7th role. Manager tier — superset of SP Collections
+    // plus L2 write-off approval, legal action, case reassignment,
+    // and reporting visibility. L3 (director) approval is reserved for
+    // SP Admin via the `tenant:admin` permission.
+    sp_collections_manager: {
+      name: 'SP Collections Manager',
+      permissions: [
+        'customer:read', 'customer:read_pii',
+        'contract:read', 'contract:update',
+        'repayment:read', 'repayment:create',
+        'loan_request:read',
+        'collections:read', 'collections:create', 'collections:update',
+        'collections:transition', 'collections:assign',
+        'collections:ptp', 'collections:escalate',
+        'collections:write_off_recommend',
+        'collections:write_off_approve', // L2 approval
+        'collections:legal_action',
+        'collections:reassign',
+        'creditline:read', 'bnpl_purchase:read', 'invoice:read',
+        'scoring:read', 'notification:create',
+        'report:read', 'analytics:read',
       ],
       isSystem: true,
     },
@@ -733,6 +789,57 @@ async function main() {
   }
   console.log(`  PlanTierConfig: 3 tiers upserted (starter / growth / enterprise)`);
 
+  // S19-12: platform-default field-level authorisation rules. Tenants
+  // can override per-field via the admin UI later; these defaults
+  // apply to every tenant unless overridden. Idempotent — uses raw
+  // SQL because Prisma's upsert doesn't gracefully handle a unique
+  // constraint that includes a nullable column (tenantId IS NULL).
+  console.log('[1.7/8] Seeding platform-default FieldAuthConfig (PII redaction rules)...');
+  const defaultFieldRules: Array<{ resource: string; field: string; perms: string[] }> = [
+    // Customer PII fields — require explicit `customer:read_pii` permission.
+    { resource: 'customer', field: 'nationalId',     perms: ['customer:read_pii'] },
+    { resource: 'customer', field: 'phonePrimary',   perms: ['customer:read_pii'] },
+    { resource: 'customer', field: 'phoneSecondary', perms: ['customer:read_pii'] },
+    { resource: 'customer', field: 'email',          perms: ['customer:read_pii'] },
+    { resource: 'customer', field: 'dateOfBirth',    perms: ['customer:read_pii'] },
+    // Debtor PII (factoring counterparty).
+    { resource: 'debtor', field: 'registrationNumber', perms: ['customer:read_pii'] },
+    { resource: 'debtor', field: 'contactEmail',       perms: ['customer:read_pii'] },
+    { resource: 'debtor', field: 'contactPhone',       perms: ['customer:read_pii'] },
+  ];
+  // NOTE: Postgres UNIQUE treats NULLs as distinct, so the
+  // @@unique([tenantId, resourceType, fieldName]) constraint does
+  // NOT prevent duplicate platform-default rows (tenantId IS NULL).
+  // Use check-then-create/update — the same idempotent pattern we
+  // use for the tenant-null ScorecardConfig rows.
+  for (const rule of defaultFieldRules) {
+    const existing = await prisma.fieldAuthConfig.findFirst({
+      where: { tenantId: null, resourceType: rule.resource, fieldName: rule.field },
+    });
+    if (existing) {
+      await prisma.fieldAuthConfig.update({
+        where: { id: existing.id },
+        data: {
+          requiredPermissions: rule.perms,
+          behavior: 'redact',
+          isActive: true,
+        },
+      });
+    } else {
+      await prisma.fieldAuthConfig.create({
+        data: {
+          tenantId: null,
+          resourceType: rule.resource,
+          fieldName: rule.field,
+          requiredPermissions: rule.perms,
+          behavior: 'redact',
+          isActive: true,
+        },
+      });
+    }
+  }
+  console.log(`  Platform FieldAuthConfig: ${defaultFieldRules.length} rules seeded`);
+
   // -----------------------------------------------------------------------
   // Loop through each tenant
   // -----------------------------------------------------------------------
@@ -811,6 +918,8 @@ async function main() {
       { key: 'sp_analyst', email: `analyst@${cfg.emailDomain}`, password: 'Analyst123!@#', name: `${cfg.name} Analyst` },
       { key: 'sp_auditor', email: `auditor@${cfg.emailDomain}`, password: 'Auditor123!@#', name: `${cfg.name} Auditor` },
       { key: 'sp_collections', email: `collections@${cfg.emailDomain}`, password: 'Collections123!@#', name: `${cfg.name} Collections` },
+      // S19-1: new 6th seeded user for the SP Collections Manager role.
+      { key: 'sp_collections_manager', email: `collections-mgr@${cfg.emailDomain}`, password: 'CollMgr123!@#', name: `${cfg.name} Collections Manager` },
     ];
 
     let spAdminId: string = '';
@@ -991,6 +1100,68 @@ async function main() {
       skipDuplicates: true,
     });
     console.log('  Customer matching rules (3) seeded');
+
+    // S19-5: default collections workflow config per tenant. Stored
+    // shape mirrors DEFAULT_TRANSITIONS from the recovery-service
+    // state machine — keeps the seed self-contained without a
+    // cross-package import. Tenants can tweak via the GraphQL admin
+    // mutation later.
+    const defaultCollectionsTransitions = {
+      new: ['contacted', 'escalated', 'closed'],
+      contacted: ['promise_to_pay', 'escalated', 'closed'],
+      promise_to_pay: ['broken_ptp', 'recovered', 'closed'],
+      broken_ptp: ['contacted', 'escalated', 'legal', 'closed'],
+      escalated: ['contacted', 'legal', 'write_off_pending', 'closed'],
+      legal: ['write_off_pending', 'recovered', 'closed'],
+      write_off_pending: ['written_off', 'escalated', 'closed'],
+      written_off: ['closed'],
+      recovered: ['closed'],
+      closed: [],
+    };
+    await prisma.collectionsWorkflowConfig.upsert({
+      where: { tenantId: tenant.id },
+      update: {
+        transitions: defaultCollectionsTransitions as Prisma.InputJsonValue,
+      },
+      create: {
+        tenantId: tenant.id,
+        transitions: defaultCollectionsTransitions as Prisma.InputJsonValue,
+        ptpGraceDays: 3,
+        autoCaseCreationDpd: 30,
+        maxContactAttempts: 5,
+      },
+    });
+    console.log('  CollectionsWorkflowConfig seeded (default transitions + 30 DPD auto-open)');
+
+    // S19-8: write-off approval thresholds. Defaults in tenant ccy
+    // align with the Sprint 19 dev prompt examples:
+    //   ≤ 500 → L1 only
+    //   500..5000 → L1 + L2
+    //   > 5000 → L1 + L2 + L3
+    const writeOffThresholdRows = [
+      { level: 'l1_officer' as const,  maxAmountThreshold: new Prisma.Decimal('500.0000') },
+      { level: 'l2_manager' as const,  maxAmountThreshold: new Prisma.Decimal('5000.0000') },
+      { level: 'l3_director' as const, maxAmountThreshold: new Prisma.Decimal('999999999.0000') },
+    ];
+    for (const row of writeOffThresholdRows) {
+      await prisma.writeOffThreshold.upsert({
+        where: {
+          tenantId_level_currency: {
+            tenantId: tenant.id,
+            level: row.level,
+            currency: cfg.currency,
+          },
+        },
+        update: { maxAmountThreshold: row.maxAmountThreshold },
+        create: {
+          tenantId: tenant.id,
+          level: row.level,
+          maxAmountThreshold: row.maxAmountThreshold,
+          currency: cfg.currency,
+        },
+      });
+    }
+    console.log(`  WriteOff thresholds (3) seeded for ${cfg.currency}`);
 
     // ---------------------------------------------------------------------
     // 7. Create customers (20 per tenant) with consents
