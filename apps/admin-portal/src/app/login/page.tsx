@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { motion, AnimatePresence, useMotionValue, useTransform, useSpring } from 'framer-motion';
 import { useAuth, MfaEnrollmentRequiredError } from '@/lib/auth-context';
 import { useI18n } from '@/lib/i18n/i18n-context';
@@ -979,16 +980,19 @@ function ThemeFloatToggle() {
 
 function LoginForm() {
   const { login } = useAuth();
+  const router = useRouter();
   const { t } = useI18n();
   const cities = useFootprint();
   const [tenantSlug, setTenantSlug] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  // S19-STAB-5: separate flag for the "enrolment required" dead-end.
-  // We render a different (more prominent) banner than the generic
-  // error one — distinct enough that operators don't try the same
-  // password again expecting it to work.
+  // MFA-lockout fix: flag stays for the brief moment between
+  // catching the MfaEnrollmentRequiredError and the redirect to
+  // /settings/profile completing. The banner is informational —
+  // the redirect happens immediately afterwards. Previously this
+  // was a dead-end with no recovery path; the user now lands on
+  // the MFA enrolment card with a restricted (but valid) session.
   const [mfaEnrollmentRequired, setMfaEnrollmentRequired] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -1013,7 +1017,16 @@ function LoginForm() {
       // user must contact their admin (who can either enrol them
       // via password reset or temporarily downgrade the tier).
       if (err instanceof MfaEnrollmentRequiredError) {
+        // MFA-lockout fix: auth-context.login already stored the
+        // restricted access token before throwing. Redirect to the
+        // profile page where the MFA enrolment card lives — the
+        // user can scan the QR + confirm a TOTP code without
+        // touching any other guarded resolver (the scoped token's
+        // allow-list covers initiateMfaEnrollment / confirm /
+        // me / myTenant). After enrolment they re-login for a
+        // full-scope session.
         setMfaEnrollmentRequired(true);
+        router.push('/settings/profile');
       } else {
         setError(err.message || 'Login failed');
       }

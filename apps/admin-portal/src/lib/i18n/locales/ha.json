@@ -127,7 +127,7 @@
     "copyrightTagline": "Lending platform for financial institutions",
     "mfaRequired": {
       "title": "Ana buƙatar rajistar MFA",
-      "body": "Tsarin ƙungiyarka yanzu yana buƙatar tabbatarwa mai matakai da yawa (MFA) don wannan matsayi. Tuntuɓi mai gudanarwa don sake saita izinin shiga — da zarar ka iya shiga, kunna MFA daga bayanan martabarka."
+      "body": "Tsarin ƙungiyarka yana buƙatar tabbatarwa mai matakai da yawa (MFA) don wannan matsayi. Kammala rajista a ƙasa don dawo da cikakken izinin shiga."
     }
   },
   "mfa": {
@@ -1685,6 +1685,11 @@
       "passwordRequired": "Password is required",
       "passwordsDoNotMatch": "Passwords do not match",
       "passwordResetFailed": "Password reset failed",
+      "resetMfa": "Sake saita MFA",
+      "resettingMfa": "Ana sake saitawa...",
+      "resetMfaHelp": "Yana cire rajistar MFA na wannan mai amfani kuma yana fara sabon lokacin jinkiri na kwanaki 7. Mai amfani zai buƙaci yin rajista kuma.",
+      "mfaResetFailed": "Sake saita MFA ya gaza",
+      "mfaWasReset": "An sake saita MFA. Mai amfani yana da kwanaki 7 don sake yin rajista.",
       "mfaCompliance": {
         "column": "Bin Ka'idar MFA",
         "enrolled": "An yi rajista",

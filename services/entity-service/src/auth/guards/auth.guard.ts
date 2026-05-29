@@ -5,6 +5,7 @@ import { PrismaService } from '@lons/database';
 
 import { IS_PUBLIC_KEY } from '../decorators/public.decorator';
 import { JwtService } from '../jwt.service';
+import { MFA_ENROLLMENT_ONLY_ALLOWED_HANDLERS } from '../interfaces/jwt-payload.interface';
 
 @Injectable()
 export class AuthGuard implements CanActivate {
@@ -61,6 +62,24 @@ export class AuthGuard implements CanActivate {
         effectiveTenantId = tenantOverride;
       }
 
+      // MFA-lockout fix: an `mfa_enrollment_only`-scoped access
+      // token is issued to overdue users so they can reach the
+      // MFA enrolment flow. The token is intentionally restricted
+      // to the handlers in MFA_ENROLLMENT_ONLY_ALLOWED_HANDLERS;
+      // any other resolver/controller call returns 403.
+      // Implemented here (not in RolesGuard) so the restriction
+      // applies even to handlers with no @Roles decorator (e.g.
+      // public-ish reads that AuthGuard runs on but RolesGuard
+      // doesn't gate).
+      if (payload.scope === 'mfa_enrollment_only') {
+        const handlerName = context.getHandler()?.name;
+        if (!handlerName || !MFA_ENROLLMENT_ONLY_ALLOWED_HANDLERS.includes(handlerName)) {
+          throw new ForbiddenException(
+            'MFA enrollment required — complete enrollment to access the platform',
+          );
+        }
+      }
+
       request.user = {
         userId: payload.sub,
         tenantId: effectiveTenantId,
@@ -68,6 +87,7 @@ export class AuthGuard implements CanActivate {
         permissions: payload.permissions,
         isPlatformAdmin,
         tenantOverride: tenantOverride || undefined,
+        scope: payload.scope,
       };
       return true;
     } catch (err) {

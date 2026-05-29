@@ -222,8 +222,12 @@ export class AuthResolver {
       | {
           requiresMfa: false;
           accessToken: string;
-          refreshToken: string;
+          // MFA-lockout fix: optional — enrollment-only result omits
+          // the refresh token so the restricted session cannot be
+          // extended without re-login.
+          refreshToken?: string;
           mfaGraceDaysRemaining?: number;
+          requiresMfaEnrollment?: boolean;
         }
       | { requiresMfa: true; mfaToken: string },
   ): LoginResponse {
@@ -238,6 +242,10 @@ export class AuthResolver {
       // client can render a persistent banner. Undefined on a
       // not-required / enrolled login (no banner needed).
       mfaGraceDaysRemaining: result.mfaGraceDaysRemaining,
+      // MFA-lockout fix: true on the enrollment-only result. The
+      // frontend reads this AND `accessToken` together to route
+      // into the enrolment flow with a valid (restricted) session.
+      requiresMfaEnrollment: result.requiresMfaEnrollment,
     };
   }
 }

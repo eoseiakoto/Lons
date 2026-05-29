@@ -1,6 +1,7 @@
 import { Resolver, Query, Mutation, Args, ID, InputType, Field } from '@nestjs/graphql';
 import { ForbiddenException } from '@nestjs/common';
-import { PlatformUserService, PasswordService, AuthService, CurrentUser, IAuthenticatedUser } from '@lons/entity-service';
+import { PlatformUserService, PasswordService, AuthService, MfaService, CurrentUser, IAuthenticatedUser } from '@lons/entity-service';
+import { PrismaService } from '@lons/database';
 import { encodeCursor, decodeCursor, AuditAction, AuditActionType, AuditResourceType } from '@lons/common';
 import { IsOptional, IsString, IsEmail } from 'class-validator';
 
@@ -28,6 +29,13 @@ export class PlatformUserResolver {
     private platformUserService: PlatformUserService,
     private passwordService: PasswordService,
     private authService: AuthService,
+    // MFA-lockout fix: platform-admin cross-tenant MFA reset path
+    // for support escalations where the SP Admin is themselves
+    // locked out. PrismaService is needed to enter the target
+    // tenant context before stamping the user's MFA columns
+    // (User table is RLS-scoped).
+    private mfaService: MfaService,
+    private prisma: PrismaService,
   ) {}
 
   private requirePlatformAdmin(user: IAuthenticatedUser): void {
@@ -160,5 +168,34 @@ export class PlatformUserResolver {
     this.passwordService.validateStrength(newPassword);
     const passwordHash = await this.passwordService.hash(newPassword);
     return this.platformUserService.resetPassword(id, passwordHash) as unknown as PlatformUserType;
+  }
+
+  /**
+   * MFA-lockout fix: platform-admin cross-tenant MFA reset.
+   *
+   * Used when the SP Admin is themselves locked out and the
+   * tenant has no other admin who can run `adminResetUserMfa` —
+   * the platform support team can recover the user.
+   *
+   * Same field-clearing semantics as `adminResetMfa('user', ...)`,
+   * but wrapped in `enterTenantContext(tenantId)` so the RLS
+   * policy on the `users` table admits the write.
+   *
+   * Gated by `requirePlatformAdmin` (role check on the caller).
+   * Audited via @AuditAction so the (actor, target tenant, target
+   * user) tuple is retained.
+   */
+  @Mutation(() => Boolean)
+  @AuditAction(AuditActionType.UPDATE, AuditResourceType.PLATFORM_USER)
+  async platformResetUserMfa(
+    @CurrentUser() user: IAuthenticatedUser,
+    @Args('tenantId', { type: () => ID }) tenantId: string,
+    @Args('userId', { type: () => ID }) userId: string,
+  ): Promise<boolean> {
+    this.requirePlatformAdmin(user);
+    await this.prisma.enterTenantContext({ tenantId }, async () => {
+      await this.mfaService.adminResetMfa('user', userId);
+    });
+    return true;
   }
 }

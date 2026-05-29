@@ -61,6 +61,21 @@ const RESET_PASSWORD = gql`
   }
 `;
 
+/**
+ * MFA-lockout fix: admin recovery for a user whose MFA is
+ * unrecoverable (lost phone, locked out by tier enforcement).
+ * Argument is `id` (not `userId`) to match the backend resolver
+ * signature in apps/graphql-server/src/graphql/resolvers/user.resolver.ts.
+ * The mutation also returns mfaEnabled so the UI can confirm the
+ * post-reset state — though we additionally refetch the users
+ * query to update the MFA Compliance badge on the row.
+ */
+const RESET_MFA = gql`
+  mutation AdminResetUserMfa($id: ID!) {
+    adminResetUserMfa(id: $id) { id mfaEnabled }
+  }
+`;
+
 type MfaComplianceStatus = 'not_required' | 'enrolled' | 'pending' | 'overdue';
 
 interface UserNode {
@@ -162,6 +177,14 @@ export default function UsersPage() {
   const [resetError, setResetError] = useState('');
   const [resetSuccess, setResetSuccess] = useState(false);
 
+  // MFA-lockout fix: Reset MFA state. No collapsible "confirm step"
+  // (matches the prompt's prescribed pattern — one click + clear
+  // help text + success/error feedback). The success flag also
+  // gates the button so a user can't double-click after a
+  // successful reset.
+  const [mfaResetSuccess, setMfaResetSuccess] = useState(false);
+  const [mfaResetError, setMfaResetError] = useState('');
+
   const { data, loading, refetch } = useQuery(USERS_QUERY, {
     variables: { pagination: { first: 50 } },
   });
@@ -171,6 +194,7 @@ export default function UsersPage() {
   const [updateUser, { loading: updating }] = useMutation(UPDATE_USER);
   const [deactivateUser] = useMutation(DEACTIVATE_USER);
   const [resetPassword, { loading: resetting }] = useMutation(RESET_PASSWORD);
+  const [resetMfa, { loading: resettingMfa }] = useMutation(RESET_MFA);
 
   const users: UserNode[] = data?.users?.edges?.map((e: any) => e.node) || [];
   const roles: RoleNode[] = rolesData?.roles || [];
@@ -197,6 +221,11 @@ export default function UsersPage() {
     setResetConfirm('');
     setResetError('');
     setResetSuccess(false);
+    // MFA-lockout fix: clear the reset-MFA feedback when switching
+    // users so stale success/error from a previous user doesn't
+    // bleed into the next drawer open.
+    setMfaResetSuccess(false);
+    setMfaResetError('');
     setDrawerOpen(true);
   };
 
@@ -446,6 +475,73 @@ export default function UsersPage() {
               </div>
             )}
             {resetSuccess && !resetOpen && <p className="text-xs text-[color:var(--status-success-text)]">{t('settings.users.passwordWasReset')}</p>}
+          </div>
+        )}
+
+        {/*
+          MFA-lockout fix: admin path to reset a user's MFA when
+          they're locked out (lost phone, device change, expired
+          grace window with no other admin to help). Conditional
+          on `mfaEnabled` so the button doesn't appear for users
+          who have nothing to reset — but stays mounted after a
+          successful reset so the success message remains visible
+          until the drawer closes. The visible-after-success
+          condition is `(editUser.mfaEnabled || mfaResetSuccess)`.
+
+          Permission gating: the backend mutation is decorated with
+          @Roles('user:update'); a non-admin user cannot invoke it
+          even if they somehow rendered the button. The audit trail
+          via @AuditAction captures (actor, target).
+        */}
+        {editUser && (editUser.mfaEnabled || mfaResetSuccess) && (
+          <div className="mt-6 pt-6 border-t border-[color:var(--border-subtle)] space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-medium text-[color:var(--text-secondary)]">
+                {t('settings.users.resetMfa')}
+              </h3>
+              {/* Button hides after success so the user can't double-fire. */}
+              {!mfaResetSuccess && editUser.mfaEnabled && (
+                <button
+                  type="button"
+                  disabled={resettingMfa}
+                  onClick={async () => {
+                    setMfaResetError('');
+                    setMfaResetSuccess(false);
+                    try {
+                      await resetMfa({ variables: { id: editUser.id } });
+                      setMfaResetSuccess(true);
+                      // Refresh the users list so the MFA Compliance
+                      // badge on the row updates immediately (the
+                      // reset stamps mfaDisabledAt = now, which
+                      // restarts the 7-day grace window — the badge
+                      // should flip from "Enrolled" to "Pending 7d").
+                      refetch();
+                    } catch (err: any) {
+                      setMfaResetError(
+                        err?.graphQLErrors?.[0]?.message ||
+                          t('settings.users.mfaResetFailed'),
+                      );
+                    }
+                  }}
+                  className="text-xs text-[color:var(--status-warning-text)] hover:text-[color:var(--status-error-text)] disabled:opacity-50 transition-colors"
+                >
+                  {resettingMfa
+                    ? t('settings.users.resettingMfa')
+                    : t('settings.users.resetMfa')}
+                </button>
+              )}
+            </div>
+            <p className="text-xs text-[color:var(--text-tertiary)]">
+              {t('settings.users.resetMfaHelp')}
+            </p>
+            {mfaResetError && (
+              <p className="text-xs text-[color:var(--status-error-text)]">{mfaResetError}</p>
+            )}
+            {mfaResetSuccess && (
+              <p className="text-xs text-[color:var(--status-success-text)]">
+                {t('settings.users.mfaWasReset')}
+              </p>
+            )}
           </div>
         )}
 

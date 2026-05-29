@@ -127,7 +127,7 @@
     "copyrightTagline": "Lending platform for financial institutions",
     "mfaRequired": {
       "title": "Inscription MFA requise",
-      "body": "Le plan de votre organisation exige désormais l'authentification multifacteur pour ce rôle. Contactez votre administrateur pour réinitialiser votre accès — une fois connecté, activez la MFA depuis votre profil."
+      "body": "Le plan de votre organisation exige l'authentification multifacteur pour ce rôle. Terminez l'inscription ci-dessous pour rétablir l'accès complet."
     }
   },
   "mfa": {
@@ -1685,6 +1685,11 @@
       "passwordRequired": "Password is required",
       "passwordsDoNotMatch": "Passwords do not match",
       "passwordResetFailed": "Password reset failed",
+      "resetMfa": "Réinitialiser le MFA",
+      "resettingMfa": "Réinitialisation...",
+      "resetMfaHelp": "Supprime l'inscription MFA de cet utilisateur et démarre une nouvelle période de grâce de 7 jours. L'utilisateur devra se réinscrire.",
+      "mfaResetFailed": "Échec de la réinitialisation du MFA",
+      "mfaWasReset": "Le MFA a été réinitialisé. L'utilisateur dispose de 7 jours pour se réinscrire.",
       "mfaCompliance": {
         "column": "Conformité MFA",
         "enrolled": "Inscrit",

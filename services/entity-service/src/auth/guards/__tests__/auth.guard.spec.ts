@@ -1,4 +1,4 @@
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { AuthGuard } from '../auth.guard';
 
@@ -167,6 +167,85 @@ describe('AuthGuard', () => {
       const { context } = makeGqlContext({ authorization: 'Bearer expired-token' });
 
       await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // MFA-lockout fix: enrollment-only scoped tokens
+  // -------------------------------------------------------------------------
+
+  describe('mfa_enrollment_only scope (MFA lockout fix)', () => {
+    // Build a GraphQL context whose `getHandler()` returns a real
+    // function with a name property — the guard reads
+    // context.getHandler().name to check against the allow-list.
+    function makeScopedCtx(handlerName: string, headers: Record<string, string> = {}) {
+      const request: Record<string, any> = { headers };
+      const handlerFn = function namedHandler() {};
+      Object.defineProperty(handlerFn, 'name', { value: handlerName });
+      const ctx = {
+        getType: () => 'graphql',
+        getHandler: () => handlerFn,
+        getClass: () => ({}),
+        getArgs: () => [{}, {}, { req: request }, {}],
+        getArgByIndex: (index: number) => [{}, {}, { req: request }, {}][index],
+      } as unknown as ExecutionContext;
+      return { context: ctx, request };
+    }
+
+    const enrollmentScopedPayload = {
+      sub: 'user-1',
+      tenantId: 'tenant-1',
+      role: 'SP Admin',
+      permissions: [],
+      type: 'access' as const,
+      scope: 'mfa_enrollment_only' as const,
+    };
+
+    it('admits an enrollment-only token on the initiateMfaEnrollment handler', async () => {
+      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+      const jwtService = createMockJwtService({
+        verifyToken: jest.fn().mockResolvedValue(enrollmentScopedPayload),
+      });
+      const guard = new AuthGuard(reflector, jwtService as any);
+      const { context, request } = makeScopedCtx('initiateMfaEnrollment', {
+        authorization: 'Bearer scoped-token',
+      });
+      await expect(guard.canActivate(context)).resolves.toBe(true);
+      // Scope is carried through onto request.user so downstream
+      // code (e.g. CurrentUser decorator) sees it.
+      expect(request.user.scope).toBe('mfa_enrollment_only');
+    });
+
+    it('admits an enrollment-only token on the me query', async () => {
+      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+      const jwtService = createMockJwtService({
+        verifyToken: jest.fn().mockResolvedValue(enrollmentScopedPayload),
+      });
+      const guard = new AuthGuard(reflector, jwtService as any);
+      const { context } = makeScopedCtx('me', { authorization: 'Bearer scoped-token' });
+      await expect(guard.canActivate(context)).resolves.toBe(true);
+    });
+
+    it('REJECTS an enrollment-only token on any other handler', async () => {
+      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+      const jwtService = createMockJwtService({
+        verifyToken: jest.fn().mockResolvedValue(enrollmentScopedPayload),
+      });
+      const guard = new AuthGuard(reflector, jwtService as any);
+      const { context } = makeScopedCtx('createCollectionsCase', {
+        authorization: 'Bearer scoped-token',
+      });
+      await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
+    });
+
+    it('admits a full-scope token (no `scope` field) on any handler', async () => {
+      jest.spyOn(reflector, 'getAllAndOverride').mockReturnValue(false);
+      const jwtService = createMockJwtService(); // default = no scope
+      const guard = new AuthGuard(reflector, jwtService as any);
+      const { context } = makeScopedCtx('anyOtherHandler', {
+        authorization: 'Bearer full-token',
+      });
+      await expect(guard.canActivate(context)).resolves.toBe(true);
     });
   });
 });

@@ -127,7 +127,7 @@
     "copyrightTagline": "Lending platform for financial institutions",
     "mfaRequired": {
       "title": "MFA enrollment required",
-      "body": "Your organization's plan now requires multi-factor authentication for this role. Contact your administrator to reset your access — once you can log in, enable MFA from your profile."
+      "body": "Your organization's plan requires multi-factor authentication for this role. Complete enrollment below to restore full access."
     }
   },
   "mfa": {
@@ -1685,6 +1685,11 @@
       "passwordRequired": "Password is required",
       "passwordsDoNotMatch": "Passwords do not match",
       "passwordResetFailed": "Password reset failed",
+      "resetMfa": "Reset MFA",
+      "resettingMfa": "Resetting...",
+      "resetMfaHelp": "Removes this user's MFA enrollment and starts a new 7-day grace period. The user will need to re-enrol.",
+      "mfaResetFailed": "MFA reset failed",
+      "mfaWasReset": "MFA was reset. The user has 7 days to re-enrol.",
       "mfaCompliance": {
         "column": "MFA Compliance",
         "enrolled": "Enrolled",
