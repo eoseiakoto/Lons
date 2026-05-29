@@ -5,10 +5,11 @@ import { ObservabilityModule } from '@lons/common';
 import { RecoveryStrategyService } from './recovery-strategy.service';
 import { CollectionsModule } from './collections/collections.module';
 import { WriteOffModule } from './write-off/write-off.module';
+import { NplModule } from './npl/npl.module';
 
 @Module({
-  imports: [PrismaModule, ObservabilityModule, CollectionsModule, WriteOffModule],
+  imports: [PrismaModule, ObservabilityModule, CollectionsModule, WriteOffModule, NplModule],
   providers: [RecoveryStrategyService],
-  exports: [RecoveryStrategyService, CollectionsModule, WriteOffModule],
+  exports: [RecoveryStrategyService, CollectionsModule, WriteOffModule, NplModule],
 })
 export class RecoveryServiceModule {}
