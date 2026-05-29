@@ -95,8 +95,14 @@ jobs:
           GRAPHQL_HEALTH_TIMEOUT: '60'
           NODE_ENV: development
 
+      # S19-4: Fail the pipeline on any critical-severity advisory.
+      # Removed the `|| true` swallow — silent passes were how a known
+      # critical CVE in lockfile-lint leaked through Sprint 17.
+      # To temporarily suppress a specific advisory, add it to
+      # `.audit-ignore.json` with a justification + expiry date and
+      # extend this step to pipe through the ignore filter.
       - name: Security Audit
-        run: pnpm audit --audit-level=critical || true
+        run: pnpm audit --audit-level=critical
 
   python-scoring:
     runs-on: ubuntu-latest

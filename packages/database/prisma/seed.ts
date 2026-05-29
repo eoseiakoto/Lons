@@ -29,7 +29,7 @@ const prisma = new PrismaClient({
 // Audit guard: scripts/audit-permissions.ts fails CI if any @Roles(...)
 // string in apps/ or services/ is missing from this array.
 const allPermissions = [
-  'tenant:create', 'tenant:read', 'tenant:update', 'tenant:suspend',
+  'tenant:create', 'tenant:read', 'tenant:update', 'tenant:suspend', 'tenant:admin',
   'user:create', 'user:read', 'user:update', 'user:deactivate',
   'role:create', 'role:read', 'role:update', 'role:delete',
   'product:create', 'product:read', 'product:update', 'product:activate', 'product:delete',
@@ -40,7 +40,11 @@ const allPermissions = [
   'contract:create', 'contract:read', 'contract:update',
   'repayment:create', 'repayment:read',
   'audit:read', 'analytics:read',
-  'collections:read', 'collections:write',
+  // S19-5..9: collections workflow permissions
+  'collections:read', 'collections:create', 'collections:update', 'collections:write',
+  'collections:transition', 'collections:assign', 'collections:ptp', 'collections:escalate',
+  'collections:write_off_recommend', 'collections:write_off_approve', 'collections:write_off_final',
+  'collections:legal_action', 'collections:reassign',
   'monitoring:read', 'monitoring:write',
   'usage:read',
   // Invoice factoring (Sprint 14)
@@ -51,6 +55,15 @@ const allPermissions = [
   'factoring:verify',
   // BNPL credit lines (Sprint 15)
   'bnpl_credit_line:create', 'bnpl_credit_line:read', 'bnpl_credit_line:adjust',
+  // Overdraft (Sprint 10B)
+  'creditline:read', 'creditline:update',
+  // BNPL purchases (Sprint 11)
+  'bnpl_purchase:read', 'bnpl_purchase:update',
+  // Settlement + ledger + reconciliation + reports (operations visibility)
+  'settlement:read', 'ledger:read', 'reconciliation:read', 'webhook:read',
+  'scoring:read', 'report:read', 'report:export', 'dashboard:read',
+  // Notifications
+  'notification:create',
   // Billing + integrations
   'billing:read', 'billing:manage', 'integration:read',
 ];
@@ -77,23 +90,36 @@ async function createRoles(tenantId: string) {
       ],
       isSystem: true,
     },
+    // S19-1: expanded for S10-S18 features (overdraft, BNPL, factoring,
+    // settlement, scoring, reporting). Read-only role — no write perms.
     sp_analyst: {
       name: 'SP Analyst',
       permissions: [
         'product:read', 'customer:read', 'loan_request:read',
         'contract:read', 'repayment:read', 'analytics:read',
+        'creditline:read', 'bnpl_purchase:read', 'invoice:read',
+        'settlement:read', 'collections:read', 'scoring:read',
+        'report:read', 'report:export', 'dashboard:read',
       ],
       isSystem: true,
     },
+    // S19-1: expanded for full audit-trail visibility across all
+    // Sprint 10-18 surfaces. Includes PII access for compliance review.
     sp_auditor: {
       name: 'SP Auditor',
       permissions: [
         'product:read', 'customer:read', 'customer:read_pii',
         'loan_request:read', 'contract:read', 'repayment:read',
         'audit:read', 'analytics:read',
+        'creditline:read', 'bnpl_purchase:read', 'invoice:read',
+        'settlement:read', 'collections:read', 'scoring:read',
+        'ledger:read', 'reconciliation:read', 'webhook:read',
+        'report:read', 'report:export',
       ],
       isSystem: true,
     },
+    // S19-1: expanded for the S19-5..9 collections workflow. Officer
+    // tier — can recommend write-off (L1) but cannot approve (L2/L3).
     sp_collections: {
       name: 'SP Collections',
       permissions: [
@@ -101,6 +127,36 @@ async function createRoles(tenantId: string) {
         'contract:read', 'contract:update',
         'repayment:read', 'repayment:create',
         'loan_request:read',
+        'collections:read', 'collections:create', 'collections:update',
+        'collections:transition', 'collections:assign',
+        'collections:ptp', 'collections:escalate',
+        'collections:write_off_recommend',
+        'creditline:read', 'bnpl_purchase:read', 'invoice:read',
+        'scoring:read', 'notification:create',
+      ],
+      isSystem: true,
+    },
+    // S19-1: new 7th role. Manager tier — superset of SP Collections
+    // plus L2 write-off approval, legal action, case reassignment,
+    // and reporting visibility. L3 (director) approval is reserved for
+    // SP Admin via the `tenant:admin` permission.
+    sp_collections_manager: {
+      name: 'SP Collections Manager',
+      permissions: [
+        'customer:read', 'customer:read_pii',
+        'contract:read', 'contract:update',
+        'repayment:read', 'repayment:create',
+        'loan_request:read',
+        'collections:read', 'collections:create', 'collections:update',
+        'collections:transition', 'collections:assign',
+        'collections:ptp', 'collections:escalate',
+        'collections:write_off_recommend',
+        'collections:write_off_approve', // L2 approval
+        'collections:legal_action',
+        'collections:reassign',
+        'creditline:read', 'bnpl_purchase:read', 'invoice:read',
+        'scoring:read', 'notification:create',
+        'report:read', 'analytics:read',
       ],
       isSystem: true,
     },
@@ -811,6 +867,8 @@ async function main() {
       { key: 'sp_analyst', email: `analyst@${cfg.emailDomain}`, password: 'Analyst123!@#', name: `${cfg.name} Analyst` },
       { key: 'sp_auditor', email: `auditor@${cfg.emailDomain}`, password: 'Auditor123!@#', name: `${cfg.name} Auditor` },
       { key: 'sp_collections', email: `collections@${cfg.emailDomain}`, password: 'Collections123!@#', name: `${cfg.name} Collections` },
+      // S19-1: new 6th seeded user for the SP Collections Manager role.
+      { key: 'sp_collections_manager', email: `collections-mgr@${cfg.emailDomain}`, password: 'CollMgr123!@#', name: `${cfg.name} Collections Manager` },
     ];
 
     let spAdminId: string = '';

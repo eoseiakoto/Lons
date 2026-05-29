@@ -13,9 +13,45 @@ import { BusinessExceptionFilter } from './filters/business-exception.filter';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // S19-3 (FR-SEC-014): full CSP with Swagger UI carve-outs (unsafe-inline
+  // for scripts + styles, data: for icons). Replaces the old blanket
+  // `contentSecurityPolicy: false`, which left every endpoint with no XSS
+  // protection just so /api/docs could render.
+  //
+  // S19-2 (FR-SEC-005.3): HSTS — force HTTPS for this origin + subdomains
+  // for 1 year and signal preload-list eligibility.
+  const isDev = process.env.NODE_ENV !== 'production';
+  // Dev mode allows localhost connections (HMR, devtools, local CLI).
+  // In production, only same-origin XHRs from Swagger UI are permitted.
+  const connectSources: string[] = ["'self'"];
+  if (isDev) {
+    connectSources.push('http://localhost:*', 'ws://localhost:*');
+  }
   app.use(
     helmet({
-      contentSecurityPolicy: false, // Swagger UI requires inline scripts
+      contentSecurityPolicy: {
+        directives: {
+          defaultSrc: ["'self'"],
+          // unsafe-inline is required for Swagger UI's bootstrap script
+          // and the inline styles it injects on render. Scoped tightly:
+          // only this app serves Swagger; the GraphQL server's stricter
+          // CSP at apps/graphql-server/src/main.ts has no unsafe-inline.
+          scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+          styleSrc: ["'self'", "'unsafe-inline'", 'https://cdn.jsdelivr.net'],
+          imgSrc: ["'self'", 'data:', 'https://cdn.jsdelivr.net'],
+          connectSrc: connectSources,
+          fontSrc: ["'self'", 'https://cdn.jsdelivr.net'],
+          objectSrc: ["'none'"],
+          frameAncestors: ["'none'"],
+          baseUri: ["'self'"],
+          formAction: ["'self'"],
+        },
+      },
+      strictTransportSecurity: {
+        maxAge: 31536000,
+        includeSubDomains: true,
+        preload: true,
+      },
     }),
   );
 

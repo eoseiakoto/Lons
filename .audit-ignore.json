@@ -1,0 +1,11 @@
+{
+  "_comment": "S19-4: Advisory suppression list for `pnpm audit`. Each entry MUST include a justification and expiry date. Review monthly and prune expired entries — the goal is zero entries.",
+  "_schema": {
+    "advisory": "Numeric advisory ID from pnpm audit output",
+    "package": "Affected package name (informational)",
+    "justification": "Why this is safe to suppress (dev dep only, no upstream fix, scope limited, etc.)",
+    "expiresAt": "ISO date — re-evaluate by this date",
+    "owner": "Email of person responsible for tracking"
+  },
+  "advisories": []
+}

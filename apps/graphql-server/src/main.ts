@@ -25,6 +25,15 @@ async function bootstrap() {
           frameAncestors: ["'none'"],
         },
       },
+      // S19-2 (FR-SEC-005.3): HSTS — instruct browsers to force HTTPS
+      // for this origin (and subdomains) for 1 year. `preload: true`
+      // signals eligibility for the HSTS preload list; submission to
+      // hstspreload.org happens out-of-band per environment.
+      strictTransportSecurity: {
+        maxAge: 31536000, // 1 year in seconds
+        includeSubDomains: true,
+        preload: true,
+      },
     }),
   );
 
