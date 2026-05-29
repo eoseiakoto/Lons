@@ -95,7 +95,19 @@ export class TenantService {
   }
 
   async update(id: string, data: Prisma.TenantUpdateInput) {
-    await this.findById(id);
+    const existing = await this.findById(id);
+    // S19-STAB-5: stamp `planTierChangedAt` whenever the tier actually
+    // changes. The MFA compliance service uses this as the start
+    // of the 7-day grace window when a tenant upgrades to Growth or
+    // Enterprise. We compare against the existing row so that no-op
+    // writes (operator updates legalName, leaves planTier alone)
+    // don't accidentally reset the grace countdown for everyone.
+    const tierChanged =
+      data.planTier !== undefined &&
+      data.planTier !== existing.planTier;
+    if (tierChanged) {
+      data = { ...data, planTierChangedAt: new Date() };
+    }
     return this.prisma.tenant.update({ where: { id }, data });
   }
 

@@ -3,7 +3,57 @@ import * as argon2 from 'argon2';
 import { computeSearchableHash } from '@lons/common';
 import { DEFAULT_SCORECARD } from '@lons/shared-types';
 
-const prisma = new PrismaClient();
+// The seed writes across every tenant + creates platform-level rows,
+// so it needs the `lons` owner role's RLS bypass (S19-STAB-1 + role
+// provisioning in 20260526200000). Prisma's default PrismaClient
+// reads DATABASE_URL, which points at the non-owner `lons_app` —
+// override here to use DIRECT_DATABASE_URL (the owner) so the seed
+// isn't blocked by RLS policies.
+const prisma = new PrismaClient({
+  datasourceUrl: process.env.DIRECT_DATABASE_URL || process.env.DATABASE_URL,
+});
+
+// ---------------------------------------------------------------------------
+// Canonical permission catalog
+// ---------------------------------------------------------------------------
+//
+// Hoisted to module scope so the per-tenant `createRoles()` AND the
+// `selfHealSpAdminPermissions()` final pass (S19-STAB-4) share a single
+// source of truth.
+//
+// Mirrors the @Roles(...) strings used in resolvers across graphql-server
+// and process-engine. If a new resolver introduces a permission, add it
+// here so the SP Admin role gets it by default — otherwise existing
+// tenant admins will silently lose access on the next deploy.
+//
+// Audit guard: scripts/audit-permissions.ts fails CI if any @Roles(...)
+// string in apps/ or services/ is missing from this array.
+const allPermissions = [
+  'tenant:create', 'tenant:read', 'tenant:update', 'tenant:suspend',
+  'user:create', 'user:read', 'user:update', 'user:deactivate',
+  'role:create', 'role:read', 'role:update', 'role:delete',
+  'product:create', 'product:read', 'product:update', 'product:activate', 'product:delete',
+  'customer:create', 'customer:read', 'customer:update', 'customer:read_pii', 'customer:blacklist',
+  'lender:create', 'lender:read', 'lender:update',
+  'subscription:create', 'subscription:read', 'subscription:update',
+  'loan_request:create', 'loan_request:read', 'loan_request:process', 'loan_request:approve',
+  'contract:create', 'contract:read', 'contract:update',
+  'repayment:create', 'repayment:read',
+  'audit:read', 'analytics:read',
+  'collections:read', 'collections:write',
+  'monitoring:read', 'monitoring:write',
+  'usage:read',
+  // Invoice factoring (Sprint 14)
+  'debtor:create', 'debtor:read', 'debtor:update',
+  'invoice:create', 'invoice:verify', 'invoice:offer', 'invoice:accept',
+  'invoice:decline', 'invoice:dispute', 'invoice:fund', 'invoice:notify',
+  'invoice:payment', 'invoice:release',
+  'factoring:verify',
+  // BNPL credit lines (Sprint 15)
+  'bnpl_credit_line:create', 'bnpl_credit_line:read', 'bnpl_credit_line:adjust',
+  // Billing + integrations
+  'billing:read', 'billing:manage', 'integration:read',
+];
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -14,37 +64,6 @@ async function hashPassword(password: string): Promise<string> {
 }
 
 async function createRoles(tenantId: string) {
-  // Catalog of every permission the platform recognises. Mirrors the
-  // @Roles(...) strings used in resolvers across graphql-server and
-  // process-engine. If a new resolver introduces a permission, add it
-  // here so the SP Admin role gets it by default — otherwise existing
-  // tenant admins will silently lose access on the next deploy.
-  const allPermissions = [
-    'tenant:create', 'tenant:read', 'tenant:update', 'tenant:suspend',
-    'user:create', 'user:read', 'user:update', 'user:deactivate',
-    'role:create', 'role:read', 'role:update', 'role:delete',
-    'product:create', 'product:read', 'product:update', 'product:activate', 'product:delete',
-    'customer:create', 'customer:read', 'customer:update', 'customer:read_pii', 'customer:blacklist',
-    'lender:create', 'lender:read', 'lender:update',
-    'subscription:create', 'subscription:read', 'subscription:update',
-    'loan_request:create', 'loan_request:read', 'loan_request:process', 'loan_request:approve',
-    'contract:create', 'contract:read', 'contract:update',
-    'repayment:create', 'repayment:read',
-    'audit:read', 'analytics:read',
-    'collections:read', 'collections:write',
-    'monitoring:read', 'monitoring:write',
-    'usage:read',
-    // Invoice factoring (Sprint 14)
-    'debtor:create', 'debtor:read', 'debtor:update',
-    'invoice:create', 'invoice:verify', 'invoice:offer', 'invoice:accept',
-    'invoice:decline', 'invoice:dispute', 'invoice:fund', 'invoice:notify',
-    'invoice:payment', 'invoice:release',
-    'factoring:verify',
-    // BNPL credit lines (Sprint 15)
-    'bnpl_credit_line:create', 'bnpl_credit_line:read', 'bnpl_credit_line:adjust',
-    // Billing + integrations
-    'billing:read', 'billing:manage', 'integration:read',
-  ];
 
   const roleDefinitions = {
     sp_admin: { name: 'SP Admin', permissions: allPermissions, isSystem: true },
@@ -1635,6 +1654,45 @@ async function main() {
       console.log(`  Skipped repayments (${existingRepaymentCount} already exist)`);
     }
   }
+
+  // ---------------------------------------------------------------------
+  // Self-healing pass (S19-STAB-4)
+  // ---------------------------------------------------------------------
+  //
+  // The per-tenant `createRoles()` upserts above already refresh
+  // permissions for the 3 seed-defined tenants. This final sweep
+  // catches tenants that exist in the DB but weren't iterated above —
+  // typically real production / staging tenants created via the admin
+  // portal's onboarding flow rather than the seed.
+  //
+  // Why this matters: the Sprint 14 → Sprint 18 drift left every
+  // tenant's SP Admin role missing 8 permissions until a manual SQL
+  // backfill was run. Running `pnpm db:seed` (which any operator
+  // could be expected to do after pulling a permission catalog
+  // update) should leave the DB self-consistent without a second
+  // manual step.
+  //
+  // Updates only the `SP Admin` role's `permissions` column. Does not
+  // touch SP Operator / SP Analyst / SP Auditor / SP Collections —
+  // their permission lists are narrower by design and only the
+  // explicitly-seeded tenants get those refreshed.
+  console.log('\n[Self-healing] Aligning SP Admin permissions across all tenants...');
+  const allTenants = await prisma.tenant.findMany({
+    where: { deletedAt: null },
+    select: { id: true, slug: true, name: true },
+  });
+  let refreshedCount = 0;
+  for (const t of allTenants) {
+    const result = await prisma.role.updateMany({
+      where: { tenantId: t.id, name: 'SP Admin' },
+      data: { permissions: allPermissions as Prisma.JsonArray },
+    });
+    if (result.count > 0) refreshedCount += result.count;
+  }
+  console.log(
+    `[Self-healing] Refreshed SP Admin permissions on ${refreshedCount} role row(s) ` +
+      `across ${allTenants.length} tenant(s). Catalog size: ${allPermissions.length} permissions.`,
+  );
 
   console.log('\n============================================================');
   console.log('  Seeding complete!');

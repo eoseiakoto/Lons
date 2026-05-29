@@ -34,6 +34,8 @@ describe('AuthService', () => {
     mfaSecret: null,
     mfaEnabled: false,
     mfaBackupCodes: null,
+    // S19-STAB-5: column added in 20260526300000_mfa_tier_enforcement.
+    mfaDisabledAt: null,
     lastLoginAt: null,
     lockedUntil: null,
     failedLoginCount: 0,
@@ -81,24 +83,55 @@ describe('AuthService', () => {
         PasswordService,
         {
           provide: PrismaService,
-          useValue: {
-            user: {
+          useValue: (() => {
+            // S19-STAB-1 + S19-STAB-5: AuthService now wraps tenant-
+            // scoped lookups in `prisma.enterTenantContext(...)` and
+            // accesses the in-context tx client via `prisma.scoped()`.
+            // The mock has to thread those through to the underlying
+            // jest.fn-stubbed model accessors so existing tests keep
+            // their `mockResolvedValueOnce(mockUser)` semantics.
+            const userMock = {
               findFirst: jest.fn(),
               findUnique: jest.fn(),
               update: jest.fn(),
-            },
-            platformUser: {
+            };
+            const platformUserMock = {
               findFirst: jest.fn(),
               findUnique: jest.fn(),
               update: jest.fn(),
-            },
-            refreshToken: {
+            };
+            const refreshTokenMock = {
               findUnique: jest.fn(),
               create: jest.fn(),
               update: jest.fn(),
-            },
-            $executeRawUnsafe: jest.fn(),
-          },
+            };
+            const tenantMock = {
+              findUnique: jest.fn(),
+            };
+            const mock = {
+              user: userMock,
+              platformUser: platformUserMock,
+              refreshToken: refreshTokenMock,
+              tenant: tenantMock,
+              $executeRawUnsafe: jest.fn(),
+              // Passes through to the callback synchronously — no
+              // session-var work in tests.
+              enterTenantContext: jest.fn(async (_ctx: unknown, fn: () => any) => fn()),
+              // `scoped()` returns the in-context client. For the
+              // mock, that's the same shape as the singleton — so
+              // we hand back an object exposing the same model
+              // accessors. Tests that stub `prisma.user.findFirst`
+              // continue to be hit because both paths point at the
+              // same jest.fn objects.
+              scoped: jest.fn(() => ({
+                user: userMock,
+                platformUser: platformUserMock,
+                refreshToken: refreshTokenMock,
+                tenant: tenantMock,
+              })),
+            };
+            return mock;
+          })(),
         },
         {
           provide: ConfigService,

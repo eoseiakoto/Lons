@@ -215,13 +215,22 @@ describe('verifyCode', () => {
 });
 
 describe('disableMfa', () => {
-  it('clears all MFA fields', async () => {
+  it('clears all MFA fields and stamps mfaDisabledAt for tenant users', async () => {
     const { service, user } = makeService();
     await service.disableMfa('user', USER_ID);
-    expect(user.update).toHaveBeenCalledWith({
-      where: { id: USER_ID },
-      data: { mfaEnabled: false, mfaSecret: null, mfaBackupCodes: null },
-    });
+    // S19-STAB-5: `mfaDisabledAt` is now set so the compliance
+    // service can compute a fresh 7-day grace window if the
+    // tenant tier still mandates MFA. We assert the timestamp
+    // is present + recent rather than asserting exact equality
+    // (the test uses `new Date()` at call time).
+    expect(user.update).toHaveBeenCalledTimes(1);
+    const [args] = (user.update as jest.Mock).mock.calls[0];
+    expect(args.where).toEqual({ id: USER_ID });
+    expect(args.data.mfaEnabled).toBe(false);
+    expect(args.data.mfaSecret).toBeNull();
+    expect(args.data.mfaBackupCodes).toBeNull();
+    expect(args.data.mfaDisabledAt).toBeInstanceOf(Date);
+    expect(Date.now() - args.data.mfaDisabledAt.getTime()).toBeLessThan(5_000);
   });
 });
 

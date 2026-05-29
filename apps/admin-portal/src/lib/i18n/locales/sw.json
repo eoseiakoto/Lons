@@ -124,7 +124,21 @@
     "heroOrigination": "origination",
     "heroRecovery": "recovery",
     "heroDescription": "Lending platform used by banks, microfinance lenders, and telcos across Africa.",
-    "copyrightTagline": "Lending platform for financial institutions"
+    "copyrightTagline": "Lending platform for financial institutions",
+    "mfaRequired": {
+      "title": "Usajili wa MFA unahitajika",
+      "body": "Mpango wa shirika lako sasa unahitaji uthibitisho wa hatua nyingi (MFA) kwa jukumu hili. Wasiliana na msimamizi wako ili kuweka upya ufikiaji wako — mara tu uwezapo kuingia, washa MFA kutoka kwenye wasifu wako."
+    }
+  },
+  "mfa": {
+    "grace": {
+      "title": "Usajili wa MFA utahitajika hivi karibuni",
+      "lastDay": "Leo ni siku ya mwisho ya kujisajili kwa MFA.",
+      "oneDay": "Imebaki siku 1 kujisajili kwa MFA.",
+      "nDays": "Zimebaki siku {n} kujisajili kwa MFA.",
+      "cta": "Jisajili sasa",
+      "dismiss": "Funga taarifa"
+    }
   },
   "dashboard": {
     "title": "Dashibodi",
@@ -1670,7 +1684,14 @@
       "deactivationFailed": "Deactivation failed",
       "passwordRequired": "Password is required",
       "passwordsDoNotMatch": "Passwords do not match",
-      "passwordResetFailed": "Password reset failed"
+      "passwordResetFailed": "Password reset failed",
+      "mfaCompliance": {
+        "column": "Utiifu wa MFA",
+        "enrolled": "Amesajiliwa",
+        "notRequired": "Haihitajiki",
+        "pending": "Inasubiri",
+        "overdue": "Umechelewa"
+      }
     },
     "integrations": {
       "title": "Integration settings",

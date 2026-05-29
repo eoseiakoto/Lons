@@ -38,9 +38,32 @@ const LOGIN_MUTATION = gql`
     loginBySlug(slug: $slug, email: $email, password: $password) {
       accessToken
       refreshToken
+      requiresMfaEnrollment
+      mfaGraceDaysRemaining
     }
   }
 `;
+
+/**
+ * S19-STAB-5 — thrown by `login()` when the server refuses tokens
+ * because the user's tenant tier mandates MFA and the 7-day grace
+ * window has expired. The LoginForm catches this and surfaces a
+ * dedicated "enrolment required" UI instead of the generic
+ * "Invalid credentials" toast.
+ */
+export class MfaEnrollmentRequiredError extends Error {
+  constructor() {
+    super('MFA enrolment is required for this account.');
+    this.name = 'MfaEnrollmentRequiredError';
+  }
+}
+
+/**
+ * S19-STAB-5 — localStorage key for the grace-window countdown.
+ * Read by `MfaGraceBanner` on the portal layout; cleared on logout
+ * or when the user successfully enrols MFA.
+ */
+export const MFA_GRACE_KEY = 'mfaGraceDaysRemaining';
 
 const ME_QUERY = gql`
   query Me {
@@ -121,9 +144,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       variables: { slug, email, password },
     });
 
-    const { accessToken, refreshToken } = data.loginBySlug;
+    const {
+      accessToken,
+      refreshToken,
+      requiresMfaEnrollment,
+      mfaGraceDaysRemaining,
+    } = data.loginBySlug;
+
+    // S19-STAB-5: hard block when the server returns
+    // `requiresMfaEnrollment=true` (tier mandates MFA, grace window
+    // expired). No tokens were issued — surface the typed error so
+    // the LoginForm can render a dedicated "enrolment required"
+    // message instead of a generic credentials failure.
+    if (requiresMfaEnrollment) {
+      throw new MfaEnrollmentRequiredError();
+    }
+
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('refreshToken', refreshToken);
+
+    // S19-STAB-5: persist the grace-window countdown so the portal-
+    // layout banner can render it across navigations. The banner
+    // clears the key once the user enrols (MFA status flips to
+    // 'enrolled' on next login) or on logout.
+    if (typeof mfaGraceDaysRemaining === 'number') {
+      localStorage.setItem(MFA_GRACE_KEY, String(mfaGraceDaysRemaining));
+    } else {
+      localStorage.removeItem(MFA_GRACE_KEY);
+    }
 
     const payload = parseJwt(accessToken);
     if (!payload) throw new Error('Invalid token');
@@ -144,6 +192,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
     localStorage.removeItem('tenantName');
+    // S19-STAB-5: drop the grace countdown so the banner doesn't
+    // re-appear on the next user's login.
+    localStorage.removeItem(MFA_GRACE_KEY);
     setUser(null);
     router.push('/login');
   }, [router]);

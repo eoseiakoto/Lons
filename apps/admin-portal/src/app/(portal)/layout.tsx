@@ -5,6 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { Providers } from '../providers';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
+import { MfaGraceBanner } from '@/components/layout/mfa-grace-banner';
 import { FeedbackButton } from '@/components/feedback/feedback-button';
 import { PageBackdrop } from '@/components/dashboard/page-backdrop';
 import { useAuth } from '@/lib/auth-context';
@@ -72,6 +73,13 @@ function LayoutShell({ children }: { children: React.ReactNode }) {
       )}
       <div className="relative flex-1 flex flex-col min-w-0">
         <Header />
+        {/*
+          S19-STAB-5 — Persistent MFA-grace banner. Reads from
+          localStorage (written by auth-context.login on a successful
+          tier-mandated login) and self-hides when the user enrols
+          or logs out.
+        */}
+        <MfaGraceBanner />
         <main
           id="main-content"
           key={pathname}

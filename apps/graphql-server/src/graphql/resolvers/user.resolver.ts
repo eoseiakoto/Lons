@@ -1,9 +1,30 @@
-import { Resolver, Query, Mutation, Args, ID, InputType, Field } from '@nestjs/graphql';
-import { UserService, PasswordService, CurrentTenant, CurrentUser, IAuthenticatedUser, Roles } from '@lons/entity-service';
-import { encodeCursor, decodeCursor, AuditAction, AuditActionType, AuditResourceType } from '@lons/common';
+import { Resolver, Query, Mutation, Args, ID, InputType, Field, ResolveField, Parent } from '@nestjs/graphql';
+import {
+  UserService,
+  PasswordService,
+  CurrentTenant,
+  CurrentUser,
+  IAuthenticatedUser,
+  Roles,
+  MfaComplianceService,
+} from '@lons/entity-service';
+import { PrismaService } from '@lons/database';
+import {
+  encodeCursor,
+  decodeCursor,
+  AuditAction,
+  AuditActionType,
+  AuditResourceType,
+} from '@lons/common';
+import { PlanTierLiteral } from '@lons/shared-types';
 import { IsOptional, IsString, IsEmail, Matches } from 'class-validator';
 
-import { UserType, UserConnection } from '../types/user.type';
+import {
+  UserType,
+  UserConnection,
+  MfaComplianceType,
+  MfaComplianceStatusEnum,
+} from '../types/user.type';
 import { PaginationInput } from '../inputs/pagination.input';
 import { CreateUserInput, UpdateUserInput } from '../inputs/create-user.input';
 
@@ -31,6 +52,12 @@ export class UserResolver {
   constructor(
     private userService: UserService,
     private passwordService: PasswordService,
+    // S19-STAB-5: optional so existing tests that wire UserResolver
+    // without compliance still construct. Production wiring always
+    // injects both. Named with a `Svc` suffix to avoid colliding with
+    // the `mfaCompliance` ResolveField below.
+    private mfaComplianceSvc?: MfaComplianceService,
+    private prisma?: PrismaService,
   ) {}
 
   @Query(() => UserType)
@@ -139,5 +166,59 @@ export class UserResolver {
     @Args('id', { type: () => ID }) id: string,
   ): Promise<UserType> {
     return this.userService.deactivate(tenantId, id) as unknown as UserType;
+  }
+
+  /**
+   * S19-STAB-5 — per-user MFA compliance status. Computed by the
+   * stateless `MfaComplianceService` from
+   *   - tenant.{planTier, planTierChangedAt, createdAt}
+   *   - user.{role.name, mfaEnabled, createdAt, mfaDisabledAt}
+   *
+   * Resolves on-demand so listing users without selecting this field
+   * costs no extra round-trips. The /settings/users page selects it
+   * to render the column badges; other queries don't.
+   *
+   * Tenant rows live in the platform schema and aren't RLS-scoped, so
+   * a direct singleton lookup is fine. The User row was already
+   * loaded by the parent query, which (via UserService) ran inside
+   * the RLS-scoped context.
+   */
+  @ResolveField(() => MfaComplianceType, { nullable: true })
+  async mfaCompliance(
+    @Parent() user: UserType & {
+      tenantId?: string;
+      mfaDisabledAt?: Date | null;
+      role: { name: string };
+    },
+  ): Promise<MfaComplianceType | null> {
+    if (!this.mfaComplianceSvc || !this.prisma) {
+      return null;
+    }
+    // The parent user object came from UserService.findById / findAll,
+    // which selects tenantId. If a downstream caller doesn't, bail
+    // gracefully — null is a valid "couldn't compute" signal here.
+    if (!user.tenantId) return null;
+
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: user.tenantId },
+      select: { planTier: true, planTierChangedAt: true, createdAt: true },
+    });
+    if (!tenant) return null;
+
+    const result = this.mfaComplianceSvc.computeStatus({
+      planTier: tenant.planTier as PlanTierLiteral,
+      tenantPlanTierChangedAt: tenant.planTierChangedAt,
+      tenantCreatedAt: tenant.createdAt,
+      roleName: user.role.name,
+      userMfaEnabled: user.mfaEnabled,
+      userCreatedAt: user.createdAt,
+      userMfaDisabledAt: user.mfaDisabledAt ?? null,
+    });
+
+    return {
+      status: result.status as MfaComplianceStatusEnum,
+      graceDaysRemaining: result.graceDaysRemaining,
+      graceEndsAt: result.graceEndsAt,
+    };
   }
 }

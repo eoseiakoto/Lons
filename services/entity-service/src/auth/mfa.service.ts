@@ -158,11 +158,29 @@ export class MfaService {
     userType: 'user' | 'platform_user',
     userId: string,
   ): Promise<void> {
-    const data = { mfaEnabled: false, mfaSecret: null, mfaBackupCodes: null };
     if (userType === 'user') {
-      await this.prisma.user.update({ where: { id: userId }, data });
+      // S19-STAB-5: stamp `mfaDisabledAt` so the compliance service
+      // can start a fresh 7-day grace window from this moment if the
+      // tenant tier requires MFA. PlatformUser rows don't carry that
+      // column (platform admins are governed by a separate policy).
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          mfaEnabled: false,
+          mfaSecret: null,
+          mfaBackupCodes: null,
+          mfaDisabledAt: new Date(),
+        },
+      });
     } else {
-      await this.prisma.platformUser.update({ where: { id: userId }, data });
+      await this.prisma.platformUser.update({
+        where: { id: userId },
+        data: {
+          mfaEnabled: false,
+          mfaSecret: null,
+          mfaBackupCodes: null,
+        },
+      });
     }
   }
 

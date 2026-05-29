@@ -7,6 +7,7 @@ import {
   CurrentUser,
   IAuthenticatedUser,
   Public,
+  MfaEnrollmentRequiredException,
 } from '@lons/entity-service';
 import { PrismaService } from '@lons/database';
 import { AuditAction, AuditActionType, AuditResourceType } from '@lons/common';
@@ -32,8 +33,18 @@ export class AuthResolver {
     @Args('email') email: string,
     @Args('password') password: string,
   ): Promise<LoginResponse> {
-    const result = await this.authService.loginTenantUser(tenantId, email, password);
-    return this.toLoginResponse(result);
+    try {
+      const result = await this.authService.loginTenantUser(tenantId, email, password);
+      return this.toLoginResponse(result);
+    } catch (err) {
+      // S19-STAB-5: overdue users get a structured response instead of
+      // a generic Unauthorized. Client routes the response into the
+      // enrolment flow rather than surfacing it as a credentials error.
+      if (err instanceof MfaEnrollmentRequiredException) {
+        return { requiresMfa: false, requiresMfaEnrollment: true };
+      }
+      throw err;
+    }
   }
 
   @Mutation(() => LoginResponse)
@@ -45,8 +56,15 @@ export class AuthResolver {
     @Args('password') password: string,
   ): Promise<LoginResponse> {
     const tenant = await this.tenantService.findBySlug(slug);
-    const result = await this.authService.loginTenantUser(tenant.id, email, password);
-    return this.toLoginResponse(result);
+    try {
+      const result = await this.authService.loginTenantUser(tenant.id, email, password);
+      return this.toLoginResponse(result);
+    } catch (err) {
+      if (err instanceof MfaEnrollmentRequiredException) {
+        return { requiresMfa: false, requiresMfaEnrollment: true };
+      }
+      throw err;
+    }
   }
 
   @Mutation(() => LoginResponse)
@@ -201,7 +219,12 @@ export class AuthResolver {
 
   private toLoginResponse(
     result:
-      | { requiresMfa: false; accessToken: string; refreshToken: string }
+      | {
+          requiresMfa: false;
+          accessToken: string;
+          refreshToken: string;
+          mfaGraceDaysRemaining?: number;
+        }
       | { requiresMfa: true; mfaToken: string },
   ): LoginResponse {
     if (result.requiresMfa) {
@@ -211,6 +234,10 @@ export class AuthResolver {
       requiresMfa: false,
       accessToken: result.accessToken,
       refreshToken: result.refreshToken,
+      // S19-STAB-5: pass through the grace-window countdown so the
+      // client can render a persistent banner. Undefined on a
+      // not-required / enrolled login (no banner needed).
+      mfaGraceDaysRemaining: result.mfaGraceDaysRemaining,
     };
   }
 }

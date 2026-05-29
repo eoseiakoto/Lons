@@ -1,6 +1,48 @@
-import { ObjectType, Field, ID } from '@nestjs/graphql';
+import { ObjectType, Field, ID, registerEnumType, Int } from '@nestjs/graphql';
 import { PageInfo } from './page-info.type';
 import { RoleType } from './role.type';
+
+/**
+ * S19-STAB-5 — GraphQL enum mirroring the literal-string union
+ * `MfaComplianceStatus` from @lons/shared-types. NestJS code-first
+ * schemas can't lift a TS string union directly, so we wrap it.
+ * Keep values in sync with `MfaComplianceStatus` in shared-types.
+ */
+export enum MfaComplianceStatusEnum {
+  NOT_REQUIRED = 'not_required',
+  ENROLLED = 'enrolled',
+  PENDING = 'pending',
+  OVERDUE = 'overdue',
+}
+
+registerEnumType(MfaComplianceStatusEnum, {
+  name: 'MfaComplianceStatus',
+  description: 'MFA enforcement status for the user under their tenant tier policy',
+});
+
+/**
+ * S19-STAB-5 — detail wrapper exposed on `UserType.mfaCompliance`.
+ *
+ * The admin-portal users list reads `status` to render the badge;
+ * the per-user detail screen reads `graceDaysRemaining` + `graceEndsAt`
+ * to render the countdown copy.
+ */
+@ObjectType()
+export class MfaComplianceType {
+  @Field(() => MfaComplianceStatusEnum)
+  status!: MfaComplianceStatusEnum;
+
+  /**
+   * Positive for `pending` (days left), negative for `overdue`
+   * (days past), null for `not_required` / `enrolled`.
+   */
+  @Field(() => Int, { nullable: true })
+  graceDaysRemaining?: number | null;
+
+  /** ISO timestamp. Null for `not_required` / `enrolled`. */
+  @Field({ nullable: true })
+  graceEndsAt?: string | null;
+}
 
 @ObjectType()
 export class UserType {
@@ -33,6 +75,14 @@ export class UserType {
 
   @Field()
   updatedAt!: Date;
+
+  /**
+   * S19-STAB-5 — populated by a ResolveField on UserResolver. The
+   * field is nullable here because the resolver is async; queries
+   * that don't ask for it never trigger the lookup.
+   */
+  @Field(() => MfaComplianceType, { nullable: true })
+  mfaCompliance?: MfaComplianceType;
 }
 
 @ObjectType()

@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { JwtService } from './jwt.service';
 import { PasswordService } from './password.service';
 import { MfaService } from './mfa.service';
+import { MfaComplianceService } from './mfa-compliance.service';
 import { AuthGuard } from './guards/auth.guard';
 import { RolesGuard } from './guards/roles.guard';
 import { RlsTenantContextInterceptor } from './interceptors/rls-tenant-context.interceptor';
@@ -18,6 +19,8 @@ import { RlsTenantContextInterceptor } from './interceptors/rls-tenant-context.i
     PasswordService,
     // Sprint 15 (S15-6) — MFA TOTP enrollment + verification.
     MfaService,
+    // S19-STAB-5 — tier-based MFA enforcement compliance check.
+    MfaComplianceService,
     {
       provide: APP_GUARD,
       useClass: AuthGuard,
@@ -33,6 +36,6 @@ import { RlsTenantContextInterceptor } from './interceptors/rls-tenant-context.i
       useClass: RlsTenantContextInterceptor,
     },
   ],
-  exports: [AuthService, JwtService, PasswordService, MfaService],
+  exports: [AuthService, JwtService, PasswordService, MfaService, MfaComplianceService],
 })
 export class AuthModule {}

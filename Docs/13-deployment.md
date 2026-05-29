@@ -57,11 +57,46 @@ Lōns is deployed as a containerized microservice platform on cloud infrastructu
 
 | ID | Requirement | Priority |
 |---|---|---|
+| ID | Requirement | Priority |
+|---|---|---|
 | NFR-ENV-001 | All environments SHALL use identical container images — only configuration differs. | Must |
 | NFR-ENV-002 | Environment-specific configuration SHALL be managed via environment variables and ConfigMaps/Secrets (never hardcoded). | Must |
 | NFR-ENV-003 | Secrets (API keys, database credentials, encryption keys) SHALL be stored in a secrets manager (Vault, AWS Secrets Manager, or equivalent). | Must |
 | NFR-ENV-004 | Production database credentials SHALL be rotated automatically on a configurable schedule. | Should |
 | NFR-ENV-005 | Development and staging environments SHALL be resettable (teardown and rebuild from scratch) within 30 minutes. | Should |
+
+### 2.3 Secrets bootstrap
+
+Several application secrets are **required at boot** — missing any of them will allow services to start successfully but cause first-request failures (typically a generic 500 / "Internal server error" that masks the real cause). The application fails closed on these to prevent silent fallback to insecure defaults.
+
+These secrets are per-environment. The value used in dev must NOT be reused in staging or prod, and vice versa.
+
+| Variable | Purpose | Generate | Boot failure mode if missing | Rotation cost |
+|---|---|---|---|---|
+| `HASH_PEPPER` | HMAC-SHA-256 pepper for searchable PII hashes (`email_hash`, `tax_id_hash`, `national_id_hash`, `registration_number_hash`). Indexes the encrypted PII columns so equality lookups (e.g. login by email) work. Security Hardening SEC-5. | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` | Login mutations throw `HASH_PEPPER environment variable is required for searchable hash computation`. Surfaces as a 500 to the user. | Invalidates **every** `*_hash` row. After rotation, run `pnpm tsx scripts/backfill-pii-hashes-and-encrypt.ts` to recompute all hash columns. Treat as long-lived per environment. |
+| `ENCRYPTION_KEY` | AES-256-GCM key for at-rest PII encryption (encrypted columns: `email`, `national_id`, `phone`, full_name in some contexts). | `node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"` | PrismaService boot succeeds; first encrypted-column write or read throws. | Requires re-encrypting every encrypted column. Same backfill script as `HASH_PEPPER`. |
+| `ENCRYPTION_IV_LENGTH` | AES-GCM IV length. Always `16`. Documented for clarity. | (constant `16`) | First encryption operation throws. | N/A — don't change. |
+| `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` | RS256 keypair for signing/verifying access + refresh + MFA tokens. Paths to PEM files. SEC-9. | `openssl genrsa -out keys/private.pem 2048 && openssl rsa -in keys/private.pem -pubout -out keys/public.pem` | In `NODE_ENV=production`, JwtService throws on boot if either path is unreadable (ephemeral keys forbidden in prod). In dev, falls back to an ephemeral keypair regenerated on every restart. | Invalidates every active access + refresh token. Plan a coordinated logout window. |
+
+**Per-environment requirement.** Each environment (developer-laptop, CI, staging, pre-production, production) MUST hold an independent value for each of the above. Reusing a dev pepper or encryption key in staging or prod constitutes a security incident — the dev value lives in unencrypted `.env` files on developer laptops and in CI logs, which are not appropriate trust boundaries for staging/prod data.
+
+**Onboarding a new developer:**
+```bash
+cp .env.example .env
+# generate per-developer values for HASH_PEPPER and ENCRYPTION_KEY
+node -e "console.log('HASH_PEPPER=' + require('crypto').randomBytes(32).toString('hex'))" >> .env
+node -e "console.log('ENCRYPTION_KEY=' + require('crypto').randomBytes(32).toString('base64'))" >> .env
+# generate the RSA keypair
+mkdir -p keys
+openssl genrsa -out keys/private.pem 2048
+openssl rsa -in keys/private.pem -pubout -out keys/public.pem
+# never commit any of this
+```
+
+**New secrets** introduced by future deliveries MUST be added to all three of:
+1. `.env.example` with a generator-command comment and placeholder value
+2. This table
+3. The PR description "Migration Impact" section if the boot would fail without it (per `Docs/MIGRATION-PLAYBOOK.md` §6)
 
 ---
 
@@ -93,6 +128,8 @@ Lōns is deployed as a containerized microservice platform on cloud infrastructu
 | NFR-MIG-002 | Migrations SHALL be backward-compatible — the previous application version must be able to operate with the new schema during rolling deployments. | Must |
 | NFR-MIG-003 | Destructive migrations (column removal, table drop) SHALL go through a multi-step process: deprecate → stop using → remove (across separate deployments). | Must |
 | NFR-MIG-004 | Migration execution time SHALL be monitored — long-running migrations must be optimized or run during maintenance windows. | Should |
+
+**Operational procedure:** see `Docs/MIGRATION-PLAYBOOK.md` for the concrete pre-push checklist, local-dev pull procedure, staging/prod `migrate resolve --applied` runbook, environment-variable bootstrapping, helper commands, and troubleshooting. The playbook is the source of truth for *how* the above requirements are satisfied; this section defines *what* the requirements are.
 
 ---
 
