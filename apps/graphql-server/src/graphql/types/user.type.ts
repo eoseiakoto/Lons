@@ -39,8 +39,16 @@ export class MfaComplianceType {
   @Field(() => Int, { nullable: true })
   graceDaysRemaining?: number | null;
 
-  /** ISO timestamp. Null for `not_required` / `enrolled`. */
-  @Field({ nullable: true })
+  /**
+   * ISO timestamp. Null for `not_required` / `enrolled`.
+   *
+   * Explicit `() => String` is required because the property type
+   * is a `string | null` UNION — TS's emitDecoratorMetadata erases
+   * unions to `Object`, which @nestjs/graphql can't map to a scalar.
+   * The plain `@Field({ nullable: true })` form crashed schema
+   * generation with UndefinedTypeError. See DEV-PROMPT-GRAPHQL-MFA-TYPE-FIX.
+   */
+  @Field(() => String, { nullable: true })
   graceEndsAt?: string | null;
 }
 

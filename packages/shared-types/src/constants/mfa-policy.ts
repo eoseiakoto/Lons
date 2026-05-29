@@ -42,7 +42,22 @@ export type PlanTierLiteral = 'starter' | 'growth' | 'enterprise';
 export const MFA_REQUIRED_ROLES_BY_TIER: Record<PlanTierLiteral, readonly string[]> = {
   starter: [],
   growth: ['SP Admin'],
-  enterprise: ['SP Admin', 'SP Operator', 'SP Analyst', 'SP Auditor', 'SP Collections'],
+  // BA-C-2: SP Collections Manager landed in S19-1 (manager tier
+  // above SP Collections — superset of officer perms + L2 write-off
+  // approval + legal action). On Enterprise tier where MFA is
+  // required for every operator role, the manager role must be in
+  // the enforcement set too — otherwise the highest-privilege
+  // collections operator can sidestep MFA. Name matches the
+  // exact string seeded in packages/database/prisma/seed.ts
+  // (sp_collections_manager → name: 'SP Collections Manager').
+  enterprise: [
+    'SP Admin',
+    'SP Operator',
+    'SP Analyst',
+    'SP Auditor',
+    'SP Collections',
+    'SP Collections Manager',
+  ],
 };
 
 /**

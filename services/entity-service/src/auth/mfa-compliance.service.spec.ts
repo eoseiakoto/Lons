@@ -104,7 +104,16 @@ describe('MfaComplianceService.computeStatus', () => {
   });
 
   describe('enterprise tier — all roles', () => {
-    const roles = ['SP Admin', 'SP Operator', 'SP Analyst', 'SP Auditor', 'SP Collections'];
+    // BA-C-2: SP Collections Manager added in this fix cycle so
+    // the highest-privilege collections operator can't sidestep MFA.
+    const roles = [
+      'SP Admin',
+      'SP Operator',
+      'SP Analyst',
+      'SP Auditor',
+      'SP Collections',
+      'SP Collections Manager',
+    ];
     it.each(roles)('requires MFA for %s', (role) => {
       const tierStart = new Date('2026-05-20T00:00:00Z');
       const now = new Date('2026-05-21T00:00:00Z'); // 1 day in
