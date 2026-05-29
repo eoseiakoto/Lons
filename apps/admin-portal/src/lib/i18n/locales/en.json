@@ -128,6 +128,15 @@
     "mfaRequired": {
       "title": "MFA enrollment required",
       "body": "Your organization's plan requires multi-factor authentication for this role. Complete enrollment below to restore full access."
+    },
+    "mfaChallenge": {
+      "title": "Two-factor authentication",
+      "subtitle": "Enter the code from your authenticator app",
+      "help": "Enter the 6-digit code from your authenticator app, or one of your 8-character backup codes.",
+      "codeLabel": "Verification code",
+      "verify": "Verify",
+      "verifying": "Verifying...",
+      "useDifferentAccount": "Use a different account"
     }
   },
   "mfa": {

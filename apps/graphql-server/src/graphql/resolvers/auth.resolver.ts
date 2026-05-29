@@ -139,17 +139,35 @@ export class AuthResolver {
     @CurrentUser() user: IAuthenticatedUser,
     @Args('password') password: string,
   ): Promise<MfaEnrollmentPayload> {
-    await this.authService.verifyPassword(
-      user.userId,
-      user.tenantId,
-      password,
-      user.isPlatformAdmin,
-    );
-    const userType = user.isPlatformAdmin ? 'platform_user' : 'user';
-    const email = user.isPlatformAdmin
-      ? (await this.prisma.platformUser.findUniqueOrThrow({ where: { id: user.userId } })).email
-      : (await this.prisma.user.findUniqueOrThrow({ where: { id: user.userId } })).email;
-    return this.mfaService.initiateEnrollment(userType, user.userId, email);
+    // Platform users aren't RLS-scoped on platform_users → no
+    // tenant context wrap needed.
+    if (user.isPlatformAdmin) {
+      await this.authService.verifyPassword(user.userId, user.tenantId, password, true);
+      const email = (await this.prisma.platformUser.findUniqueOrThrow({
+        where: { id: user.userId },
+      })).email;
+      return this.mfaService.initiateEnrollment('platform_user', user.userId, email);
+    }
+
+    // MFA portal fix: tenant users hit the RLS-protected `users`
+    // table. The global RlsTenantContextInterceptor SHOULD set
+    // context for authenticated requests, but its
+    // Observable→Promise hop through `from()`+`subscribe()` can
+    // lose AsyncLocalStorage context on async boundaries — manifests
+    // as "User not found" when the SP Admin tries to enrol from the
+    // enrollment-only flow. Re-establish context at the resolver
+    // boundary so downstream queries (verifyPassword + the user.email
+    // lookup + every mfaService Prisma call) all run with SET LOCAL
+    // in effect. Nested with the interceptor's own context, that's
+    // a savepoint — harmless.
+    return this.prisma.enterTenantContext({ tenantId: user.tenantId }, async () => {
+      await this.authService.verifyPassword(user.userId, user.tenantId, password, false);
+      const tx = this.prisma.scoped();
+      const email = (await tx.user.findUniqueOrThrow({
+        where: { id: user.userId },
+      })).email;
+      return this.mfaService.initiateEnrollment('user', user.userId, email);
+    });
   }
 
   /**
@@ -163,8 +181,15 @@ export class AuthResolver {
     @CurrentUser() user: IAuthenticatedUser,
     @Args('code') code: string,
   ): Promise<boolean> {
-    const userType = user.isPlatformAdmin ? 'platform_user' : 'user';
-    return this.mfaService.confirmEnrollment(userType, user.userId, code);
+    if (user.isPlatformAdmin) {
+      return this.mfaService.confirmEnrollment('platform_user', user.userId, code);
+    }
+    // MFA portal fix: same RLS context concern as initiateMfaEnrollment.
+    // mfaService.confirmEnrollment does prisma.user.findUnique + .update,
+    // both of which need SET LOCAL active.
+    return this.prisma.enterTenantContext({ tenantId: user.tenantId }, async () => {
+      return this.mfaService.confirmEnrollment('user', user.userId, code);
+    });
   }
 
   /**
@@ -180,15 +205,18 @@ export class AuthResolver {
     @CurrentUser() user: IAuthenticatedUser,
     @Args('password') password: string,
   ): Promise<boolean> {
-    await this.authService.verifyPassword(
-      user.userId,
-      user.tenantId,
-      password,
-      user.isPlatformAdmin,
-    );
-    const userType = user.isPlatformAdmin ? 'platform_user' : 'user';
-    await this.mfaService.disableMfa(userType, user.userId);
-    return true;
+    if (user.isPlatformAdmin) {
+      await this.authService.verifyPassword(user.userId, user.tenantId, password, true);
+      await this.mfaService.disableMfa('platform_user', user.userId);
+      return true;
+    }
+    // MFA portal fix: tenant-user RLS context wrap. See
+    // initiateMfaEnrollment for the full rationale.
+    return this.prisma.enterTenantContext({ tenantId: user.tenantId }, async () => {
+      await this.authService.verifyPassword(user.userId, user.tenantId, password, false);
+      await this.mfaService.disableMfa('user', user.userId);
+      return true;
+    });
   }
 
   /**
@@ -205,14 +233,16 @@ export class AuthResolver {
     @CurrentUser() user: IAuthenticatedUser,
     @Args('password') password: string,
   ): Promise<string[]> {
-    await this.authService.verifyPassword(
-      user.userId,
-      user.tenantId,
-      password,
-      user.isPlatformAdmin,
-    );
-    const userType = user.isPlatformAdmin ? 'platform_user' : 'user';
-    return this.mfaService.regenerateBackupCodes(userType, user.userId);
+    if (user.isPlatformAdmin) {
+      await this.authService.verifyPassword(user.userId, user.tenantId, password, true);
+      return this.mfaService.regenerateBackupCodes('platform_user', user.userId);
+    }
+    // MFA portal fix: tenant-user RLS context wrap. See
+    // initiateMfaEnrollment for the full rationale.
+    return this.prisma.enterTenantContext({ tenantId: user.tenantId }, async () => {
+      await this.authService.verifyPassword(user.userId, user.tenantId, password, false);
+      return this.mfaService.regenerateBackupCodes('user', user.userId);
+    });
   }
 
   // ── Helpers ─────────────────────────────────────────────────────────

@@ -85,8 +85,24 @@ export class AuthService {
 
   /**
    * FIX-14: verify a user's password — used to gate re-authentication-
-   * sensitive operations (MFA enroll, MFA disable). Throws
-   * UnauthorizedException on mismatch.
+   * sensitive operations (MFA enroll, MFA disable, backup-code
+   * regeneration). Throws UnauthorizedException on mismatch.
+   *
+   * BA-FIX (MFA portal): the tenant-user branch now enters tenant
+   * context before the `users` lookup. The runtime `lons_app` role
+   * is subject to the `tenant_isolation` RLS policy on `users`, so
+   * without `SET LOCAL app.current_tenant`, the query returns zero
+   * rows and the user sees "User not found" when they try to enrol
+   * in MFA from the enrollment-only flow or change MFA settings.
+   *
+   * `scoped()` is required because the SET LOCAL only takes effect
+   * on the in-context tx connection — calls through the pooled
+   * singleton would hit a fresh connection without the session vars.
+   *
+   * Fixing this in one place propagates to all four resolver call
+   * sites (initiateMfaEnrollment, confirmMfaEnrollment via
+   * verifyCode's own path, disableMfa, regenerateMfaBackupCodes)
+   * without each one needing its own wrap.
    */
   async verifyPassword(
     userId: string,
@@ -95,6 +111,7 @@ export class AuthService {
     isPlatformAdmin: boolean,
   ): Promise<void> {
     if (isPlatformAdmin) {
+      // platform_users isn't tenant-scoped → no RLS, no context needed.
       const user = await this.prisma.platformUser.findUnique({
         where: { id: userId },
       });
@@ -105,12 +122,17 @@ export class AuthService {
       if (!ok) throw new UnauthorizedException('Invalid password');
       return;
     }
-    const user = await this.prisma.user.findFirst({
-      where: { id: userId, tenantId, deletedAt: null },
+    // Tenant user — RLS gate. Enter tenant context + use the in-context
+    // tx client so SET LOCAL is honoured.
+    return this.prisma.enterTenantContext({ tenantId }, async () => {
+      const tx = this.prisma.scoped();
+      const user = await tx.user.findFirst({
+        where: { id: userId, tenantId, deletedAt: null },
+      });
+      if (!user) throw new UnauthorizedException('User not found');
+      const ok = await this.passwordService.verify(user.passwordHash, password);
+      if (!ok) throw new UnauthorizedException('Invalid password');
     });
-    if (!user) throw new UnauthorizedException('User not found');
-    const ok = await this.passwordService.verify(user.passwordHash, password);
-    if (!ok) throw new UnauthorizedException('Invalid password');
   }
 
   async loginTenantUser(

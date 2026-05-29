@@ -449,12 +449,24 @@ function BrandHero({ cities }: { cities: City[] }) {
 }
 
 function LoginForm() {
-  const { login } = useAuth();
+  const { login, verifyMfa } = useAuth();
   const cities = useFootprint();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  /**
+   * MFA portal fix: when login() resolves to a non-null challenge,
+   * the form swaps to a TOTP input screen. State is kept here (not
+   * in auth-context) so the mfaToken disappears with this component
+   * unmount — it should never outlive the login flow.
+   */
+  const [mfaChallenge, setMfaChallenge] = useState<{
+    mfaToken: string;
+    email: string;
+  } | null>(null);
+  const [totpCode, setTotpCode] = useState('');
 
   const mx = useMotionValue(0);
   const parallaxSky = useSpring(useTransform(mx, [-720, 720], [18, -18]), {
@@ -467,13 +479,58 @@ function LoginForm() {
     setError('');
     setLoading(true);
     try {
-      await login(email, password);
+      const challenge = await login(email, password);
+      // MFA portal fix: a returned challenge means the platform admin
+      // has MFA enabled — swap to the TOTP entry screen. login() has
+      // already declined to store any tokens (the challenge is the
+      // ONLY credential the user holds at this point).
+      if (challenge) {
+        setMfaChallenge(challenge);
+        setTotpCode('');
+        setError('');
+      }
     } catch (err: any) {
       const msg = err?.graphQLErrors?.[0]?.message || err?.networkError?.message || err?.message || 'Login failed';
       setError(msg);
     } finally {
       setLoading(false);
     }
+  };
+
+  /**
+   * MFA portal fix: exchange the in-progress mfaToken + TOTP/backup
+   * code for a full session. The mutation accepts a 6-digit TOTP OR
+   * an 8-char backup code (UPPERCASE hex). We trim only — case
+   * folding happens server-side so a user typing the backup code in
+   * lower case still works.
+   */
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mfaChallenge) return;
+    setError('');
+    setLoading(true);
+    try {
+      await verifyMfa(mfaChallenge.mfaToken, totpCode.trim());
+      // Successful verifyMfa hydrates the session + redirects in
+      // auth-context. This component will unmount on navigation.
+    } catch (err: any) {
+      const msg = err?.graphQLErrors?.[0]?.message || err?.networkError?.message || err?.message || 'Verification failed';
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * MFA portal fix: "Use a different account" — return to the email/
+   * password screen. Clears the mfaToken (effectively abandoning
+   * it; the backend's per-token attempt counter ages out
+   * automatically).
+   */
+  const handleMfaCancel = () => {
+    setMfaChallenge(null);
+    setTotpCode('');
+    setError('');
   };
 
   return (
@@ -522,70 +579,148 @@ function LoginForm() {
                 }}
               >
                 <div className="hidden lg:block mb-6">
-                  <h2 className="text-[22px] font-semibold tracking-tight text-[color:var(--text-primary)]">Sign in</h2>
-                  <p className="text-[13px] text-[color:var(--text-secondary)] mt-0.5">System Administration</p>
+                  <h2 className="text-[22px] font-semibold tracking-tight text-[color:var(--text-primary)]">
+                    {mfaChallenge ? 'Two-factor authentication' : 'Sign in'}
+                  </h2>
+                  <p className="text-[13px] text-[color:var(--text-secondary)] mt-0.5">
+                    {mfaChallenge
+                      ? `Signed in as ${mfaChallenge.email}`
+                      : 'System Administration'}
+                  </p>
                 </div>
 
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-[12px] font-medium tracking-wide text-[color:var(--text-secondary)] mb-1.5">
-                      Email
-                    </label>
-                    <input
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="input-field"
-                      placeholder="admin@lons.io"
-                      required
-                      autoFocus
-                    />
-                  </div>
+                {/*
+                  MFA portal fix: two screens share this card. The
+                  email/password form is shown until login() returns
+                  a challenge; then we render the TOTP entry form
+                  with the same visual envelope (no layout shift).
+                */}
+                {!mfaChallenge ? (
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div>
+                      <label className="block text-[12px] font-medium tracking-wide text-[color:var(--text-secondary)] mb-1.5">
+                        Email
+                      </label>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="input-field"
+                        placeholder="admin@lons.io"
+                        required
+                        autoFocus
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block text-[12px] font-medium tracking-wide text-[color:var(--text-secondary)] mb-1.5">
-                      Password
-                    </label>
-                    <input
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="input-field"
-                      placeholder="••••••••"
-                      required
-                    />
-                  </div>
+                    <div>
+                      <label className="block text-[12px] font-medium tracking-wide text-[color:var(--text-secondary)] mb-1.5">
+                        Password
+                      </label>
+                      <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="input-field"
+                        placeholder="••••••••"
+                        required
+                      />
+                    </div>
 
-                  <AnimatePresence initial={false}>
-                    {error && (
-                      <motion.div
-                        key="login-error"
-                        initial={{ opacity: 0, y: -6, height: 0 }}
-                        animate={{ opacity: 1, y: 0, height: 'auto' }}
-                        exit={{ opacity: 0, y: -6, height: 0 }}
-                        transition={{ type: 'spring', stiffness: 280, damping: 26 }}
-                        className="overflow-hidden"
-                      >
-                        <div
-                          role="alert"
-                          className="flex items-start gap-2 px-3 py-2.5 rounded-lg text-[13px]"
-                          style={{
-                            backgroundColor: 'var(--status-error-soft)',
-                            color: 'var(--status-error-text)',
-                            border: '1px solid var(--status-error)',
-                          }}
+                    <AnimatePresence initial={false}>
+                      {error && (
+                        <motion.div
+                          key="login-error"
+                          initial={{ opacity: 0, y: -6, height: 0 }}
+                          animate={{ opacity: 1, y: 0, height: 'auto' }}
+                          exit={{ opacity: 0, y: -6, height: 0 }}
+                          transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+                          className="overflow-hidden"
                         >
-                          <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" strokeWidth={2.25} />
-                          <span>{error}</span>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                          <div
+                            role="alert"
+                            className="flex items-start gap-2 px-3 py-2.5 rounded-lg text-[13px]"
+                            style={{
+                              backgroundColor: 'var(--status-error-soft)',
+                              color: 'var(--status-error-text)',
+                              border: '1px solid var(--status-error)',
+                            }}
+                          >
+                            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" strokeWidth={2.25} />
+                            <span>{error}</span>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
 
-                  <div className="pt-1">
-                    <SignInButton loading={loading} label="Sign in" loadingLabel="Signing in..." />
-                  </div>
-                </form>
+                    <div className="pt-1">
+                      <SignInButton loading={loading} label="Sign in" loadingLabel="Signing in..." />
+                    </div>
+                  </form>
+                ) : (
+                  <form onSubmit={handleMfaSubmit} className="space-y-4">
+                    <p className="text-[13px] leading-relaxed text-[color:var(--text-secondary)]">
+                      Enter the 6-digit code from your authenticator app, or one of your 8-character backup codes.
+                    </p>
+
+                    <div>
+                      <label className="block text-[12px] font-medium tracking-wide text-[color:var(--text-secondary)] mb-1.5">
+                        Verification code
+                      </label>
+                      <input
+                        type="text"
+                        value={totpCode}
+                        onChange={(e) => setTotpCode(e.target.value)}
+                        className="input-field tracking-[0.3em] text-center text-[18px]"
+                        placeholder="••••••"
+                        autoComplete="one-time-code"
+                        inputMode="text"
+                        // Allow up to 8 chars to accommodate backup codes;
+                        // backend accepts both 6-digit TOTP and 8-char
+                        // hex backup codes.
+                        maxLength={8}
+                        required
+                        autoFocus
+                      />
+                    </div>
+
+                    <AnimatePresence initial={false}>
+                      {error && (
+                        <motion.div
+                          key="mfa-error"
+                          initial={{ opacity: 0, y: -6, height: 0 }}
+                          animate={{ opacity: 1, y: 0, height: 'auto' }}
+                          exit={{ opacity: 0, y: -6, height: 0 }}
+                          transition={{ type: 'spring', stiffness: 280, damping: 26 }}
+                          className="overflow-hidden"
+                        >
+                          <div
+                            role="alert"
+                            className="flex items-start gap-2 px-3 py-2.5 rounded-lg text-[13px]"
+                            style={{
+                              backgroundColor: 'var(--status-error-soft)',
+                              color: 'var(--status-error-text)',
+                              border: '1px solid var(--status-error)',
+                            }}
+                          >
+                            <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" strokeWidth={2.25} />
+                            <span>{error}</span>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <div className="pt-1 space-y-2">
+                      <SignInButton loading={loading} label="Verify" loadingLabel="Verifying..." />
+                      <button
+                        type="button"
+                        onClick={handleMfaCancel}
+                        className="w-full text-center text-[12px] text-[color:var(--text-tertiary)] hover:text-[color:var(--text-secondary)] transition-colors"
+                      >
+                        Use a different account
+                      </button>
+                    </div>
+                  </form>
+                )}
               </div>
             </div>
 
