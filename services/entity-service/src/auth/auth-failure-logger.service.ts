@@ -68,12 +68,20 @@ export class AuthFailureLoggerService {
    * Resolver/mutation-level access denied. Called by AuthGuard /
    * RolesGuard when the requested handler requires a permission the
    * user doesn't hold.
+   *
+   * BA-C-1: accepts either a single permission string OR an array.
+   * RolesGuard checks `@Roles('a', 'b', 'c')`-style permission sets
+   * with all-must-hold semantics, so passing the full required set
+   * gives auditors the complete picture of what was missing.
    */
   async logMutationAccessDenied(
     user: IAuthenticatedUser,
     resolverName: string,
-    requiredPermission: string,
+    requiredPermission: string | string[],
   ): Promise<void> {
+    const required = Array.isArray(requiredPermission)
+      ? requiredPermission
+      : [requiredPermission];
     await this.log({
       tenantId: user.tenantId,
       userId: user.userId,
@@ -81,7 +89,7 @@ export class AuthFailureLoggerService {
       action: 'mutation_access_denied',
       resourceType: 'resolver',
       resourceField: resolverName,
-      requiredPermissions: [requiredPermission],
+      requiredPermissions: required,
       actualPermissions: user.permissions ?? [],
     });
   }

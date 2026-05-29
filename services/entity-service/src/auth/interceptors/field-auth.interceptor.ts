@@ -5,6 +5,7 @@ import {
   Injectable,
   Logger,
   NestInterceptor,
+  Optional,
   SetMetadata,
 } from '@nestjs/common';
 import { GqlExecutionContext } from '@nestjs/graphql';
@@ -13,6 +14,7 @@ import { Observable, from, of } from 'rxjs';
 import { mergeMap } from 'rxjs/operators';
 
 import { FieldAuthService } from '../field-auth.service';
+import { AuthFailureLoggerService } from '../auth-failure-logger.service';
 import { IAuthenticatedUser } from '../interfaces/jwt-payload.interface';
 
 /**
@@ -59,6 +61,11 @@ export class FieldAuthInterceptor implements NestInterceptor {
   constructor(
     private readonly fieldAuthService: FieldAuthService,
     private readonly reflector: Reflector,
+    // BA-C-1: @Optional so unit tests without DI wiring still work.
+    // Production wiring (AuthModule) injects the logger so every
+    // redaction / throw also writes to audit_logs + emits the
+    // AUTHORIZATION_FAILURE event.
+    @Optional() private readonly authFailureLogger?: AuthFailureLoggerService,
   ) {}
 
   intercept(context: ExecutionContext, next: CallHandler): Observable<unknown> {
@@ -106,19 +113,20 @@ export class FieldAuthInterceptor implements NestInterceptor {
     const rules = await this.fieldAuthService.getFieldAuthRules(tenantId, resourceType);
     if (rules.size === 0) return data;
 
-    return this.redactValue(data, rules, user);
+    return this.redactValue(data, rules, user, resourceType);
   }
 
   private redactValue(
     value: unknown,
     rules: Map<string, import('../field-auth.service').FieldAuthRule>,
     user: IAuthenticatedUser,
+    resourceType: string,
   ): unknown {
     if (value === null || value === undefined) return value;
 
     // Arrays: redact each element.
     if (Array.isArray(value)) {
-      return value.map((v) => this.redactValue(v, rules, user));
+      return value.map((v) => this.redactValue(v, rules, user, resourceType));
     }
 
     // Connection shape: { items: [...], hasMore } — redact `items`.
@@ -127,7 +135,7 @@ export class FieldAuthInterceptor implements NestInterceptor {
       return {
         ...obj,
         items: Array.isArray(obj.items)
-          ? obj.items.map((v) => this.redactValue(v, rules, user))
+          ? obj.items.map((v) => this.redactValue(v, rules, user, resourceType))
           : obj.items,
       };
     }
@@ -141,6 +149,16 @@ export class FieldAuthInterceptor implements NestInterceptor {
         if (this.fieldAuthService.checkFieldAccess(user.permissions ?? [], user.isPlatformAdmin, rule)) {
           continue;
         }
+        // BA-C-1: log every denied field access. Fire-and-forget —
+        // a transient audit-log failure must never delay (or mask)
+        // the redaction / Forbidden the client is waiting on. The
+        // service already swallows its own errors; the .catch is
+        // belt-and-braces for any unforeseen rejection path.
+        this.authFailureLogger
+          ?.logFieldAccessDenied(user, resourceType, fieldName, rule.requiredPermissions)
+          .catch(() => {
+            /* swallow */
+          });
         if (rule.behavior === 'error') {
           throw new ForbiddenException(`Access denied to field: ${fieldName}`);
         }
