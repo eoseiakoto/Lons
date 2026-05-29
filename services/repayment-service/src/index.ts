@@ -10,3 +10,7 @@ export * from './waterfall/waterfall-allocator';
 export * from './early-settlement/early-settlement.service';
 export * from './early-settlement/early-settlement.module';
 export * from './early-settlement/early-settlement.types';
+
+// S19-6 — penalty calculator (compound + per-DPD tiered rates).
+// Pure function module integrated by the accrual scheduler.
+export * from './penalty/penalty-calculator';

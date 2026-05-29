@@ -59,6 +59,8 @@ import { CollectionsResolver } from './graphql/resolvers/collections.resolver';
 import { CollectionsCaseResolver } from './graphql/resolvers/collections-case.resolver';
 // S19-8: multi-level write-off approval workflow.
 import { WriteOffResolver } from './graphql/resolvers/write-off.resolver';
+// S19-6: per-product penalty config (compound + tiered rates).
+import { PenaltyConfigResolver } from './graphql/resolvers/penalty-config.resolver';
 import { AuditResolver } from './graphql/resolvers/audit.resolver';
 import { PlatformAuditResolver } from './graphql/resolvers/platform-audit.resolver';
 import { IntegrationResolver } from './graphql/resolvers/integration.resolver';
@@ -162,6 +164,7 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
     CollectionsResolver,
     CollectionsCaseResolver,
     WriteOffResolver,
+    PenaltyConfigResolver,
     AuditResolver,
     PlatformAuditResolver,
     IntegrationResolver,
