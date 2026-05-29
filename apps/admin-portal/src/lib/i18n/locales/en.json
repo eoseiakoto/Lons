@@ -127,7 +127,7 @@
     "copyrightTagline": "Lending platform for financial institutions",
     "mfaRequired": {
       "title": "MFA enrollment required",
-      "body": "Your organization's plan now requires multi-factor authentication for this role. Contact your administrator to reset your access — once you can log in, enable MFA from your profile."
+      "body": "Your organization's plan requires multi-factor authentication for this role. Complete enrollment below to restore full access."
     }
   },
   "mfa": {

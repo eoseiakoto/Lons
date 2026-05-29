@@ -185,6 +185,50 @@ export class MfaService {
   }
 
   /**
+   * MFA-lockout fix: administrative MFA reset.
+   *
+   * Same field-clearing semantics as `disableMfa` but WITHOUT the
+   * password re-auth — used when an admin needs to recover a
+   * locked-out user (lost phone, device change). The caller's
+   * permission gate (`user:update` for SP Admin, platform-admin
+   * check for the cross-tenant variant) is enforced at the
+   * resolver layer; this method assumes authz already passed.
+   *
+   * Stamps `mfaDisabledAt` so the compliance service computes a
+   * fresh 7-day grace window from this moment — giving the
+   * reset user a real chance to re-enrol before the next login
+   * starts blocking again.
+   *
+   * The accountability trail is the resolver's @AuditAction
+   * decorator, which records (actor, target, before/after).
+   */
+  async adminResetMfa(
+    userType: 'user' | 'platform_user',
+    userId: string,
+  ): Promise<void> {
+    if (userType === 'user') {
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          mfaEnabled: false,
+          mfaSecret: null,
+          mfaBackupCodes: null,
+          mfaDisabledAt: new Date(),
+        },
+      });
+    } else {
+      await this.prisma.platformUser.update({
+        where: { id: userId },
+        data: {
+          mfaEnabled: false,
+          mfaSecret: null,
+          mfaBackupCodes: null,
+        },
+      });
+    }
+  }
+
+  /**
    * Regenerate the 10 backup codes after the user exhausts them. Does
    * not change the TOTP secret. Returns the new codes once — caller is
    * responsible for showing them to the user immediately.

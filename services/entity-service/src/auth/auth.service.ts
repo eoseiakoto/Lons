@@ -18,12 +18,26 @@ import { IAuthenticatedUser } from './interfaces/jwt-payload.interface';
  * Sprint 15 (S15-6) — login returns either a full token pair or, when
  * MFA is enabled on the account, a short-lived MFA token that the
  * client exchanges for a full pair via `verifyMfa`.
+ *
+ * MFA-lockout fix: a fourth shape — the enrollment-only result —
+ * unblocks users whose grace window has expired. It carries an
+ * `accessToken` scoped via `scope: 'mfa_enrollment_only'` (no refresh
+ * token) plus `requiresMfaEnrollment: true` so the frontend knows to
+ * route directly into the enrolment flow. AuthGuard rejects the
+ * scoped token on every endpoint other than the MFA enrolment
+ * mutations + `me`/`myTenant` — see
+ * MFA_ENROLLMENT_ONLY_ALLOWED_HANDLERS.
  */
 export type LoginResult =
   | {
       requiresMfa: false;
       accessToken: string;
-      refreshToken: string;
+      /**
+       * MFA-lockout fix: omitted on the enrollment-only result —
+       * the restricted session is intentionally not refreshable so
+       * the user must complete enrolment in one sitting.
+       */
+      refreshToken?: string;
       user: IAuthenticatedUser;
       /**
        * S19-STAB-5: present when the user is in the MFA grace window
@@ -32,6 +46,13 @@ export type LoginResult =
        * enrolled or not required.
        */
       mfaGraceDaysRemaining?: number;
+      /**
+       * MFA-lockout fix: present on the enrollment-only result so the
+       * frontend can branch into the enrolment flow without a separate
+       * shape. When true, `refreshToken` is undefined and
+       * `accessToken` carries `scope: 'mfa_enrollment_only'`.
+       */
+      requiresMfaEnrollment?: boolean;
     }
   | { requiresMfa: true; mfaToken: string };
 
@@ -184,12 +205,22 @@ export class AuthService {
             userMfaDisabledAt: user.mfaDisabledAt,
           });
           if (compliance.status === 'overdue') {
-            // Grace window has expired — hard block. The resolver
-            // catches this and surfaces `requiresMfaEnrollment: true`
-            // so the client can drop the user into the enrolment
-            // flow instead of issuing an error toast.
-            throw new MfaEnrollmentRequiredException(
-              Math.abs(compliance.graceDaysRemaining ?? 0),
+            // MFA-lockout fix: hand the user a RESTRICTED session
+            // instead of throwing. The original behaviour
+            // (`throw MfaEnrollmentRequiredException`) issued no
+            // tokens — locking the user out with no enrolment path
+            // (chicken-and-egg). The fix issues an
+            // `scope: 'mfa_enrollment_only'` access token + no
+            // refresh token, which AuthGuard admits only on the
+            // MFA enrolment + profile-read handlers (see
+            // MFA_ENROLLMENT_ONLY_ALLOWED_HANDLERS). After
+            // enrolment completes the user re-logs in and gets a
+            // full-scope token; until then every other resolver
+            // returns 403.
+            return this.issueMfaEnrollmentOnlyTokens(
+              user,
+              tenantId,
+              compliance.graceDaysRemaining ?? 0,
             );
           }
           if (compliance.status === 'pending') {
@@ -355,6 +386,67 @@ export class AuthService {
         permissions,
         isPlatformAdmin: false,
       },
+    };
+  }
+
+  /**
+   * MFA-lockout fix: issue an enrollment-only access token for a user
+   * whose tenant tier mandates MFA AND whose grace window has expired.
+   * The token carries `scope: 'mfa_enrollment_only'`; AuthGuard
+   * admits it ONLY on the handlers listed in
+   * MFA_ENROLLMENT_ONLY_ALLOWED_HANDLERS (the MFA enrolment + profile
+   * read endpoints). No refresh token is issued — the user must
+   * complete enrolment in the access-token's lifetime (1 hour) or
+   * re-login to get a fresh enrolment-only token.
+   *
+   * `mfaGraceDaysRemaining` is intentionally negative here — it
+   * reports days PAST the deadline, useful for the UI's
+   * "you are N days past due" copy.
+   */
+  private issueMfaEnrollmentOnlyTokens(
+    user: {
+      id: string;
+      email: string;
+      name: string | null;
+      role: { name: string; permissions: unknown };
+    },
+    tenantId: string,
+    graceDaysRemaining: number,
+  ): {
+    requiresMfa: false;
+    accessToken: string;
+    user: IAuthenticatedUser;
+    requiresMfaEnrollment: true;
+    mfaGraceDaysRemaining: number;
+  } {
+    // Permissions intentionally empty on the enrollment-only payload.
+    // The user's real role/permissions are NOT carried into the
+    // restricted session — even if AuthGuard's handler allow-list
+    // were ever subverted, the @Roles checks downstream would still
+    // fail closed because the JWT carries no permissions.
+    const accessToken = this.jwtService.signAccessToken({
+      sub: user.id,
+      tenantId,
+      role: user.role.name,
+      permissions: [],
+      email: user.email,
+      name: user.name ?? undefined,
+      scope: 'mfa_enrollment_only',
+    });
+    return {
+      requiresMfa: false,
+      accessToken,
+      // refreshToken intentionally omitted — see LoginResult comment.
+      user: {
+        userId: user.id,
+        tenantId,
+        role: user.role.name,
+        permissions: [],
+        isPlatformAdmin: false,
+        scope: 'mfa_enrollment_only',
+      },
+      requiresMfaEnrollment: true,
+      mfaGraceDaysRemaining: graceDaysRemaining,
     };
   }
 

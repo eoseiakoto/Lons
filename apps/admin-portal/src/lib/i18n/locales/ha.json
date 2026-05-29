@@ -127,7 +127,7 @@
     "copyrightTagline": "Lending platform for financial institutions",
     "mfaRequired": {
       "title": "Ana buƙatar rajistar MFA",
-      "body": "Tsarin ƙungiyarka yanzu yana buƙatar tabbatarwa mai matakai da yawa (MFA) don wannan matsayi. Tuntuɓi mai gudanarwa don sake saita izinin shiga — da zarar ka iya shiga, kunna MFA daga bayanan martabarka."
+      "body": "Tsarin ƙungiyarka yana buƙatar tabbatarwa mai matakai da yawa (MFA) don wannan matsayi. Kammala rajista a ƙasa don dawo da cikakken izinin shiga."
     }
   },
   "mfa": {

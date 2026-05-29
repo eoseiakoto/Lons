@@ -127,7 +127,7 @@
     "copyrightTagline": "Lending platform for financial institutions",
     "mfaRequired": {
       "title": "Se requiere inscripción en MFA",
-      "body": "El plan de su organización ahora exige autenticación multifactor para este rol. Póngase en contacto con su administrador para restablecer su acceso — una vez que pueda iniciar sesión, active la MFA desde su perfil."
+      "body": "El plan de su organización exige autenticación multifactor para este rol. Complete la inscripción a continuación para restablecer el acceso completo."
     }
   },
   "mfa": {

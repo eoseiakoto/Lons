@@ -2,6 +2,7 @@ import { Resolver, Query, Mutation, Args, ID, InputType, Field, ResolveField, Pa
 import {
   UserService,
   PasswordService,
+  MfaService,
   CurrentTenant,
   CurrentUser,
   IAuthenticatedUser,
@@ -52,6 +53,10 @@ export class UserResolver {
   constructor(
     private userService: UserService,
     private passwordService: PasswordService,
+    // MFA-lockout fix: admins reset a locked-out user's MFA via
+    // this service (no password re-auth). The mfaService field is
+    // declared before the optional ones so DI resolves it first.
+    private mfaService: MfaService,
     // S19-STAB-5: optional so existing tests that wire UserResolver
     // without compliance still construct. Production wiring always
     // injects both. Named with a `Svc` suffix to avoid colliding with
@@ -156,6 +161,32 @@ export class UserResolver {
     this.passwordService.validateStrength(newPassword);
     const passwordHash = await this.passwordService.hash(newPassword);
     return this.userService.resetPassword(tenantId, id, passwordHash) as unknown as UserType;
+  }
+
+  /**
+   * MFA-lockout fix: admin recovery path for a user whose MFA is
+   * unrecoverable (lost phone, device change, locked out by tier
+   * enforcement). Same field-clearing semantics as `disableMfa` but
+   * without requiring the target user's password.
+   *
+   * Permission gate: `user:update` (SP Admin tier). The audit trail
+   * via @AuditAction captures (actor, target) so accountability is
+   * preserved.
+   *
+   * Effect: mfaEnabled=false, mfaSecret/mfaBackupCodes cleared,
+   * mfaDisabledAt = now → the compliance service starts a fresh
+   * 7-day grace window so the user has runway to re-enrol before
+   * the next login blocks again.
+   */
+  @Mutation(() => UserType)
+  @AuditAction(AuditActionType.UPDATE, AuditResourceType.USER)
+  @Roles('user:update')
+  async adminResetUserMfa(
+    @CurrentTenant() tenantId: string,
+    @Args('id', { type: () => ID }) id: string,
+  ): Promise<UserType> {
+    await this.mfaService.adminResetMfa('user', id);
+    return this.userService.findById(tenantId, id) as unknown as UserType;
   }
 
   @Mutation(() => UserType)

@@ -151,12 +151,46 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       mfaGraceDaysRemaining,
     } = data.loginBySlug;
 
-    // S19-STAB-5: hard block when the server returns
-    // `requiresMfaEnrollment=true` (tier mandates MFA, grace window
-    // expired). No tokens were issued — surface the typed error so
-    // the LoginForm can render a dedicated "enrolment required"
-    // message instead of a generic credentials failure.
+    // MFA-lockout fix: the server now ALSO issues an `accessToken`
+    // alongside `requiresMfaEnrollment: true` — the token is
+    // scoped to `mfa_enrollment_only`, so the portal can authenticate
+    // the user just enough to reach the MFA enrolment card and
+    // unlock their account. Previously this branch threw and the
+    // user had no recovery path (chicken-and-egg).
+    //
+    // We still surface the typed error to the LoginForm so the
+    // "enrolment required" banner renders — but the LoginForm now
+    // catches it and lets the redirect-to-profile happen WITHOUT
+    // refusing the login.
     if (requiresMfaEnrollment) {
+      // Store the restricted token. No refreshToken is issued for
+      // an enrollment-only session — the user must complete the
+      // enrolment within the access-token's lifetime or re-login.
+      localStorage.setItem('accessToken', accessToken);
+      localStorage.removeItem('refreshToken');
+      // Stamp the grace countdown (negative for overdue) so any
+      // future banner that surfaces "N days past due" reads it.
+      if (typeof mfaGraceDaysRemaining === 'number') {
+        localStorage.setItem(MFA_GRACE_KEY, String(mfaGraceDaysRemaining));
+      }
+      // Hydrate the user object from the JWT so subsequent route
+      // guards see an authenticated user (just with `scope:
+      // mfa_enrollment_only` on the JWT itself, which the server
+      // enforces — the frontend doesn't need to police it).
+      const enrollmentPayload = parseJwt(accessToken);
+      if (enrollmentPayload) {
+        setUser({
+          userId: enrollmentPayload.sub as string,
+          tenantId: enrollmentPayload.tenantId as string,
+          role: enrollmentPayload.role as string,
+          permissions: [],
+          email: enrollmentPayload.email as string | undefined,
+          name: enrollmentPayload.name as string | undefined,
+        });
+      }
+      // The LoginForm catches this error and routes to the
+      // enrolment card. Throw AFTER token storage so the redirect
+      // target finds a valid session.
       throw new MfaEnrollmentRequiredError();
     }
 
