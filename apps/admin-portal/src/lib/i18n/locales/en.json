@@ -1685,6 +1685,11 @@
       "passwordRequired": "Password is required",
       "passwordsDoNotMatch": "Passwords do not match",
       "passwordResetFailed": "Password reset failed",
+      "resetMfa": "Reset MFA",
+      "resettingMfa": "Resetting...",
+      "resetMfaHelp": "Removes this user's MFA enrollment and starts a new 7-day grace period. The user will need to re-enrol.",
+      "mfaResetFailed": "MFA reset failed",
+      "mfaWasReset": "MFA was reset. The user has 7 days to re-enrol.",
       "mfaCompliance": {
         "column": "MFA Compliance",
         "enrolled": "Enrolled",

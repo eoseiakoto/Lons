@@ -1685,6 +1685,11 @@
       "passwordRequired": "Password is required",
       "passwordsDoNotMatch": "Passwords do not match",
       "passwordResetFailed": "Password reset failed",
+      "resetMfa": "Redefinir MFA",
+      "resettingMfa": "Redefinindo...",
+      "resetMfaHelp": "Remove a inscrição de MFA deste usuário e inicia um novo período de carência de 7 dias. O usuário precisará se inscrever novamente.",
+      "mfaResetFailed": "Falha ao redefinir o MFA",
+      "mfaWasReset": "O MFA foi redefinido. O usuário tem 7 dias para se inscrever novamente.",
       "mfaCompliance": {
         "column": "Conformidade com MFA",
         "enrolled": "Inscrito",

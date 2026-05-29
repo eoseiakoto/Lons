@@ -1685,6 +1685,11 @@
       "passwordRequired": "Password is required",
       "passwordsDoNotMatch": "Passwords do not match",
       "passwordResetFailed": "Password reset failed",
+      "resetMfa": "Restablecer MFA",
+      "resettingMfa": "Restableciendo...",
+      "resetMfaHelp": "Elimina la inscripción de MFA de este usuario e inicia un nuevo período de gracia de 7 días. El usuario deberá volver a inscribirse.",
+      "mfaResetFailed": "Error al restablecer el MFA",
+      "mfaWasReset": "Se restableció el MFA. El usuario tiene 7 días para volver a inscribirse.",
       "mfaCompliance": {
         "column": "Cumplimiento de MFA",
         "enrolled": "Inscrito",

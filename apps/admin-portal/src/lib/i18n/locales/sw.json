@@ -1685,6 +1685,11 @@
       "passwordRequired": "Password is required",
       "passwordsDoNotMatch": "Passwords do not match",
       "passwordResetFailed": "Password reset failed",
+      "resetMfa": "Weka upya MFA",
+      "resettingMfa": "Inaweka upya...",
+      "resetMfaHelp": "Inaondoa usajili wa MFA wa mtumiaji huyu na kuanzisha kipindi kipya cha siku 7 cha neema. Mtumiaji atahitaji kujiandikisha tena.",
+      "mfaResetFailed": "Kuweka upya MFA kumeshindikana",
+      "mfaWasReset": "MFA imewekwa upya. Mtumiaji ana siku 7 za kujiandikisha tena.",
       "mfaCompliance": {
         "column": "Utiifu wa MFA",
         "enrolled": "Amesajiliwa",

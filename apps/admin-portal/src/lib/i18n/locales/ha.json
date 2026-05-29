@@ -1685,6 +1685,11 @@
       "passwordRequired": "Password is required",
       "passwordsDoNotMatch": "Passwords do not match",
       "passwordResetFailed": "Password reset failed",
+      "resetMfa": "Sake saita MFA",
+      "resettingMfa": "Ana sake saitawa...",
+      "resetMfaHelp": "Yana cire rajistar MFA na wannan mai amfani kuma yana fara sabon lokacin jinkiri na kwanaki 7. Mai amfani zai buƙaci yin rajista kuma.",
+      "mfaResetFailed": "Sake saita MFA ya gaza",
+      "mfaWasReset": "An sake saita MFA. Mai amfani yana da kwanaki 7 don sake yin rajista.",
       "mfaCompliance": {
         "column": "Bin Ka'idar MFA",
         "enrolled": "An yi rajista",
