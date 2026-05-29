@@ -1050,6 +1050,68 @@ async function main() {
     });
     console.log('  Customer matching rules (3) seeded');
 
+    // S19-5: default collections workflow config per tenant. Stored
+    // shape mirrors DEFAULT_TRANSITIONS from the recovery-service
+    // state machine — keeps the seed self-contained without a
+    // cross-package import. Tenants can tweak via the GraphQL admin
+    // mutation later.
+    const defaultCollectionsTransitions = {
+      new: ['contacted', 'escalated', 'closed'],
+      contacted: ['promise_to_pay', 'escalated', 'closed'],
+      promise_to_pay: ['broken_ptp', 'recovered', 'closed'],
+      broken_ptp: ['contacted', 'escalated', 'legal', 'closed'],
+      escalated: ['contacted', 'legal', 'write_off_pending', 'closed'],
+      legal: ['write_off_pending', 'recovered', 'closed'],
+      write_off_pending: ['written_off', 'escalated', 'closed'],
+      written_off: ['closed'],
+      recovered: ['closed'],
+      closed: [],
+    };
+    await prisma.collectionsWorkflowConfig.upsert({
+      where: { tenantId: tenant.id },
+      update: {
+        transitions: defaultCollectionsTransitions as Prisma.InputJsonValue,
+      },
+      create: {
+        tenantId: tenant.id,
+        transitions: defaultCollectionsTransitions as Prisma.InputJsonValue,
+        ptpGraceDays: 3,
+        autoCaseCreationDpd: 30,
+        maxContactAttempts: 5,
+      },
+    });
+    console.log('  CollectionsWorkflowConfig seeded (default transitions + 30 DPD auto-open)');
+
+    // S19-8: write-off approval thresholds. Defaults in tenant ccy
+    // align with the Sprint 19 dev prompt examples:
+    //   ≤ 500 → L1 only
+    //   500..5000 → L1 + L2
+    //   > 5000 → L1 + L2 + L3
+    const writeOffThresholdRows = [
+      { level: 'l1_officer' as const,  maxAmountThreshold: new Prisma.Decimal('500.0000') },
+      { level: 'l2_manager' as const,  maxAmountThreshold: new Prisma.Decimal('5000.0000') },
+      { level: 'l3_director' as const, maxAmountThreshold: new Prisma.Decimal('999999999.0000') },
+    ];
+    for (const row of writeOffThresholdRows) {
+      await prisma.writeOffThreshold.upsert({
+        where: {
+          tenantId_level_currency: {
+            tenantId: tenant.id,
+            level: row.level,
+            currency: cfg.currency,
+          },
+        },
+        update: { maxAmountThreshold: row.maxAmountThreshold },
+        create: {
+          tenantId: tenant.id,
+          level: row.level,
+          maxAmountThreshold: row.maxAmountThreshold,
+          currency: cfg.currency,
+        },
+      });
+    }
+    console.log(`  WriteOff thresholds (3) seeded for ${cfg.currency}`);
+
     // ---------------------------------------------------------------------
     // 7. Create customers (20 per tenant) with consents
     // ---------------------------------------------------------------------

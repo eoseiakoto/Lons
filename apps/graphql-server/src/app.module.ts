@@ -54,6 +54,9 @@ import { ContractResolver } from './graphql/resolvers/contract.resolver';
 import { RepaymentResolver } from './graphql/resolvers/repayment.resolver';
 import { SettlementResolver } from './graphql/resolvers/settlement.resolver';
 import { CollectionsResolver } from './graphql/resolvers/collections.resolver';
+// S19-5: new case-centric collections workflow surface (parallel to the
+// legacy CollectionsResolver which wraps the append-only action log).
+import { CollectionsCaseResolver } from './graphql/resolvers/collections-case.resolver';
 import { AuditResolver } from './graphql/resolvers/audit.resolver';
 import { PlatformAuditResolver } from './graphql/resolvers/platform-audit.resolver';
 import { IntegrationResolver } from './graphql/resolvers/integration.resolver';
@@ -155,6 +158,7 @@ const queryComplexityPlugin = new QueryComplexityPlugin({ maxDepth: 10, maxCost:
     RepaymentResolver,
     SettlementResolver,
     CollectionsResolver,
+    CollectionsCaseResolver,
     AuditResolver,
     PlatformAuditResolver,
     IntegrationResolver,
