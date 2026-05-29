@@ -91,6 +91,18 @@ CREATE TABLE audit_logs_2027_10 PARTITION OF audit_logs FOR VALUES FROM ('2027-1
 CREATE TABLE audit_logs_2027_11 PARTITION OF audit_logs FOR VALUES FROM ('2027-11-01') TO ('2027-12-01');
 CREATE TABLE audit_logs_2027_12 PARTITION OF audit_logs FOR VALUES FROM ('2027-12-01') TO ('2028-01-01');
 
+-- Safety net: catch rows outside the defined range (e.g., backfilled data
+-- or inserts after 2027-12 if partition extension is delayed). Production
+-- should still create monthly partitions proactively via a scheduled job
+-- or pg_partman; the default partition is a fallback only.
+--
+-- Declared BEFORE the legacy data INSERT below so any legacy rows with
+-- created_at outside 2026-03..2027-12 route here instead of failing the
+-- migration. Also declared before the grant DO-block, which queries
+-- pg_inherits — the loop picks up audit_logs_default automatically and
+-- applies the same INSERT+SELECT-only grants as the monthly partitions.
+CREATE TABLE audit_logs_default PARTITION OF audit_logs DEFAULT;
+
 -- ── Step 5: migrate legacy rows + drop legacy table ────────────────
 INSERT INTO audit_logs SELECT * FROM audit_logs_legacy;
 DROP TABLE audit_logs_legacy;

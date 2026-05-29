@@ -60,7 +60,9 @@ const TENANT_SCOPED_TABLES = [
   'reconciliation_exceptions',
   'collections_actions',
   'webhook_endpoints',
-  'webhook_delivery_logs',
+  // webhook_delivery_logs intentionally NOT here: no tenant_id column,
+  // tenant isolation cascades via FK to webhook_endpoints. Listed in
+  // PLATFORM_SCOPED_TABLES below.
   'wallet_provider_configs',
   'notification_provider_configs',
   'notification_mock_log',
@@ -91,6 +93,17 @@ const TENANT_SCOPED_TABLES = [
   // Sprint 15 BNPL credit lines
   'bnpl_credit_lines',
   'bnpl_credit_line_adjustments',
+  // Sprint 14–18 additions (S19-STAB-1 RLS sweep)
+  'aging_bucket_configs',
+  'customer_financial_data',
+  'customer_matching_rules',
+  'emi_integration_configs',
+  'micro_loan_credit_limit_changes',
+  'operator_approval_limits',
+  'pipeline_step_logs',
+  'revenue_distribution_configs',
+  'scorecard_configs',
+  'upgrade_requests',
 ];
 
 /**
@@ -104,6 +117,7 @@ const PLATFORM_SCOPED_TABLES = [
   'tenants', // Special case: RLS on `id = current_tenant`
   'billing_line_items', // Cascades via FK; no direct tenant_id
   'plan_tier_configs', // Platform configuration (one row per tier)
+  'webhook_delivery_logs', // No tenant_id; isolated via FK to webhook_endpoints (which has RLS)
 ];
 
 describe('Sprint 15 (S15-7) — RLS coverage sweep', () => {
@@ -148,9 +162,11 @@ describe('Sprint 15 (S15-7) — RLS coverage sweep', () => {
         );
         expect(rows.length).toBe(1);
         expect(rows[0].relrowsecurity).toBe(true);
-        // FORCE keeps the policy effective even for table owners — required
-        // because the application connects as the owner role.
-        expect(rows[0].relforcerowsecurity).toBe(true);
+        // FORCE is NOT set. The application connects as the non-owner
+        // lons_app role (see commit 595f4aa), so RLS applies naturally
+        // without FORCE. The `lons` table owner still bypasses RLS for
+        // migrations/seed via DIRECT_DATABASE_URL — that's intentional.
+        expect(rows[0].relforcerowsecurity).toBe(false);
       },
     );
   });
