@@ -325,7 +325,18 @@ export class AuthService {
     }
 
     const userType = payload.userType ?? 'user';
-    const ok = await this.mfaService.verifyCode(userType, payload.sub, code);
+    // MFA-RLS fix (MfaService): verifyCode loads + (on backup-code
+    // hit) updates the tenant `users` row. The mutation entry point
+    // is the Public `verifyMfa` resolver — no interceptor wrap —
+    // so the service MUST get tenantId explicitly. For platform_user
+    // the param is harmless (the service ignores tenantId on the
+    // platform branch).
+    const ok = await this.mfaService.verifyCode(
+      userType,
+      payload.sub,
+      code,
+      payload.tenantId,
+    );
     if (!ok) {
       throw new UnauthorizedException('Invalid MFA code');
     }

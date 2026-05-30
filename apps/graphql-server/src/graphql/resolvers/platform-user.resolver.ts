@@ -193,8 +193,14 @@ export class PlatformUserResolver {
     @Args('userId', { type: () => ID }) userId: string,
   ): Promise<boolean> {
     this.requirePlatformAdmin(user);
+    // MFA-RLS fix (MfaService): pass tenantId so the service's
+    // internal prisma.user.update is re-entered into the target
+    // tenant's context (the outer wrap here makes the inner one
+    // a savepoint — harmless). Without the explicit tenantId,
+    // mfaService.adminResetMfa would throw the new "tenantId is
+    // required" guard.
     await this.prisma.enterTenantContext({ tenantId }, async () => {
-      await this.mfaService.adminResetMfa('user', userId);
+      await this.mfaService.adminResetMfa('user', userId, tenantId);
     });
     return true;
   }

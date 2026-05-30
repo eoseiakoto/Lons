@@ -9,6 +9,15 @@
  * `authenticator.check()` is real (otplib is deterministic given the
  * same secret + clock), so TOTP tests freeze time via jest fake timers
  * to make them stable.
+ *
+ * MFA-RLS fix update: every tenant-user assertion now passes
+ * `TENANT_ID` as the 4th arg and the mock prisma exposes
+ * `enterTenantContext` + `scoped()`. The first runs the callback
+ * synchronously and the second returns the same mock so the
+ * existing `user.update.mock.calls[0]` style assertions still work
+ * unchanged. A new describe block proves that the tenant branch
+ * routes through `enterTenantContext` with the right tenantId, and
+ * that the platform_user branch never enters context.
  */
 import * as crypto from 'crypto';
 import { authenticator } from 'otplib';
@@ -16,6 +25,7 @@ import { authenticator } from 'otplib';
 import { MfaService } from './mfa.service';
 
 const USER_ID = '11111111-1111-1111-1111-111111111111';
+const TENANT_ID = '22222222-2222-2222-2222-222222222222';
 const EMAIL = 'user@example.com';
 
 function hashBackupCode(code: string): string {
@@ -31,16 +41,24 @@ function makeService() {
     findUnique: jest.fn(),
     update: jest.fn().mockResolvedValue({}),
   };
-  const prisma = { user, platformUser } as any;
+  // MFA-RLS fix: capture every enterTenantContext call so tests
+  // can assert the right tenantId was threaded through. The mock
+  // just runs the callback synchronously — no real transaction.
+  const enterTenantContext = jest.fn(async (_ctx: { tenantId: string }, fn: () => Promise<unknown>) => fn());
+  const prisma: any = { user, platformUser, enterTenantContext };
+  // `scoped()` returns the same mock so `tx.user.update` hits the
+  // same jest.fn we asserted on prior to the RLS fix. Avoids
+  // having to mirror the model surface on a second object.
+  prisma.scoped = () => prisma;
   const service = new MfaService(prisma);
-  return { service, prisma, user, platformUser };
+  return { service, prisma, user, platformUser, enterTenantContext };
 }
 
 describe('initiateEnrollment', () => {
   it('returns plaintext codes but stores HASHES (FIX-6)', async () => {
     const { service, user } = makeService();
 
-    const result = await service.initiateEnrollment('user', USER_ID, EMAIL);
+    const result = await service.initiateEnrollment('user', USER_ID, EMAIL, TENANT_ID);
 
     expect(result.backupCodes).toHaveLength(10);
     expect(result.backupCodes.every((c) => /^[A-F0-9]{8}$/.test(c))).toBe(true);
@@ -62,19 +80,21 @@ describe('initiateEnrollment', () => {
 
   it('stores the TOTP secret in plaintext (encryption middleware handles at-rest)', async () => {
     const { service, user } = makeService();
-    const result = await service.initiateEnrollment('user', USER_ID, EMAIL);
+    const result = await service.initiateEnrollment('user', USER_ID, EMAIL, TENANT_ID);
     expect(user.update.mock.calls[0][0].data.mfaSecret).toBe(result.secret);
     expect(result.otpauthUri).toContain(encodeURIComponent('Lons Platform'));
   });
 
   it('does NOT enable MFA on initiate (must confirm first)', async () => {
     const { service, user } = makeService();
-    await service.initiateEnrollment('user', USER_ID, EMAIL);
+    await service.initiateEnrollment('user', USER_ID, EMAIL, TENANT_ID);
     expect(user.update.mock.calls[0][0].data.mfaEnabled).toBeUndefined();
   });
 
   it('routes platform_user to platformUser model', async () => {
     const { service, user, platformUser } = makeService();
+    // No tenantId required for platform_user — platform_users is
+    // not RLS-scoped.
     await service.initiateEnrollment('platform_user', USER_ID, EMAIL);
     expect(platformUser.update).toHaveBeenCalledTimes(1);
     expect(user.update).not.toHaveBeenCalled();
@@ -92,7 +112,7 @@ describe('confirmEnrollment', () => {
       mfaBackupCodes: '[]',
     });
 
-    const ok = await service.confirmEnrollment('user', USER_ID, code);
+    const ok = await service.confirmEnrollment('user', USER_ID, code, TENANT_ID);
 
     expect(ok).toBe(true);
     expect(user.update).toHaveBeenCalledWith({
@@ -110,7 +130,7 @@ describe('confirmEnrollment', () => {
       mfaBackupCodes: '[]',
     });
 
-    const ok = await service.confirmEnrollment('user', USER_ID, '000000');
+    const ok = await service.confirmEnrollment('user', USER_ID, '000000', TENANT_ID);
 
     expect(ok).toBe(false);
     expect(user.update).not.toHaveBeenCalled();
@@ -124,7 +144,7 @@ describe('confirmEnrollment', () => {
       mfaBackupCodes: null,
     });
     await expect(
-      service.confirmEnrollment('user', USER_ID, '123456'),
+      service.confirmEnrollment('user', USER_ID, '123456', TENANT_ID),
     ).rejects.toThrow(/has not been initiated/);
   });
 });
@@ -139,7 +159,7 @@ describe('verifyCode', () => {
       mfaBackupCodes: '[]',
     });
     const code = authenticator.generate(secret);
-    expect(await service.verifyCode('user', USER_ID, code)).toBe(true);
+    expect(await service.verifyCode('user', USER_ID, code, TENANT_ID)).toBe(true);
   });
 
   it('invalid TOTP with no backup match returns false', async () => {
@@ -149,7 +169,7 @@ describe('verifyCode', () => {
       mfaSecret: authenticator.generateSecret(),
       mfaBackupCodes: '[]',
     });
-    expect(await service.verifyCode('user', USER_ID, '000000')).toBe(false);
+    expect(await service.verifyCode('user', USER_ID, '000000', TENANT_ID)).toBe(false);
   });
 
   it('valid backup code (post-hashing) returns true and consumes it', async () => {
@@ -164,7 +184,7 @@ describe('verifyCode', () => {
       ]),
     });
 
-    expect(await service.verifyCode('user', USER_ID, plaintext)).toBe(true);
+    expect(await service.verifyCode('user', USER_ID, plaintext, TENANT_ID)).toBe(true);
 
     // Consumed → only the remaining hash is persisted.
     const persisted = JSON.parse(
@@ -188,8 +208,8 @@ describe('verifyCode', () => {
         mfaBackupCodes: '[]',
       });
 
-    expect(await service.verifyCode('user', USER_ID, plaintext)).toBe(true);
-    expect(await service.verifyCode('user', USER_ID, plaintext)).toBe(false);
+    expect(await service.verifyCode('user', USER_ID, plaintext, TENANT_ID)).toBe(true);
+    expect(await service.verifyCode('user', USER_ID, plaintext, TENANT_ID)).toBe(false);
   });
 
   it('rejects when MFA is not enabled', async () => {
@@ -199,7 +219,7 @@ describe('verifyCode', () => {
       mfaSecret: null,
       mfaBackupCodes: null,
     });
-    expect(await service.verifyCode('user', USER_ID, '123456')).toBe(false);
+    expect(await service.verifyCode('user', USER_ID, '123456', TENANT_ID)).toBe(false);
   });
 
   it('backup code is case-insensitive', async () => {
@@ -210,14 +230,14 @@ describe('verifyCode', () => {
       mfaSecret: authenticator.generateSecret(),
       mfaBackupCodes: JSON.stringify([hashBackupCode(plaintext)]),
     });
-    expect(await service.verifyCode('user', USER_ID, 'a1b2c3d4')).toBe(true);
+    expect(await service.verifyCode('user', USER_ID, 'a1b2c3d4', TENANT_ID)).toBe(true);
   });
 });
 
 describe('disableMfa', () => {
   it('clears all MFA fields and stamps mfaDisabledAt for tenant users', async () => {
     const { service, user } = makeService();
-    await service.disableMfa('user', USER_ID);
+    await service.disableMfa('user', USER_ID, TENANT_ID);
     // S19-STAB-5: `mfaDisabledAt` is now set so the compliance
     // service can compute a fresh 7-day grace window if the
     // tenant tier still mandates MFA. We assert the timestamp
@@ -243,7 +263,7 @@ describe('regenerateBackupCodes', () => {
       mfaBackupCodes: null,
     });
     await expect(
-      service.regenerateBackupCodes('user', USER_ID),
+      service.regenerateBackupCodes('user', USER_ID, TENANT_ID),
     ).rejects.toThrow(/MFA is not enabled/);
   });
 
@@ -255,7 +275,7 @@ describe('regenerateBackupCodes', () => {
       mfaBackupCodes: '[]',
     });
 
-    const codes = await service.regenerateBackupCodes('user', USER_ID);
+    const codes = await service.regenerateBackupCodes('user', USER_ID, TENANT_ID);
     expect(codes).toHaveLength(10);
 
     const persisted = JSON.parse(
@@ -264,5 +284,201 @@ describe('regenerateBackupCodes', () => {
     for (let i = 0; i < 10; i++) {
       expect(persisted[i]).toBe(hashBackupCode(codes[i]));
     }
+  });
+});
+
+// ─── MFA-RLS fix: tenant-context routing ──────────────────────────────
+//
+// These cases prove the wiring the previous tests cared about indirectly.
+// They are the canary tests for "the singleton bypass came back".
+
+describe('MFA-RLS fix: tenant context wiring', () => {
+  describe('initiateEnrollment', () => {
+    it('enters tenant context with the right tenantId on the user branch', async () => {
+      const { service, enterTenantContext } = makeService();
+      await service.initiateEnrollment('user', USER_ID, EMAIL, TENANT_ID);
+      // Two contexts: loadUser is not called by initiateEnrollment,
+      // but tenantUserUpdate enters once. Assert the args.
+      expect(enterTenantContext).toHaveBeenCalledTimes(1);
+      expect(enterTenantContext.mock.calls[0][0]).toEqual({ tenantId: TENANT_ID });
+    });
+
+    it('throws when tenantId is missing on the user branch', async () => {
+      const { service, user, enterTenantContext } = makeService();
+      await expect(
+        // Intentionally omit the optional 4th arg to trigger the
+        // runtime guard. TypeScript allows it (param is optional);
+        // the service's explicit `if (!tenantId) throw` is the
+        // safety net.
+        service.initiateEnrollment('user', USER_ID, EMAIL),
+      ).rejects.toThrow(/tenantId is required/);
+      expect(user.update).not.toHaveBeenCalled();
+      expect(enterTenantContext).not.toHaveBeenCalled();
+    });
+
+    it('does NOT enter tenant context for platform_user', async () => {
+      const { service, enterTenantContext } = makeService();
+      await service.initiateEnrollment('platform_user', USER_ID, EMAIL);
+      expect(enterTenantContext).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('confirmEnrollment', () => {
+    it('enters tenant context for loadUser AND the update on the user branch', async () => {
+      const { service, user, enterTenantContext } = makeService();
+      const secret = authenticator.generateSecret();
+      const code = authenticator.generate(secret);
+      user.findUnique.mockResolvedValue({
+        mfaEnabled: false,
+        mfaSecret: secret,
+        mfaBackupCodes: '[]',
+      });
+      await service.confirmEnrollment('user', USER_ID, code, TENANT_ID);
+      // 2 enters: loadUser + tenantUserUpdate. Both should carry
+      // the same tenantId.
+      expect(enterTenantContext.mock.calls.length).toBeGreaterThanOrEqual(2);
+      for (const [ctx] of enterTenantContext.mock.calls) {
+        expect(ctx).toEqual({ tenantId: TENANT_ID });
+      }
+    });
+
+    it('throws when tenantId is missing on the user branch', async () => {
+      const { service } = makeService();
+      await expect(
+        // Intentionally omit the optional 4th arg — runtime guard fires.
+        service.confirmEnrollment('user', USER_ID, '000000'),
+      ).rejects.toThrow(/tenantId is required/);
+    });
+  });
+
+  describe('verifyCode', () => {
+    it('enters context for the loadUser path', async () => {
+      const { service, user, enterTenantContext } = makeService();
+      user.findUnique.mockResolvedValue({
+        mfaEnabled: true,
+        mfaSecret: authenticator.generateSecret(),
+        mfaBackupCodes: '[]',
+      });
+      await service.verifyCode('user', USER_ID, '000000', TENANT_ID);
+      expect(enterTenantContext).toHaveBeenCalledTimes(1);
+      expect(enterTenantContext.mock.calls[0][0]).toEqual({ tenantId: TENANT_ID });
+    });
+
+    it('enters context for loadUser AND the backup-code consume update', async () => {
+      const { service, user, enterTenantContext } = makeService();
+      const plaintext = 'A1B2C3D4';
+      user.findUnique.mockResolvedValue({
+        mfaEnabled: true,
+        mfaSecret: authenticator.generateSecret(),
+        mfaBackupCodes: JSON.stringify([hashBackupCode(plaintext)]),
+      });
+      await service.verifyCode('user', USER_ID, plaintext, TENANT_ID);
+      // loadUser enters once + consumeBackupCode→tenantUserUpdate
+      // enters once = 2 total. Both carry tenantId.
+      expect(enterTenantContext.mock.calls.length).toBeGreaterThanOrEqual(2);
+      for (const [ctx] of enterTenantContext.mock.calls) {
+        expect(ctx).toEqual({ tenantId: TENANT_ID });
+      }
+    });
+
+    it('throws when tenantId is missing for the user branch', async () => {
+      const { service } = makeService();
+      await expect(
+        // Intentionally omit the optional 4th arg — runtime guard fires.
+        service.verifyCode('user', USER_ID, '000000'),
+      ).rejects.toThrow(/tenantId is required/);
+    });
+
+    it('platform_user verifyCode does NOT enter tenant context', async () => {
+      const { service, platformUser, enterTenantContext } = makeService();
+      platformUser.findUnique.mockResolvedValue({
+        mfaEnabled: true,
+        mfaSecret: authenticator.generateSecret(),
+        mfaBackupCodes: '[]',
+      });
+      await service.verifyCode('platform_user', USER_ID, '000000');
+      expect(enterTenantContext).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('adminResetMfa', () => {
+    it('enters tenant context with the right tenantId', async () => {
+      const { service, user, enterTenantContext } = makeService();
+      await service.adminResetMfa('user', USER_ID, TENANT_ID);
+      expect(enterTenantContext).toHaveBeenCalledTimes(1);
+      expect(enterTenantContext.mock.calls[0][0]).toEqual({ tenantId: TENANT_ID });
+      // And the update went through.
+      expect(user.update).toHaveBeenCalledTimes(1);
+      const [args] = (user.update as jest.Mock).mock.calls[0];
+      expect(args.data.mfaEnabled).toBe(false);
+      expect(args.data.mfaDisabledAt).toBeInstanceOf(Date);
+    });
+
+    it('throws when tenantId is missing on the user branch', async () => {
+      const { service } = makeService();
+      await expect(
+        // Intentionally omit the optional 4th arg — runtime guard fires.
+        service.adminResetMfa('user', USER_ID),
+      ).rejects.toThrow(/tenantId is required/);
+    });
+
+    it('platform_user adminResetMfa does NOT enter tenant context', async () => {
+      const { service, platformUser, enterTenantContext } = makeService();
+      await service.adminResetMfa('platform_user', USER_ID);
+      expect(enterTenantContext).not.toHaveBeenCalled();
+      expect(platformUser.update).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('regenerateBackupCodes', () => {
+    it('enters context for loadUser + update; both carry tenantId', async () => {
+      const { service, user, enterTenantContext } = makeService();
+      user.findUnique.mockResolvedValue({
+        mfaEnabled: true,
+        mfaSecret: 'x',
+        mfaBackupCodes: '[]',
+      });
+      await service.regenerateBackupCodes('user', USER_ID, TENANT_ID);
+      expect(enterTenantContext.mock.calls.length).toBeGreaterThanOrEqual(2);
+      for (const [ctx] of enterTenantContext.mock.calls) {
+        expect(ctx).toEqual({ tenantId: TENANT_ID });
+      }
+    });
+
+    it('throws when tenantId is missing on the user branch', async () => {
+      const { service, user } = makeService();
+      user.findUnique.mockResolvedValue({
+        mfaEnabled: true,
+        mfaSecret: 'x',
+        mfaBackupCodes: '[]',
+      });
+      await expect(
+        // Intentionally omit the optional 4th arg — runtime guard fires.
+        service.regenerateBackupCodes('user', USER_ID),
+      ).rejects.toThrow(/tenantId is required/);
+    });
+  });
+
+  describe('disableMfa', () => {
+    it('enters tenant context for the user branch', async () => {
+      const { service, enterTenantContext } = makeService();
+      await service.disableMfa('user', USER_ID, TENANT_ID);
+      expect(enterTenantContext).toHaveBeenCalledTimes(1);
+      expect(enterTenantContext.mock.calls[0][0]).toEqual({ tenantId: TENANT_ID });
+    });
+
+    it('throws when tenantId is missing on the user branch', async () => {
+      const { service } = makeService();
+      await expect(
+        // Intentionally omit the optional 4th arg — runtime guard fires.
+        service.disableMfa('user', USER_ID),
+      ).rejects.toThrow(/tenantId is required/);
+    });
+
+    it('platform_user disableMfa does NOT enter tenant context', async () => {
+      const { service, enterTenantContext } = makeService();
+      await service.disableMfa('platform_user', USER_ID);
+      expect(enterTenantContext).not.toHaveBeenCalled();
+    });
   });
 });
