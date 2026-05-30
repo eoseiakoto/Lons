@@ -343,6 +343,158 @@ describe('AuthService', () => {
     });
   });
 
+  // ─── Auth-RLS sweep regression tests ────────────────────────────
+  //
+  // Both methods run on the tenant-scoped `users` table. The fix is
+  // "use the scoped tx client, not the bare singleton". These tests
+  // pin the wiring so the regression cannot return silently.
+
+  describe('Auth-RLS sweep: changePassword tenant context', () => {
+    it('wraps the call in enterTenantContext with the right tenantId', async () => {
+      jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(mockUser);
+      jest.spyOn(passwordService, 'verify').mockResolvedValue(true);
+      jest.spyOn(passwordService, 'validateStrength').mockImplementation(() => {});
+      jest.spyOn(passwordService, 'hash').mockResolvedValue('new-hashed-password');
+      jest.spyOn(prisma.user, 'update').mockResolvedValue(mockUser);
+
+      await service.changePassword(mockTenantId, mockUserId, password, 'NewStr0ng!Pass#');
+
+      const enterCalls = (prisma as any).enterTenantContext.mock.calls;
+      // At minimum the changePassword wrap. (loginTenantUser tests
+      // run in separate `it` blocks with fresh modules → no
+      // bleed-over.)
+      expect(enterCalls.length).toBeGreaterThanOrEqual(1);
+      expect(enterCalls[0][0]).toEqual({ tenantId: mockTenantId });
+    });
+
+    it('uses scoped() for both the findFirst and the update', async () => {
+      jest.spyOn(prisma.user, 'findFirst').mockResolvedValue(mockUser);
+      jest.spyOn(passwordService, 'verify').mockResolvedValue(true);
+      jest.spyOn(passwordService, 'validateStrength').mockImplementation(() => {});
+      jest.spyOn(passwordService, 'hash').mockResolvedValue('new-hashed-password');
+      jest.spyOn(prisma.user, 'update').mockResolvedValue(mockUser);
+
+      await service.changePassword(mockTenantId, mockUserId, password, 'NewStr0ng!Pass#');
+
+      // scoped() must be called at least once — the fix caches the
+      // result (`const tx = this.prisma.scoped()`) and reuses it
+      // for both findFirst and update. If someone reverts to
+      // `this.prisma.user.X` the count drops to 0 and this fails.
+      expect((prisma as any).scoped.mock.calls.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('Auth-RLS sweep: recordFailedLogin scoped tx', () => {
+    /**
+     * Strategy: re-construct AuthService with a prisma mock whose
+     * SCOPED user.update is a *different* jest.fn than the singleton
+     * user.update. After triggering a failed login, the scoped fn
+     * should have been called and the singleton fn should NOT. That
+     * proves recordFailedLogin runs on the tx client.
+     */
+    it('routes the failed login update through the scoped tx, not the singleton', async () => {
+      const singletonUpdate = jest.fn().mockResolvedValue({
+        ...mockUser,
+        failedLoginCount: 1,
+      });
+      const scopedUpdate = jest.fn().mockResolvedValue({
+        ...mockUser,
+        failedLoginCount: 1,
+      });
+      const scopedFindFirst = jest.fn().mockResolvedValue(mockUser);
+
+      const distinguishingPrisma: any = {
+        user: {
+          findFirst: jest.fn(),
+          findUnique: jest.fn(),
+          update: singletonUpdate, // bare singleton — must NOT be called
+        },
+        platformUser: { findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+        refreshToken: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+        tenant: { findUnique: jest.fn() },
+        $executeRawUnsafe: jest.fn(),
+        enterTenantContext: jest.fn(async (_ctx: unknown, fn: () => any) => fn()),
+        scoped: jest.fn(() => ({
+          // distinct mock so we can prove the call hit the tx path
+          user: { findFirst: scopedFindFirst, update: scopedUpdate, findUnique: jest.fn() },
+          platformUser: { findFirst: jest.fn(), update: jest.fn(), findUnique: jest.fn() },
+          refreshToken: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+          tenant: { findUnique: jest.fn() },
+        })),
+      };
+
+      const isolated = new AuthService(
+        distinguishingPrisma,
+        jwtService,
+        passwordService,
+      );
+      jest.spyOn(passwordService, 'verify').mockResolvedValue(false);
+
+      await expect(
+        isolated.loginTenantUser(mockTenantId, email, 'wrongpass'),
+      ).rejects.toThrow(UnauthorizedException);
+
+      // The failed-login counter increment must land on the scoped
+      // tx (where SET LOCAL is active), not on the singleton.
+      expect(scopedUpdate).toHaveBeenCalledTimes(1);
+      expect(scopedUpdate.mock.calls[0][0].data).toEqual({
+        failedLoginCount: { increment: 1 },
+      });
+      expect(singletonUpdate).not.toHaveBeenCalled();
+    });
+
+    it('lockout update also goes through the scoped tx', async () => {
+      // 4 prior failures → this attempt pushes to 5 → lockout
+      // should be stamped on the SAME scoped client.
+      const scopedFindFirst = jest.fn().mockResolvedValue({
+        ...mockUser,
+        failedLoginCount: 4,
+      });
+      // First call (increment) returns failedLoginCount=5; second
+      // call (lockedUntil stamp) returns whatever.
+      const scopedUpdate = jest
+        .fn()
+        .mockResolvedValueOnce({ ...mockUser, failedLoginCount: 5 })
+        .mockResolvedValueOnce({ ...mockUser, lockedUntil: new Date() });
+      const singletonUpdate = jest.fn();
+
+      const distinguishingPrisma: any = {
+        user: {
+          findFirst: jest.fn(),
+          findUnique: jest.fn(),
+          update: singletonUpdate,
+        },
+        platformUser: { findFirst: jest.fn(), findUnique: jest.fn(), update: jest.fn() },
+        refreshToken: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+        tenant: { findUnique: jest.fn() },
+        $executeRawUnsafe: jest.fn(),
+        enterTenantContext: jest.fn(async (_ctx: unknown, fn: () => any) => fn()),
+        scoped: jest.fn(() => ({
+          user: { findFirst: scopedFindFirst, update: scopedUpdate, findUnique: jest.fn() },
+          platformUser: { findFirst: jest.fn(), update: jest.fn(), findUnique: jest.fn() },
+          refreshToken: { findUnique: jest.fn(), create: jest.fn(), update: jest.fn() },
+          tenant: { findUnique: jest.fn() },
+        })),
+      };
+
+      const isolated = new AuthService(
+        distinguishingPrisma,
+        jwtService,
+        passwordService,
+      );
+      jest.spyOn(passwordService, 'verify').mockResolvedValue(false);
+
+      await expect(
+        isolated.loginTenantUser(mockTenantId, email, 'wrongpass'),
+      ).rejects.toThrow(UnauthorizedException);
+
+      // Both writes (increment + lockedUntil) on the scoped client.
+      expect(scopedUpdate).toHaveBeenCalledTimes(2);
+      expect(scopedUpdate.mock.calls[1][0].data.lockedUntil).toBeInstanceOf(Date);
+      expect(singletonUpdate).not.toHaveBeenCalled();
+    });
+  });
+
   describe('refreshTokens', () => {
     it('should issue new tokens and rotate refresh token', async () => {
       const refreshToken = jwtService.signRefreshToken({

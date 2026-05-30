@@ -186,7 +186,12 @@ export class AuthService {
 
       const isValid = await this.passwordService.verify(user.passwordHash, password);
       if (!isValid) {
-        await this.recordFailedLogin(user.id);
+        // Auth-RLS sweep (FIX-2): pass the scoped `tx` so the failed
+        // login counter update runs on the in-context connection.
+        // Before the fix, `recordFailedLogin` used `this.prisma`
+        // (singleton) → RLS dropped the update silently → lockouts
+        // never triggered for tenant users.
+        await this.recordFailedLogin(tx, user.id);
         throw new UnauthorizedException('Invalid credentials');
       }
 
@@ -617,25 +622,42 @@ export class AuthService {
     });
   }
 
+  /**
+   * Auth-RLS sweep (FIX-1): `users` is RLS-scoped; bare `this.prisma.user.*`
+   * runs on the singleton's pooled connection without `SET LOCAL
+   * app.current_tenant` and is silently filtered to zero rows. The
+   * resolver layer (`changePassword` mutation in auth.resolver.ts)
+   * does NOT wrap this call, so we enter context here. Tenant id
+   * arrives as the first method param — `@CurrentTenant` decorator
+   * supplies it from the authenticated JWT.
+   *
+   * Both queries (findFirst + update) MUST go through `scoped()` so
+   * they hit the in-context tx connection (where the SET LOCAL is
+   * active). Using `this.prisma.user.update` here would defeat the
+   * wrap — the singleton would dispatch on a fresh pooled connection.
+   */
   async changePassword(
     tenantId: string,
     userId: string,
     currentPassword: string,
     newPassword: string,
   ): Promise<void> {
-    const user = await this.prisma.user.findFirst({
-      where: { id: userId, tenantId, deletedAt: null },
-    });
-    if (!user) throw new NotFoundException('User not found');
+    return this.prisma.enterTenantContext({ tenantId }, async () => {
+      const tx = this.prisma.scoped();
+      const user = await tx.user.findFirst({
+        where: { id: userId, tenantId, deletedAt: null },
+      });
+      if (!user) throw new NotFoundException('User not found');
 
-    const valid = await this.passwordService.verify(user.passwordHash, currentPassword);
-    if (!valid) throw new UnauthorizedException('Current password is incorrect');
+      const valid = await this.passwordService.verify(user.passwordHash, currentPassword);
+      if (!valid) throw new UnauthorizedException('Current password is incorrect');
 
-    this.passwordService.validateStrength(newPassword);
-    const newHash = await this.passwordService.hash(newPassword);
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { passwordHash: newHash, updatedAt: new Date() },
+      this.passwordService.validateStrength(newPassword);
+      const newHash = await this.passwordService.hash(newPassword);
+      await tx.user.update({
+        where: { id: userId },
+        data: { passwordHash: newHash, updatedAt: new Date() },
+      });
     });
   }
 
@@ -660,8 +682,29 @@ export class AuthService {
     });
   }
 
-  private async recordFailedLogin(userId: string): Promise<void> {
-    const user = await this.prisma.user.update({
+  /**
+   * Auth-RLS sweep (FIX-2): the only caller (`loginTenantUser`) is
+   * already inside an `enterTenantContext` callback and already has
+   * a scoped `tx` client at hand. The previous implementation used
+   * the bare `this.prisma` singleton — which dispatches on a fresh
+   * pooled connection without `SET LOCAL`, so the RLS policy
+   * dropped the update silently. Net effect: failed-login counters
+   * never incremented and brute-force lockouts didn't trigger for
+   * tenant users.
+   *
+   * Fix: accept the scoped client from the caller (Option A in the
+   * dev prompt — cleaner than re-entering context here because the
+   * outer callback's tx is the right one to reuse, no extra
+   * round-trip). The typed param uses `ReturnType<PrismaService['scoped']>`
+   * so we get the same union as `this.prisma.scoped()` produces
+   * (`Prisma.TransactionClient | PrismaService`) without importing
+   * Prisma types directly.
+   */
+  private async recordFailedLogin(
+    tx: ReturnType<PrismaService['scoped']>,
+    userId: string,
+  ): Promise<void> {
+    const user = await tx.user.update({
       where: { id: userId },
       data: { failedLoginCount: { increment: 1 } },
     });
@@ -670,7 +713,7 @@ export class AuthService {
       const lockUntil = new Date(
         Date.now() + DEFAULTS.LOCKOUT_DURATION_MINUTES * 60 * 1000,
       );
-      await this.prisma.user.update({
+      await tx.user.update({
         where: { id: userId },
         data: { lockedUntil: lockUntil },
       });
