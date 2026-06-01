@@ -40,7 +40,19 @@ const REGEN_BACKUP_CODES = gql`
 
 interface MfaCardProps {
   mfaEnabled: boolean;
-  onChange: () => void;
+  /**
+   * MFA-status-display fix (Cause A): the previous signature was
+   * `() => void` and callers fired refetch() without returning the
+   * promise. After `confirmMfaEnrollment` succeeded we'd `setTimeout(reset, 30)`
+   * — racing the (async) refetch and re-rendering with the STALE
+   * `mfaEnabled` prop while the network round-trip was still in flight.
+   *
+   * The signature now allows Promise<void> so callers can return the
+   * refetch promise; `handleConfirm`/`handleDisable` `await` it
+   * before calling `reset()` so the parent's `me.mfaEnabled` has
+   * already updated by the time the card re-renders.
+   */
+  onChange: () => void | Promise<void>;
 }
 
 type Mode = 'idle' | 'enroll-password' | 'enroll-verify' | 'disable' | 'regen';
@@ -96,8 +108,14 @@ export function MfaCard({ mfaEnabled, onChange }: MfaCardProps) {
       const { data } = await confirm({ variables: { code: code.replace(/\s+/g, '') } });
       if (data.confirmMfaEnrollment) {
         setMsg({ type: 'success', text: t('settings.mfa.msgEnabled') });
-        onChange();
-        setTimeout(() => reset(), 30);
+        // MFA-status-display fix (Cause A): await the parent's refetch
+        // before resetting the card so the next render sees
+        // `mfaEnabled: true` (not the stale `false` that was true
+        // when this dialog was opened). 600ms gives the user time
+        // to read the success message before the form resets to the
+        // enabled-state buttons. Matches the post-disable cadence.
+        await onChange();
+        setTimeout(() => reset(), 600);
       } else {
         setMsg({ type: 'error', text: t('settings.mfa.msgBadCode') });
       }
@@ -112,7 +130,12 @@ export function MfaCard({ mfaEnabled, onChange }: MfaCardProps) {
     try {
       await disable({ variables: { password } });
       setMsg({ type: 'success', text: t('settings.mfa.msgDisabled') });
-      onChange();
+      // MFA-status-display fix (Cause A): same await-before-reset
+      // discipline as handleConfirm. The disable flow already used a
+      // 600ms reset cadence; the change here is just to await the
+      // refetch so the next render has `mfaEnabled: false` in the
+      // cache (rather than re-rendering with stale `true`).
+      await onChange();
       setTimeout(() => reset(), 600);
     } catch (err: any) {
       setMsg({ type: 'error', text: err?.graphQLErrors?.[0]?.message || t('settings.mfa.errDisable') });

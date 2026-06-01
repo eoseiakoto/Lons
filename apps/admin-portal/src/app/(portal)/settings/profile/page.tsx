@@ -281,7 +281,14 @@ export default function ProfilePage() {
           </div>
 
           {/* Two-Factor Authentication */}
-          <MfaCard mfaEnabled={!!me?.mfaEnabled} onChange={() => { refetch(); }} />
+          {/*
+            MFA-status-display fix (Cause A): return refetch()'s promise
+            so MfaCard can await it before resetting. Previously this was
+            `() => { refetch(); }` which discarded the promise → the
+            card's reset() fired before the cache had updated → re-render
+            showed stale `mfaEnabled`.
+          */}
+          <MfaCard mfaEnabled={!!me?.mfaEnabled} onChange={() => refetch().then(() => undefined)} />
 
           {/* Account Details */}
           <div className="card-glow p-6">
